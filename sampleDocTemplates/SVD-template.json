@@ -1,0 +1,24 @@
+{
+  "documentTitle": "SVD",
+  "templateFile": "",
+  "contentControls": [
+    {
+      "title": "system-capabilities",
+      "skin": "paragraph",
+      "headingLevel": 4,
+      "data": {
+        "type": "query",
+        "queryId": "dcfebdad-bb9f-4cba-a3ed-aa337c11d697"
+      }
+    },
+    {
+      "title": "required-states-and-modes",
+      "skin": "table",
+      "headingLevel": 4,
+      "data": {
+        "type": "query",
+        "queryId": "dcfebdad-bb9f-4cba-a3ed-aa337c11d697"
+      }
+    }
+  ]
+}

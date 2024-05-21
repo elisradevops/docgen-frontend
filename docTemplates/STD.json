@@ -1,0 +1,27 @@
+{
+  "documentTitle": "STD",
+  "teamProjectName": "042ed52f-66bc-446f-b7ab-f85003fdabcf",
+  "templateFile": "",
+  "contentControls": [
+    {
+      "title": "tests-description-content-control",
+      "skin": "test-std",
+      "headingLevel": 4,
+      "data": { "type": "test", "planId": 23319, "includeAttachments": false }
+    },
+    {
+      "title": "test-cases-to-requirements-content-control",
+      "skin": "trace-table",
+      "headingLevel": 4,
+      "data": {
+        "type": "test",
+        "planId": 23319,
+        "includeAttachments": false,
+        "linkTypeFilterArray": [
+          "Microsoft.VSTS.Common.TestedBy-Reverse",
+          "Microsoft.VSTS.Common.TestedBy-Forward"
+        ]
+      }
+    }
+  ]
+}
