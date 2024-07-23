@@ -11,19 +11,22 @@ const headers = {
   },
 };
 
-export const getBucketFileList = async (bucketName, isExternalUrl = false) => {
+export const getBucketFileList = async (bucketName, docType = null, isExternalUrl = false) => {
   let url;
   try {
-    url = `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}`;
+    url =
+      docType !== null
+        ? `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?docType=${docType}&isExternalUrl=${isExternalUrl}`
+        : `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}`;
     let res = await makeRequest(url, undefined, undefined, headers);
     return res.bucketFileList;
   } catch (e) {}
 };
 
-export const getJSONContentFromFile = async (bucketName, fileName) => {
+export const getJSONContentFromFile = async (bucketName, folderName, fileName) => {
   let url;
   try {
-    url = `${C.jsonDocument_url}/minio/ContentFromFile/${bucketName}/${fileName}`;
+    url = `${C.jsonDocument_url}/minio/ContentFromFile/${bucketName}/${folderName}/${fileName}`;
     let res = await makeRequest(url, undefined, undefined, headers);
     return res.contentFromFile;
   } catch (e) {}

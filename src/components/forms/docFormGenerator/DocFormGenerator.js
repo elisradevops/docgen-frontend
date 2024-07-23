@@ -1,18 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import Grid from '@material-ui/core/Grid';
 import Autocomplete from '@material-ui/lab/Autocomplete';
 import TextFieldM from '@material-ui/core/TextField';
 import { PrimaryButton } from 'office-ui-fabric-react';
 import CircularProgress from '@material-ui/core/CircularProgress';
-import TemplateSelector from '../../common/TemplateSelector';
 import TestContentSelector from '../../common/TestContentSelector';
 import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 
-const DocFormGenerator = observer(({ index, value, jsonDoc = { contentControls: [] }, store }) => {
+const DocFormGenerator = observer(({ docType, store }) => {
   const [loading, setLoading] = useState(false);
+  const [docTemplates, setDocTemplates] = useState([]);
+  const [selectedDocForm, setSelectedDocForm] = useState(null);
+  const [docForm, setDocForm] = useState(null);
+
+  useEffect(() => {
+    if (docType !== '') {
+      store.fetchDocTemplates(docType);
+      setDocTemplates(store.documentTemplates);
+    }
+  }, [store, docType, setDocTemplates]);
+
+  useEffect(() => {
+    if (selectedDocForm !== null && docTemplates.length > 0) {
+      var temp = docTemplates.find((docForm) =>
+        docForm.documentTitle.toLowerCase().includes(selectedDocForm.text.toLowerCase())
+      );
+      setDocForm(temp);
+    }
+  }, [selectedDocForm, docTemplates]);
 
   const generateFormControls = (formControl, contentControlIndex) => {
     switch (formControl.skin) {
@@ -85,6 +103,7 @@ const DocFormGenerator = observer(({ index, value, jsonDoc = { contentControls: 
   const handleSendRequest = async () => {
     setLoading(true);
     try {
+      //TODO: Solve this issue... TemplateURL
       await store.sendRequestToDocGen();
     } catch (error) {
       console.error(error);
@@ -94,80 +113,109 @@ const DocFormGenerator = observer(({ index, value, jsonDoc = { contentControls: 
   };
 
   return (
-    <div>
-      <Autocomplete
-        disableClearable
-        style={{ marginBlock: 8, width: 300 }}
-        autoHighlight
-        openOnFocus
-        options={store.teamProjectsList.map((teamProject) => {
-          return { key: teamProject.id, text: teamProject.name };
-        })}
-        getOptionLabel={(option) => `${option.text}`}
-        renderInput={(params) => (
-          <TextFieldM
-            {...params}
-            label='Select a TeamProject'
-            variant='outlined'
+    <>
+      <div>
+        <Autocomplete
+          disableClearable
+          style={{ marginBlock: 8, width: 300 }}
+          autoHighlight
+          openOnFocus
+          options={docTemplates.map((docForm, key) => {
+            return { key: key, text: docForm.documentTitle };
+          })}
+          getOptionLabel={(option) => `${option.text}`}
+          renderInput={(params) => (
+            <TextFieldM
+              {...params}
+              label='Select a Document Form'
+              variant='outlined'
+            />
+          )}
+          onChange={async (event, newValue) => {
+            console.log(`Selected form ${JSON.stringify(newValue)}`);
+            setSelectedDocForm(newValue);
+          }}
+        />
+      </div>
+      {selectedDocForm && (
+        <div>
+          <Autocomplete
+            disableClearable
+            style={{ marginBlock: 8, width: 300 }}
+            autoHighlight
+            openOnFocus
+            options={store.teamProjectsList.map((teamProject) => {
+              return { key: teamProject.id, text: teamProject.name };
+            })}
+            getOptionLabel={(option) => `${option.text}`}
+            renderInput={(params) => (
+              <TextFieldM
+                {...params}
+                label='Select a TeamProject'
+                variant='outlined'
+              />
+            )}
+            onChange={async (event, newValue) => {
+              store.setTeamProject(newValue.key, newValue.text);
+            }}
           />
-        )}
-        onChange={async (event, newValue) => {
-          store.setTeamProject(newValue.key, newValue.text);
-        }}
-      />
-      <Autocomplete
-        disableClearable
-        style={{ marginBlock: 8, width: 300 }}
-        autoHighlight
-        openOnFocus
-        options={store.templateList.map((template) => {
-          return { url: template.url, text: template.name };
-        })}
-        getOptionLabel={(option) => `${option.text}`}
-        renderInput={(params) => (
-          <TextFieldM
-            {...params}
-            label='Select a Template'
-            variant='outlined'
+          <Autocomplete
+            disableClearable
+            style={{ marginBlock: 8, width: 300 }}
+            autoHighlight
+            openOnFocus
+            options={store.templateList
+              .filter((template) => template.name.toLowerCase().includes(docType.toLowerCase()))
+              .map((template) => {
+                return { url: template.url, text: template.name };
+              })}
+            getOptionLabel={(option) => `${option.text}`}
+            renderInput={(params) => (
+              <TextFieldM
+                {...params}
+                label='Select a Template'
+                variant='outlined'
+              />
+            )}
+            onChange={async (event, newValue) => {
+              store.setSelectedTemplate(newValue);
+            }}
           />
-        )}
-        onChange={async (event, newValue) => {
-          store.setSelectedTemplate(newValue);
-        }}
-      />
-      <br />
-      <Grid
-        container
-        spacing={3}
-      >
-        {jsonDoc.contentControls
-          ? jsonDoc.contentControls.map((contentControl, key) => {
-              return (
-                <Grid
-                  item
-                  xs={3}
-                >
-                  <typography
-                    fontWeight='fontWeughtBold'
-                    fontSize={20}
-                    m={1}
-                  >
-                    {contentControl.title}:
-                  </typography>
-                  {generateFormControls(contentControl, key)}
-                </Grid>
-              );
-            })
-          : null}
-      </Grid>
+          <br />
+          <Grid
+            container
+            spacing={3}
+          >
+            {docForm && docForm.contentControls
+              ? docForm.contentControls.map((contentControl, key) => {
+                  return (
+                    <Grid
+                      item
+                      xs={3}
+                    >
+                      <typography
+                        fontWeight='fontWeughtBold'
+                        fontSize={20}
+                        m={1}
+                      >
+                        {contentControl.title}:
+                      </typography>
+                      {generateFormControls(contentControl, key)}
+                    </Grid>
+                  );
+                })
+              : null}
+          </Grid>
 
-      <PrimaryButton
-        text='Send Request'
-        onClick={handleSendRequest}
-        disabled={loading}
-      />
-      {loading && <CircularProgress />}
-    </div>
+          <PrimaryButton
+            text='Send Request'
+            onClick={handleSendRequest}
+            disabled={loading}
+          />
+          {loading && <CircularProgress />}
+        </div>
+      )}
+    </>
   );
 });
 

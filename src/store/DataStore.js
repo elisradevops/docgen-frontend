@@ -16,8 +16,9 @@ class DocGenDataStore {
 
   constructor() {
     makeObservable(this, {
-      documentTitle: observable,
+      documentTypeTitle: observable,
       documentTemplates: observable,
+      documentTypes: observable,
       teamProject: observable,
       selectedTemplate: observable,
       contentControls: observable,
@@ -40,6 +41,7 @@ class DocGenDataStore {
       fetchTeamProjects: action,
       setTeamProject: action,
       fetchTemplatesList: action,
+      fetchDocFolders: action,
       setSelectedTemplate: action,
       fetchSharedQueries: action,
       setSharedQueries: action,
@@ -64,13 +66,17 @@ class DocGenDataStore {
       fetchTestSuitesList: action,
       setTestSuitesList: action,
     });
-    this.fetchDocTemplates();
+
+    //TODO: need to call this manually when needed
+    //this.fetchDocTemplates();
+    this.fetchDocFolders();
     this.fetchTeamProjects();
     this.fetchTemplatesList();
     this.fetchCollectionLinkTypes();
   }
 
-  documentTitle = '';
+  documentTypeTitle = '';
+  documentTypes = [];
   documentTemplates = [];
   teamProjectsList = [];
   teamProject = '';
@@ -94,19 +100,40 @@ class DocGenDataStore {
   releaseDefinitionList = []; //list of all project releaese Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
 
-  //for setting focused teamProject
-  setDocumentTitle(documentTitle) {
-    this.documentTitle = documentTitle;
+  setDocumentTypeTitle(documentType) {
+    this.documentTypeTitle = documentType;
   }
-  //for fetching docTemplates
-  fetchDocTemplates() {
+
+  fetchDocFolders() {
     getBucketFileList('document-forms').then(async (data = []) => {
       await Promise.all(
+        data
+          .filter((file) => file.prefix !== undefined)
+          .map((file) => {
+            this.documentTypes.push(file.prefix.replace('/', ''));
+          })
+      );
+    });
+  }
+
+  //Every time selecting a tab of a certain doctype then all the specified files from that type are returned
+  fetchDocTemplates(docType) {
+    this.documentTemplates = [];
+    getBucketFileList('document-forms', docType).then(async (data = []) => {
+      await Promise.all(
         data.map(async (form) => {
-          let jsonFormTemplate = await getJSONContentFromFile('document-forms', form.name);
-          console.log(jsonFormTemplate);
+          let fileName = '';
+          let folderName = '';
+          if (form.name.includes('/')) {
+            const formNameSections = form.name.split('/');
+            if (formNameSections.length > 2) {
+              return;
+            }
+            folderName = formNameSections[0];
+            fileName = formNameSections[1];
+          }
+          let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
           this.documentTemplates.push(jsonFormTemplate);
-          console.log(this.documentTemplates);
         })
       );
     });
@@ -288,7 +315,7 @@ class DocGenDataStore {
 
   //for fetching documents
   fetchDocuments() {
-    getBucketFileList(this.ProjectBucketName, true).then((data) => {
+    getBucketFileList(this.ProjectBucketName, null, true).then((data) => {
       data.sort(function (a, b) {
         return new Date(b.lastModified) - new Date(a.lastModified);
       });

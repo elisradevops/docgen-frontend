@@ -44,10 +44,10 @@ const MainTabs = observer(({ store }) => {
             }}
             aria-label='document tabs'
           >
-            {store.documentTemplates.map((docForm, key) => {
+            {store.documentTypes.map((docType, key) => {
               return (
                 <Tab
-                  label={docForm.documentTitle}
+                  label={docType}
                   value={key}
                 />
               );
@@ -69,12 +69,10 @@ const MainTabs = observer(({ store }) => {
           </Button>
         </div>
       </AppBar>
-      {store.documentTemplates.map((docForm, key) => {
+      {store.documentTypes.map((docType, key) => {
         return selectedTab === key ? (
           <DocFormGenerator
-            index={0}
-            value={key}
-            jsonDoc={docForm}
+            docType={docType}
             store={store}
           />
         ) : null;
