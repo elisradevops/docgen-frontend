@@ -1,16 +1,16 @@
-import { observable, action, makeObservable, computed } from "mobx";
-import { enableLogging } from "mobx-logger";
-import RestApi from "./actions/AzuredevopsRestapi";
-import cookies from "js-cookies";
+import { observable, action, makeObservable, computed } from 'mobx';
+import { enableLogging } from 'mobx-logger';
+import RestApi from './actions/AzuredevopsRestapi';
+import cookies from 'js-cookies';
 import {
   getBucketFileList,
   getJSONContentFromFile,
   sendDocumentTogenerator,
   createIfBucketDoesentExsist,
-} from "../store/data/docManagerApi";
+} from '../store/data/docManagerApi';
 
-const azureDevopsUrl = cookies.getItem("azuredevopsUrl");
-const azuredevopsPat = cookies.getItem("azuredevopsPat");
+const azureDevopsUrl = cookies.getItem('azuredevopsUrl');
+const azuredevopsPat = cookies.getItem('azuredevopsPat');
 class DocGenDataStore {
   azureRestClient = new RestApi(azureDevopsUrl, azuredevopsPat);
 
@@ -26,10 +26,10 @@ class DocGenDataStore {
       templateList: observable,
       testPlansList: observable,
       testSuiteList: observable,
-      pipelineList:observable,
-      pipelineRunHistory:observable,
-      releaseDefinitionList:observable,
-      releaseDefinitionHistory:observable,
+      pipelineList: observable,
+      pipelineRunHistory: observable,
+      releaseDefinitionList: observable,
+      releaseDefinitionHistory: observable,
       repoList: observable,
       branchesList: observable,
       pullRequestList: observable,
@@ -47,17 +47,17 @@ class DocGenDataStore {
       fetchGitRepoBrances: action,
       setGitRepoList: action,
       setBranchesList: action,
-      fetchRepoPullRequests:action,
+      fetchRepoPullRequests: action,
       setRepoPullRequests: action,
       fetchGitRepoCommits: action,
       setGitRepoCommits: action,
-      fetchPipelineList:action,
-      setPipelineList:action,
+      fetchPipelineList: action,
+      setPipelineList: action,
       fetchPipelineRunHistory: action,
       setPipelineRunHistory: action,
-      fetchReleaseDefinitionList:action,
-      setReleaseDefinitionList:action,
-      fetchReleaseDefinitionHistory:action,
+      fetchReleaseDefinitionList: action,
+      setReleaseDefinitionList: action,
+      fetchReleaseDefinitionHistory: action,
       setReleaseDefinitionHistory: action,
       fetchTestPlans: action,
       setTestPlansList: action,
@@ -70,15 +70,15 @@ class DocGenDataStore {
     this.fetchCollectionLinkTypes();
   }
 
-  documentTitle = "";
+  documentTitle = '';
   documentTemplates = [];
   teamProjectsList = [];
-  teamProject = "";
-  teamProjectName = "";
-  ProjectBucketName = "";
+  teamProject = '';
+  teamProjectName = '';
+  ProjectBucketName = '';
   templateList = [];
   contentControls = [];
-  selectedTemplate = { key: "", name: "" };
+  selectedTemplate = { key: '', name: '' };
   sharedQueries = []; // list of queries
   linkTypes = []; // list of link types
   linkTypesFilter = []; // list of selected links to filter by
@@ -94,20 +94,16 @@ class DocGenDataStore {
   releaseDefinitionList = []; //list of all project releaese Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
 
-
   //for setting focused teamProject
   setDocumentTitle(documentTitle) {
     this.documentTitle = documentTitle;
   }
   //for fetching docTemplates
   fetchDocTemplates() {
-    getBucketFileList("document-forms").then(async (data = []) => {
+    getBucketFileList('document-forms').then(async (data = []) => {
       await Promise.all(
         data.map(async (form) => {
-          let jsonFormTemplate = await getJSONContentFromFile(
-            "document-forms",
-            form.name
-          );
+          let jsonFormTemplate = await getJSONContentFromFile('document-forms', form.name);
           console.log(jsonFormTemplate);
           this.documentTemplates.push(jsonFormTemplate);
           console.log(this.documentTemplates);
@@ -121,11 +117,10 @@ class DocGenDataStore {
     if (azureDevopsUrl && azuredevopsPat) {
       this.azureRestClient.getTeamProjects().then((data) => {
         console.log(data);
-        this.teamProjectsList =
-          data.value.sort((a, b) => (a.name > b.name ? 1 : -1)) || [];
+        this.teamProjectsList = data.value.sort((a, b) => (a.name > b.name ? 1 : -1)) || [];
       });
     } else {
-      console.error("Missing required cookies: azuredevopsUrl or azuredevopsPat");
+      console.error('Missing required cookies: azuredevopsUrl or azuredevopsPat');
     }
   }
   //for setting focused teamProject
@@ -133,10 +128,10 @@ class DocGenDataStore {
     this.teamProject = teamProjectId;
     this.teamProjectName = teamProjectName;
     this.ProjectBucketName = teamProjectName.toLowerCase();
-    this.ProjectBucketName = this.ProjectBucketName.replace('_', "-");
-    this.ProjectBucketName = this.ProjectBucketName.replace(/[^a-z0-9-]/g, "")
-    if (this.ProjectBucketName.length < 3 ){
-      this.ProjectBucketName = this.ProjectBucketName + "-bucket"
+    this.ProjectBucketName = this.ProjectBucketName.replace('_', '-');
+    this.ProjectBucketName = this.ProjectBucketName.replace(/[^a-z0-9-]/g, '');
+    if (this.ProjectBucketName.length < 3) {
+      this.ProjectBucketName = this.ProjectBucketName + '-bucket';
     }
     this.fetchDocuments();
     this.fetchSharedQueries();
@@ -147,7 +142,7 @@ class DocGenDataStore {
   }
   //for fetching templatefiles list
   fetchTemplatesList() {
-    getBucketFileList("templates").then((data) => {
+    getBucketFileList('templates').then((data) => {
       this.templateList = data || [];
     });
   }
@@ -160,9 +155,7 @@ class DocGenDataStore {
   //for setting the selected link type filters
   updateSelectedLinksFilter = (selectedLinkType) => {
     console.log(JSON.stringify(selectedLinkType));
-    let linkIndex = this.linkTypesFilter.findIndex(
-      (linkFilter) => linkFilter.key === selectedLinkType.key
-    );
+    let linkIndex = this.linkTypesFilter.findIndex((linkFilter) => linkFilter.key === selectedLinkType.key);
     if (linkIndex >= 0) {
       this.linkTypesFilter[linkIndex] = selectedLinkType;
     } else {
@@ -185,87 +178,87 @@ class DocGenDataStore {
     this.sharedQueries = data;
   }
   //for fetching repo list
-  fetchGitRepoList(){
-    this.azureRestClient.getGitRepoList(this.teamProject).then((data)=> {
+  fetchGitRepoList() {
+    this.azureRestClient.getGitRepoList(this.teamProject).then((data) => {
       this.setGitRepoList(data);
-    })
+    });
   }
 
   //for fetching repo list
-  fetchGitRepoBrances(RepoId){
-    this.azureRestClient.getGitRepoBrances(RepoId,this.teamProject).then((data)=> {
+  fetchGitRepoBrances(RepoId) {
+    this.azureRestClient.getGitRepoBrances(RepoId, this.teamProject).then((data) => {
       this.setBranchesList(data);
-    })
+    });
   }
 
   // for setting repo list
-  setGitRepoList(data){
+  setGitRepoList(data) {
     this.repoList = data.value || [];
   }
 
   // for setting branch list
-  setBranchesList(data){
+  setBranchesList(data) {
     this.branchesList = data.value || [];
   }
   //for fetching git repo commits
-  fetchGitRepoCommits(RepoId, branchName){
-      this.azureRestClient.getGitRepoCommits(RepoId,this.teamProject, branchName).then((data)=> {
-        this.setGitRepoCommits(data);
-    })
+  fetchGitRepoCommits(RepoId, branchName) {
+    this.azureRestClient.getGitRepoCommits(RepoId, this.teamProject, branchName).then((data) => {
+      this.setGitRepoCommits(data);
+    });
   }
   //for setting git repo commits
-  setGitRepoCommits(data){
+  setGitRepoCommits(data) {
     this.gitRepoCommits = data.value || [];
-    }
+  }
   //for setting repo pull requests
-    setRepoPullRequests(data){
-      this.pullRequestList = data.value || [];
-    }
-    //for fetching repo pull requests
-    fetchRepoPullRequests(RepoId){
-      this.azureRestClient.getRepoPullRequests(RepoId,this.teamProject).then((data) =>{
-        this.setRepoPullRequests(data);
-      })
-    }
+  setRepoPullRequests(data) {
+    this.pullRequestList = data.value || [];
+  }
+  //for fetching repo pull requests
+  fetchRepoPullRequests(RepoId) {
+    this.azureRestClient.getRepoPullRequests(RepoId, this.teamProject).then((data) => {
+      this.setRepoPullRequests(data);
+    });
+  }
   //for fetching pipeline list
-  fetchPipelineList(){
-    this.azureRestClient.getPipelineList(this.teamProject).then((data)=> {
+  fetchPipelineList() {
+    this.azureRestClient.getPipelineList(this.teamProject).then((data) => {
       this.setPipelineList(data);
-    })
+    });
   }
   //for setting pipeline list
-  setPipelineList(data){
+  setPipelineList(data) {
     this.pipelineList = data.value || [];
   }
   //for fetching pipeline run history
-  fetchPipelineRunHistory(pipelineId){
-    this.azureRestClient.getPipelineRunHistory(pipelineId,this.teamProject).then((data)=> {
-      this.setPipelineRunHistory(data)
-      console.log(data)
-    })
+  fetchPipelineRunHistory(pipelineId) {
+    this.azureRestClient.getPipelineRunHistory(pipelineId, this.teamProject).then((data) => {
+      this.setPipelineRunHistory(data);
+      console.log(data);
+    });
   }
-  //for setting pipeline run history 
-  setPipelineRunHistory(data){
+  //for setting pipeline run history
+  setPipelineRunHistory(data) {
     this.pipelineRunHistory = data.value || [];
   }
   //for fetching release list
-  fetchReleaseDefinitionList(){
-    this.azureRestClient.getReleaseDefinitionList(this.teamProject).then((data)=> {
+  fetchReleaseDefinitionList() {
+    this.azureRestClient.getReleaseDefinitionList(this.teamProject).then((data) => {
       this.setReleaseDefinitionList(data);
-    })
+    });
   }
   //for setting release list
-  setReleaseDefinitionList(data){
+  setReleaseDefinitionList(data) {
     this.releaseDefinitionList = data.value || [];
   }
   //for fetching release history
-  fetchReleaseDefinitionHistory(releaseDefinitionId){
-    this.azureRestClient.getReleaseDefinitionHistory(releaseDefinitionId,this.teamProject).then((data)=> {
+  fetchReleaseDefinitionHistory(releaseDefinitionId) {
+    this.azureRestClient.getReleaseDefinitionHistory(releaseDefinitionId, this.teamProject).then((data) => {
       this.setReleaseDefinitionHistory(data);
-    })
+    });
   }
   //for setting release history
-  setReleaseDefinitionHistory(data){
+  setReleaseDefinitionHistory(data) {
     this.releaseDefinitionHistory = data.value || [];
   }
   //for fetching test plans
@@ -281,12 +274,12 @@ class DocGenDataStore {
   }
 
   fetchTestSuitesList(testPlanId) {
-    this.azureRestClient.getTestSuiteByPlanList(this.teamProject,testPlanId).then((data) => {
-      data.sort(function (a,b){
+    this.azureRestClient.getTestSuiteByPlanList(this.teamProject, testPlanId).then((data) => {
+      data.sort(function (a, b) {
         return a.parent - b.parent;
       });
       this.setTestSuitesList(data);
-    })
+    });
   }
 
   setTestSuitesList(data) {
@@ -295,8 +288,8 @@ class DocGenDataStore {
 
   //for fetching documents
   fetchDocuments() {
-    getBucketFileList(this.ProjectBucketName,true).then((data) => {
-      data.sort(function(a,b){
+    getBucketFileList(this.ProjectBucketName, true).then((data) => {
+      data.sort(function (a, b) {
         return new Date(b.lastModified) - new Date(a.lastModified);
       });
       this.documents = data;
@@ -325,23 +318,26 @@ class DocGenDataStore {
     console.log(contentControlObject);
   };
   async sendRequestToDocGen() {
-    await createIfBucketDoesentExsist((this.ProjectBucketName));
+    await createIfBucketDoesentExsist(this.ProjectBucketName);
     let docReq = this.requestJson;
     console.log(docReq);
-    return sendDocumentTogenerator(docReq);  
-}
+    return sendDocumentTogenerator(docReq);
+  }
 
   get requestJson() {
-    let tempFileName = `${this.teamProjectName}-${new Date().toISOString().substring(0, 19).replace('T', '-')}`
+    let tempFileName = `${this.teamProjectName}-${new Date()
+      .toISOString()
+      .substring(0, 19)
+      .replace('T', '-')}`;
     return {
-      tfsCollectionUri:azureDevopsUrl,
-      PAT:azuredevopsPat,
+      tfsCollectionUri: azureDevopsUrl,
+      PAT: azuredevopsPat,
       teamProjectName: this.teamProjectName,
       templateFile: this.selectedTemplate.url,
-      uploadProperties:{
-        bucketName: this.ProjectBucketName, 
-        fileName: tempFileName
-        },
+      uploadProperties: {
+        bucketName: this.ProjectBucketName,
+        fileName: tempFileName,
+      },
       contentControls: this.contentControls,
     };
   }

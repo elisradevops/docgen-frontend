@@ -1,21 +1,21 @@
-import axios from "axios";
-import C from "../constants";
-import { v4 as uuidv4 } from "uuid";
+import axios from 'axios';
+import C from '../constants';
+import { v4 as uuidv4 } from 'uuid';
 
-var Minio = require("minio");
+var Minio = require('minio');
 
 const headers = {
   headers: {
-    "Access-Control-Allow-Origin": "*",
-    "Content-Type": "application/json",
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'application/json',
   },
 };
 
-export const getBucketFileList = async (bucketName,isExternalUrl = false) => {
+export const getBucketFileList = async (bucketName, isExternalUrl = false) => {
   let url;
   try {
     url = `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}`;
-    let res = await makeRequest(url, undefined,undefined,headers);
+    let res = await makeRequest(url, undefined, undefined, headers);
     return res.bucketFileList;
   } catch (e) {}
 };
@@ -24,7 +24,7 @@ export const getJSONContentFromFile = async (bucketName, fileName) => {
   let url;
   try {
     url = `${C.jsonDocument_url}/minio/ContentFromFile/${bucketName}/${fileName}`;
-    let res = await makeRequest(url, undefined,undefined,headers);
+    let res = await makeRequest(url, undefined, undefined, headers);
     return res.contentFromFile;
   } catch (e) {}
 };
@@ -34,16 +34,11 @@ export const createIfBucketDoesentExsist = async (bucketName) => {
   let data = { bucketName };
   try {
     url = `${C.jsonDocument_url}/minio/createBucket`;
-    return await makeRequest(url, "post", data, headers);
+    return await makeRequest(url, 'post', data, headers);
   } catch (e) {}
 };
 
-const makeRequest = async (
-  url,
-  requestMethod = "get",
-  data = {},
-  customHeaders = {}
-) => {
+const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders = {}) => {
   let config = {
     headers: customHeaders,
     method: requestMethod,
@@ -64,14 +59,10 @@ const makeRequest = async (
 export const sendDocumentTogenerator = async (docJson) => {
   try {
     docJson.documentId = uuidv4();
-    let res = await axios.post(
-      `${C.jsonDocument_url}/jsonDocument/create`,
-      docJson,
-      headers
-    );
+    let res = await axios.post(`${C.jsonDocument_url}/jsonDocument/create`, docJson, headers);
     window.currentdoc = docJson.documentId;
     return res.data;
   } catch (err) {
     return [];
   }
-}; 
+};
