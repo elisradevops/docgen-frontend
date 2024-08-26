@@ -103,7 +103,6 @@ const DocFormGenerator = observer(({ docType, store }) => {
   const handleSendRequest = async () => {
     setLoading(true);
     try {
-      //TODO: Solve this issue... TemplateURL
       await store.sendRequestToDocGen();
     } catch (error) {
       console.error(error);
