@@ -9,6 +9,7 @@ import TestContentSelector from '../../common/TestContentSelector';
 import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
+import STRTableSelector from '../../common/STRTableSelector';
 
 const DocFormGenerator = observer(({ docType, store }) => {
   const [loading, setLoading] = useState(false);
@@ -44,6 +45,20 @@ const DocFormGenerator = observer(({ docType, store }) => {
             testPlansList={store.testPlansList}
             testSuiteList={store.testSuiteList}
             fetchTestSuitesList={store.fetchTestSuitesList}
+            editingMode={false}
+            addToDocumentRequestObject={store.addContentControlToDocument}
+            contentControlIndex={contentControlIndex}
+          />
+        );
+      case 'test-str':
+        return (
+          <STRTableSelector
+            store={store}
+            contentControlTitle={formControl.title}
+            type={formControl.type}
+            skin={formControl.skin}
+            testPlansList={store.testPlansList}
+            testSuiteList={store.testSuiteList}
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}

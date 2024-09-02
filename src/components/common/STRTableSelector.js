@@ -11,16 +11,15 @@ import { PrimaryButton } from 'office-ui-fabric-react';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
-const TestContentSelector = ({
+const STRTableSelector = ({
   store,
   contentControlTitle,
   type,
   skin,
   testPlansList,
   testSuiteList,
-  editingMode,
   addToDocumentRequestObject,
-  linkTypeFilterArray,
+  editingMode,
   contentControlIndex,
 }) => {
   const [selectedTestPlan, setSelectedTestPlan] = useState({
@@ -28,19 +27,16 @@ const TestContentSelector = ({
     text: '',
   });
   const [selectedTestSuites, setSelectedTestSuites] = useState([]);
-  const [includeAttachments, setIncludeAttachments] = useState(false);
   const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
-  const [includeRequirements, setIncludeRequirements] = useState(false);
-  const [includeCustomerId, setIncludeCustomerId] = useState(false);
-  const [includeBugs, setIncludeBugs] = useState(false);
-  const [includeSeverity, setIncludeSeverity] = useState(false);
+  const [includeConfigurations, setIncludeConfigurations] = useState(false);
 
   useEffect(() => {
     if (editingMode === false) {
       UpdateDocumentRequestObject();
     }
   });
+  // }, [editingMode]);
 
   function UpdateDocumentRequestObject() {
     let testSuiteIdList = undefined;
@@ -73,11 +69,7 @@ const TestContentSelector = ({
         data: {
           testPlanId: selectedTestPlan.key,
           testSuiteArray: testSuiteIdList,
-          includeAttachments: includeAttachments,
-          includeRequirements: includeRequirements,
-          includeCustomerId: includeCustomerId,
-          includeBugs: includeBugs,
-          includeSeverity: includeSeverity,
+          includeConfigurations: includeConfigurations,
         },
       },
       contentControlIndex
@@ -127,67 +119,23 @@ const TestContentSelector = ({
           setSelectedTestPlan(newValue);
         }}
       />
+
       <FormControlLabel
         control={
           <Checkbox
-            value={includeAttachments}
+            value={includeConfigurations}
             onChange={(event, checked) => {
-              setIncludeAttachments(checked);
+              setIncludeConfigurations(checked);
             }}
           />
         }
-        label='Include Attachments'
+        label='Include Configurations'
       />
+
       <FormControlLabel
         control={
           <Checkbox
-            checked={includeRequirements}
-            onChange={(event, checked) => {
-              setIncludeRequirements(checked);
-              if (!checked) setIncludeCustomerId(false); // Ensure Customer ID checkbox is also managed
-            }}
-          />
-        }
-        label='Include Requirements'
-      />
-      {includeRequirements && (
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={includeCustomerId}
-              onChange={(event, checked) => setIncludeCustomerId(checked)}
-            />
-          }
-          label='Include Customer ID'
-        />
-      )}
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={includeBugs}
-            onChange={(event, checked) => {
-              setIncludeBugs(checked);
-              if (!checked) setIncludeSeverity(false);
-            }}
-          />
-        }
-        label='Include Bugs'
-      />
-      {includeBugs && (
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={includeSeverity}
-              onChange={(event, checked) => setIncludeSeverity(checked)}
-            />
-          }
-          label='Include Severity'
-        />
-      )}
-      <FormControlLabel
-        control={
-          <Checkbox
-            value={includeAttachments}
+            value={isSuiteSpecific}
             onChange={(event, checked) => {
               setIsSuiteSpecific(checked);
             }}
@@ -228,6 +176,7 @@ const TestContentSelector = ({
           }}
         />
       ) : null}
+
       <br />
       <br />
       {/* works only in document managing mode */}
@@ -243,4 +192,4 @@ const TestContentSelector = ({
   );
 };
 
-export default TestContentSelector;
+export default STRTableSelector;
