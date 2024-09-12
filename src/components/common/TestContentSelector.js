@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { headingLevelOptions } from '../../store/data/dropDownOptions';
-import FormContorlLabel from '@material-ui/core/FormControlLabel';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Checkbox from '@material-ui/core/Checkbox';
 import TextField from '@material-ui/core/TextField';
 import Autocomplete from '@material-ui/lab/Autocomplete';
@@ -127,7 +127,7 @@ const TestContentSelector = ({
           setSelectedTestPlan(newValue);
         }}
       />
-      <FormContorlLabel
+      <FormControlLabel
         control={
           <Checkbox
             value={includeAttachments}
@@ -138,7 +138,7 @@ const TestContentSelector = ({
         }
         label='Include Attachments'
       />
-      <FormContorlLabel
+      <FormControlLabel
         control={
           <Checkbox
             checked={includeRequirements}
@@ -151,7 +151,7 @@ const TestContentSelector = ({
         label='Include Requirements'
       />
       {includeRequirements && (
-        <FormContorlLabel
+        <FormControlLabel
           control={
             <Checkbox
               checked={includeCustomerId}
@@ -161,7 +161,7 @@ const TestContentSelector = ({
           label='Include Customer ID'
         />
       )}
-      <FormContorlLabel
+      <FormControlLabel
         control={
           <Checkbox
             checked={includeBugs}
@@ -174,7 +174,7 @@ const TestContentSelector = ({
         label='Include Bugs'
       />
       {includeBugs && (
-        <FormContorlLabel
+        <FormControlLabel
           control={
             <Checkbox
               checked={includeSeverity}
@@ -184,7 +184,7 @@ const TestContentSelector = ({
           label='Include Severity'
         />
       )}
-      <FormContorlLabel
+      <FormControlLabel
         control={
           <Checkbox
             value={includeAttachments}
