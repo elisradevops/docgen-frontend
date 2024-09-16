@@ -7,6 +7,7 @@ import Autocomplete from '@material-ui/lab/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@material-ui/icons/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@material-ui/icons/CheckBox';
 import { PrimaryButton } from 'office-ui-fabric-react';
+import { Box, Radio, RadioGroup, FormLabel } from '@material-ui/core';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
@@ -29,6 +30,7 @@ const TestContentSelector = ({
   });
   const [selectedTestSuites, setSelectedTestSuites] = useState([]);
   const [includeAttachments, setIncludeAttachments] = useState(false);
+  const [attachmentType, setAttachmentType] = useState('asEmbedded');
   const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
   const [includeRequirements, setIncludeRequirements] = useState(false);
@@ -74,6 +76,7 @@ const TestContentSelector = ({
           testPlanId: selectedTestPlan.key,
           testSuiteArray: testSuiteIdList,
           includeAttachments: includeAttachments,
+          attachmentType: attachmentType,
           includeRequirements: includeRequirements,
           includeCustomerId: includeCustomerId,
           includeBugs: includeBugs,
@@ -86,148 +89,193 @@ const TestContentSelector = ({
 
   const filteredTestSuiteList = testSuiteList.slice(1); // Skip the first item of the list
 
-  return (
-    <div>
-      <Autocomplete
-        disableClearable
-        style={{ marginBlock: 8, width: 300 }}
-        autoHighlight
-        openOnFocus
-        options={headingLevelOptions}
-        getOptionLabel={(option) => `${option.text}`}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label='Select an Heading level'
-            variant='outlined'
-          />
-        )}
-        onChange={async (event, newValue) => {
-          setContentHeadingLevel(newValue.key);
+  const attachmentTypeElements = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+      <FormLabel id='include-office-attachment-radio'>Included Office Files Type</FormLabel>
+      <RadioGroup
+        defaultValue='asEmbedded'
+        name='include-office-attachment-radio'
+        value={attachmentType}
+        onChange={(event) => {
+          setAttachmentType(event.target.value);
         }}
-      />
-      <Autocomplete
-        disableClearable
-        style={{ marginBlock: 8, width: 300 }}
-        autoHighlight
-        openOnFocus
-        options={testPlansList.map((testplan) => {
-          return { key: testplan.id, text: testplan.name };
-        })}
-        getOptionLabel={(option) => `${option.text}`}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label='Select a Test Plan'
-            variant='outlined'
-          />
-        )}
-        onChange={async (event, newValue) => {
-          store.fetchTestSuitesList(newValue.key);
-          setSelectedTestPlan(newValue);
-        }}
-      />
-      <FormControlLabel
-        control={
-          <Checkbox
-            value={includeAttachments}
-            onChange={(event, checked) => {
-              setIncludeAttachments(checked);
-            }}
-          />
-        }
-        label='Include Attachments'
-      />
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={includeRequirements}
-            onChange={(event, checked) => {
-              setIncludeRequirements(checked);
-              if (!checked) setIncludeCustomerId(false); // Ensure Customer ID checkbox is also managed
-            }}
-          />
-        }
-        label='Include Requirements'
-      />
-      {includeRequirements && (
+      >
         <FormControlLabel
-          control={
-            <Checkbox
-              checked={includeCustomerId}
-              onChange={(event, checked) => setIncludeCustomerId(checked)}
-            />
-          }
-          label='Include Customer ID'
+          value='asEmbedded'
+          label='As Embedded'
+          control={<Radio />}
         />
-      )}
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={includeBugs}
-            onChange={(event, checked) => {
-              setIncludeBugs(checked);
-              if (!checked) setIncludeSeverity(false);
-            }}
-          />
-        }
-        label='Include Bugs'
-      />
-      {includeBugs && (
         <FormControlLabel
-          control={
-            <Checkbox
-              checked={includeSeverity}
-              onChange={(event, checked) => setIncludeSeverity(checked)}
-            />
-          }
-          label='Include Severity'
+          value='asLink'
+          label='As Link'
+          control={<Radio />}
         />
-      )}
-      <FormControlLabel
-        control={
-          <Checkbox
-            value={includeAttachments}
-            onChange={(event, checked) => {
-              setIsSuiteSpecific(checked);
-            }}
-          />
-        }
-        label='Enable suite specific selection '
-      />
+      </RadioGroup>
+    </Box>
+  );
 
-      {isSuiteSpecific ? (
+  return (
+    <>
+      <div>
         <Autocomplete
+          disableClearable
           style={{ marginBlock: 8, width: 300 }}
-          multiple
-          options={filteredTestSuiteList}
-          disableCloseOnSelect
           autoHighlight
-          groupBy={(option) => option.parent}
-          getOptionLabel={(option) => `${option.name} - (${option.id})`}
-          renderOption={(option, { selected }) => (
-            <React.Fragment>
-              <Checkbox
-                icon={icon}
-                checkedIcon={checkedIcon}
-                style={{ marginRight: 8 }}
-                checked={selected}
-              />
-              {`${option.name} - (${option.id})`}
-            </React.Fragment>
-          )}
+          openOnFocus
+          options={headingLevelOptions}
+          getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
             <TextField
               {...params}
-              label='With suite cases'
+              label='Select an Heading level'
               variant='outlined'
             />
           )}
           onChange={async (event, newValue) => {
-            setSelectedTestSuites(newValue);
+            setContentHeadingLevel(newValue.key);
           }}
         />
-      ) : null}
+      </div>
+      <div>
+        <Autocomplete
+          disableClearable
+          style={{ marginBlock: 8, width: 300 }}
+          autoHighlight
+          openOnFocus
+          options={testPlansList.map((testplan) => {
+            return { key: testplan.id, text: testplan.name };
+          })}
+          getOptionLabel={(option) => `${option.text}`}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label='Select a Test Plan'
+              variant='outlined'
+            />
+          )}
+          onChange={async (event, newValue) => {
+            store.fetchTestSuitesList(newValue.key);
+            setSelectedTestPlan(newValue);
+          }}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              value={includeAttachments}
+              onChange={(event, checked) => {
+                setIncludeAttachments(checked);
+              }}
+            />
+          }
+          label='Include Attachments'
+        />
+        {includeAttachments && attachmentTypeElements}
+      </div>
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={includeRequirements}
+              onChange={(event, checked) => {
+                setIncludeRequirements(checked);
+                if (!checked) setIncludeCustomerId(false); // Ensure Customer ID checkbox is also managed
+              }}
+            />
+          }
+          label='Include Requirements'
+        />
+        {includeRequirements && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={includeCustomerId}
+                  onChange={(event, checked) => setIncludeCustomerId(checked)}
+                />
+              }
+              label='Include Customer ID'
+            />
+          </Box>
+        )}
+      </div>
+
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={includeBugs}
+              onChange={(event, checked) => {
+                setIncludeBugs(checked);
+                if (!checked) setIncludeSeverity(false);
+              }}
+            />
+          }
+          label='Include Bugs'
+        />
+        {includeBugs && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={includeSeverity}
+                  onChange={(event, checked) => setIncludeSeverity(checked)}
+                />
+              }
+              label='Include Severity'
+            />
+          </Box>
+        )}
+      </div>
+
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              value={isSuiteSpecific}
+              onChange={(event, checked) => {
+                setIsSuiteSpecific(checked);
+              }}
+            />
+          }
+          label='Enable suite specific selection '
+        />
+      </div>
+      <div>
+        {isSuiteSpecific ? (
+          <Autocomplete
+            style={{ marginBlock: 8, width: 300 }}
+            multiple
+            options={filteredTestSuiteList}
+            disableCloseOnSelect
+            autoHighlight
+            groupBy={(option) => option.parent}
+            getOptionLabel={(option) => `${option.name} - (${option.id})`}
+            renderOption={(option, { selected }) => (
+              <React.Fragment>
+                <Checkbox
+                  icon={icon}
+                  checkedIcon={checkedIcon}
+                  style={{ marginRight: 8 }}
+                  checked={selected}
+                />
+                {`${option.name} - (${option.id})`}
+              </React.Fragment>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label='With suite cases'
+                variant='outlined'
+              />
+            )}
+            onChange={async (event, newValue) => {
+              setSelectedTestSuites(newValue);
+            }}
+          />
+        ) : null}
+      </div>
       <br />
       <br />
       {/* works only in document managing mode */}
@@ -239,7 +287,7 @@ const TestContentSelector = ({
           }}
         />
       ) : null}
-    </div>
+    </>
   );
 };
 
