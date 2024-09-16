@@ -89,6 +89,8 @@ const STRTableSelector = ({
           testSuiteArray: testSuiteIdList,
           includeConfigurations: includeConfigurations,
           includeHierarchy: includeHierarchy,
+          includeOpenPCRs: includeOpenPCRs,
+          includeTestLog: includeTestLog,
         },
       },
       contentControlIndex
