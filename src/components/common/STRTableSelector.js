@@ -7,7 +7,7 @@ import Autocomplete from '@material-ui/lab/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@material-ui/icons/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@material-ui/icons/CheckBox';
 import { PrimaryButton } from 'office-ui-fabric-react';
-import { Box, FormControl, Radio, RadioGroup } from '@material-ui/core';
+import { Box, Radio, RadioGroup } from '@material-ui/core';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
@@ -38,7 +38,7 @@ const STRTableSelector = ({
   const [includeTraceAnalysis, setIncludeTraceAnalysis] = useState(false);
   const [traceAnalysisSelection, setTraceAnalysisSelection] = useState('');
   const [includeOpenPCRs, setIncludeOpenPCRs] = useState(false);
-  const [openPCRsSelection, setOpenPCRsSelection] = useState('');
+  const [openPCRsSelection, setOpenPCRsSelection] = useState('linked');
   const [includeTestLog, setIncludeTestLog] = useState(false);
 
   useEffect(() => {
@@ -89,6 +89,8 @@ const STRTableSelector = ({
           testSuiteArray: testSuiteIdList,
           includeConfigurations: includeConfigurations,
           includeHierarchy: includeHierarchy,
+          includeOpenPCRs: includeOpenPCRs,
+          includeTestLog: includeTestLog,
         },
       },
       contentControlIndex
@@ -98,7 +100,7 @@ const STRTableSelector = ({
   const filteredTestSuiteList = testSuiteList.slice(1); // Skip the first item of the list
 
   const traceAnalysisOptions = (
-    <FormControl sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <RadioGroup
         defaultValue='query'
         name='trace-analysis-buttons-group'
@@ -118,7 +120,7 @@ const STRTableSelector = ({
           control={<Radio />}
         />
       </RadioGroup>
-    </FormControl>
+    </Box>
   );
 
   const detailedExecutionStepsElements = (
@@ -188,6 +190,8 @@ const STRTableSelector = ({
           value='query'
           label='From Query'
           control={<Radio />}
+          //TODO: remove this after query open pcr implementation
+          disabled={true}
         />
         <FormControlLabel
           value='linked'
