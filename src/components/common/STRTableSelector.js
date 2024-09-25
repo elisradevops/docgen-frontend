@@ -7,10 +7,23 @@ import Autocomplete from '@material-ui/lab/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@material-ui/icons/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@material-ui/icons/CheckBox';
 import { PrimaryButton } from 'office-ui-fabric-react';
-import { Box, Radio, RadioGroup } from '@material-ui/core';
+import { FormLabel, Box, Radio, RadioGroup } from '@material-ui/core';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
+
+const initialStepsExecutionState = {
+  isEnabled: false,
+  generateAttachments: { isEnabled: false, attachmentType: 'asEmbedded' },
+  generateRequirements: { isEnabled: false, requirementType: 'linked' },
+  traceAnalysisEnabled: false,
+};
+
+const initialStepsAnalysisState = {
+  isEnabled: false,
+  generateRunAttachments: { isEnabled: false, attachmentType: 'asEmbedded' },
+  isGenerateLinkPcrsEnabled: false,
+};
 
 const STRTableSelector = ({
   store,
@@ -30,16 +43,13 @@ const STRTableSelector = ({
   const [selectedTestSuites, setSelectedTestSuites] = useState([]);
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
   const [includeConfigurations, setIncludeConfigurations] = useState(false);
-  const [includeDetailedStepsExecution, setIncludeDetailedStepsExecution] = useState(false);
   const [includeHierarchy, setIncludeHierarchy] = useState(false);
-  const [includeAttachments, setIncludeAttachments] = useState(false);
-  const [includeCoveredRequirements, setIncludeCoveredRequirements] = useState(false);
-  const [includeLinkedPCRs, setIncludeLinkedPCRs] = useState(false);
-  const [includeTraceAnalysis, setIncludeTraceAnalysis] = useState(false);
-  const [traceAnalysisSelection, setTraceAnalysisSelection] = useState('');
   const [includeOpenPCRs, setIncludeOpenPCRs] = useState(false);
   const [openPCRsSelection, setOpenPCRsSelection] = useState('linked');
   const [includeTestLog, setIncludeTestLog] = useState(false);
+
+  const [stepExecutionState, setStepExecutionState] = useState(initialStepsExecutionState);
+  const [stepAnalysisState, setStepAnalysisState] = useState(initialStepsAnalysisState);
 
   useEffect(() => {
     if (editingMode === false) {
@@ -48,14 +58,19 @@ const STRTableSelector = ({
   });
   // }, [editingMode]);
 
+  //For detailed steps execution
   useEffect(() => {
-    if (!includeDetailedStepsExecution) {
-      setIncludeAttachments(false);
-      setIncludeCoveredRequirements(false);
-      setIncludeLinkedPCRs(false);
-      setIncludeTestLog(false);
+    if (!stepExecutionState?.isEnabled) {
+      setStepExecutionState(initialStepsExecutionState);
     }
-  }, [includeDetailedStepsExecution]);
+  }, [stepExecutionState.isEnabled]);
+
+  //For detailed steps analysis
+  useEffect(() => {
+    if (!stepAnalysisState.isEnabled) {
+      setStepAnalysisState(initialStepsAnalysisState);
+    }
+  }, [stepAnalysisState.isEnabled]);
 
   function UpdateDocumentRequestObject() {
     let testSuiteIdList = undefined;
@@ -91,90 +106,14 @@ const STRTableSelector = ({
           includeHierarchy: includeHierarchy,
           includeOpenPCRs: includeOpenPCRs,
           includeTestLog: includeTestLog,
+          stepExecution: stepExecutionState,
+          stepAnalysis: stepAnalysisState,
         },
       },
       contentControlIndex
     );
   }
-
   const filteredTestSuiteList = testSuiteList.slice(1); // Skip the first item of the list
-
-  const traceAnalysisOptions = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-      <RadioGroup
-        defaultValue='query'
-        name='trace-analysis-buttons-group'
-        value={traceAnalysisSelection}
-        onChange={(event) => {
-          setTraceAnalysisSelection(event.target.value);
-        }}
-      >
-        <FormControlLabel
-          value='query'
-          label='From Query'
-          control={<Radio />}
-        />
-        <FormControlLabel
-          value='linked'
-          label='From Linked Requirements'
-          control={<Radio />}
-        />
-      </RadioGroup>
-    </Box>
-  );
-
-  const detailedExecutionStepsElements = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-      <FormControlLabel
-        label='Generate Attachments'
-        control={
-          <Checkbox
-            value={includeAttachments}
-            onChange={(event, checked) => {
-              setIncludeAttachments(checked);
-            }}
-          />
-        }
-      />
-      <FormControlLabel
-        label='Generate Covered Requirements'
-        control={
-          <Checkbox
-            value={includeCoveredRequirements}
-            onChange={(event, checked) => {
-              setIncludeCoveredRequirements(checked);
-            }}
-          />
-        }
-      />
-
-      <FormControlLabel
-        label='Generate Linked PCRs'
-        control={
-          <Checkbox
-            value={includeLinkedPCRs}
-            onChange={(event, checked) => {
-              setIncludeLinkedPCRs(checked);
-            }}
-          />
-        }
-      />
-      <div>
-        <FormControlLabel
-          label='Trace Analysis'
-          control={
-            <Checkbox
-              value={includeTraceAnalysis}
-              onChange={(event, checked) => {
-                setIncludeTraceAnalysis(checked);
-              }}
-            />
-          }
-        />
-        {includeTraceAnalysis && traceAnalysisOptions}
-      </div>
-    </Box>
-  );
 
   const openPcrsElements = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
@@ -199,6 +138,179 @@ const STRTableSelector = ({
           control={<Radio />}
         />
       </RadioGroup>
+    </Box>
+  );
+
+  const attachmentTypeElements = (attachmentProp) => {
+    const getRadioGroup = (name, value, onChange) => (
+      <RadioGroup
+        name={name}
+        value={value ?? 'asEmbedded'} // Default to 'asEmbedded' if value is null or undefined
+        onChange={onChange}
+      >
+        <FormControlLabel
+          value='asEmbedded'
+          label='As Embedded'
+          control={<Radio />}
+        />
+        <FormControlLabel
+          value='asLink'
+          label='As Link'
+          control={<Radio />}
+        />
+      </RadioGroup>
+    );
+
+    const handleChange = (event, setState, key) => {
+      const newAttachmentType = event.target.value || 'asEmbedded'; // Fallback to 'asEmbedded' if empty
+      setState((prevState) => ({
+        ...prevState,
+        [key]: {
+          ...prevState[key],
+          attachmentType: newAttachmentType,
+        },
+      }));
+    };
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+        <FormLabel id={`include-office-${attachmentProp}-attachment-radio`}>
+          Included Office Files Type
+        </FormLabel>
+        {attachmentProp === 'execution' &&
+          getRadioGroup(
+            `include-office-execution-attachment-radio`,
+            stepExecutionState?.generateAttachments?.attachmentType,
+            (event) => handleChange(event, setStepExecutionState, 'generateAttachments')
+          )}
+        {attachmentProp === 'analysis' &&
+          getRadioGroup(
+            `include-office-analysis-attachment-radio`,
+            stepAnalysisState?.generateRunAttachments?.attachmentType,
+            (event) => handleChange(event, setStepAnalysisState, 'generateRunAttachments')
+          )}
+      </Box>
+    );
+  };
+
+  const linkedRequirement = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+      <RadioGroup
+        name='linked-requirement-buttons-group'
+        value={stepExecutionState?.generateRequirements?.requirementType ?? 'defaultType'}
+        onChange={(event) => {
+          const newRequirementType = event.target.value || 'query';
+          setStepExecutionState((prev) => ({
+            ...prev,
+            generateRequirements: {
+              ...prev?.generateRequirements,
+              requirementType: newRequirementType,
+            },
+          }));
+        }}
+      >
+        <FormControlLabel
+          value='query'
+          label='From Query'
+          control={<Radio />}
+        />
+        <FormControlLabel
+          value='linked'
+          label='From Linked Requirements'
+          control={<Radio />}
+        />
+      </RadioGroup>
+    </Box>
+  );
+
+  const detailedStepsExecutionElements = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+      <div>
+        <FormControlLabel
+          label='Generate Attachments'
+          control={
+            <Checkbox
+              value={stepExecutionState.generateAttachments.isEnabled}
+              onChange={(event, checked) => {
+                setStepExecutionState((prev) => ({
+                  ...prev,
+                  generateAttachments: { ...prev.generateAttachments, isEnabled: checked },
+                }));
+              }}
+            />
+          }
+        />
+        {stepExecutionState.generateAttachments.isEnabled && attachmentTypeElements('execution')}
+      </div>
+
+      <div>
+        <FormControlLabel
+          label='Generate Covered Requirements'
+          control={
+            <Checkbox
+              value={stepExecutionState.generateRequirements.isEnabled}
+              onChange={(event, checked) => {
+                setStepExecutionState((prev) => ({
+                  ...prev,
+                  generateRequirements: { ...prev.generateRequirements, isEnabled: checked },
+                }));
+              }}
+            />
+          }
+        />
+        {stepExecutionState.generateRequirements.isEnabled && linkedRequirement}
+      </div>
+
+      <FormControlLabel
+        label='Trace Analysis'
+        control={
+          <Checkbox
+            value={stepAnalysisState.traceAnalysisEnabled}
+            onChange={(event, checked) => {
+              setStepExecutionState((prev) => ({
+                ...prev,
+                traceAnalysisEnabled: checked,
+              }));
+            }}
+          />
+        }
+      />
+    </Box>
+  );
+
+  const detailedStepsAnalysisElements = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+      <div>
+        <FormControlLabel
+          label='Generate Run Attachments'
+          control={
+            <Checkbox
+              value={stepAnalysisState.generateRunAttachments.isEnabled}
+              onChange={(event, checked) =>
+                setStepAnalysisState((prev) => ({
+                  ...prev,
+                  generateRunAttachments: { ...prev.generateRunAttachments, isEnabled: checked },
+                }))
+              }
+            />
+          }
+        />
+        {stepAnalysisState.generateRunAttachments.isEnabled && attachmentTypeElements('analysis')}
+      </div>
+
+      {/*TBD: <div>
+        <FormControlLabel
+          label='Generate Linked PCRs'
+          control={
+            <Checkbox
+              value={stepAnalysisState.isGenerateLinkPcrsEnabled}
+              onChange={(event, checked) => {
+                setStepAnalysisState((prev) => ({ ...prev, isGenerateLinkPcrsEnabled: checked }));
+              }}
+            />
+          }
+        />
+      </div> */}
     </Box>
   );
 
@@ -292,22 +404,6 @@ const STRTableSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={includeDetailedStepsExecution}
-              onChange={(event, checked) => {
-                setIncludeDetailedStepsExecution(checked);
-              }}
-            />
-          }
-          label='Generate Detailed Steps Execution'
-        />
-
-        {includeDetailedStepsExecution && detailedExecutionStepsElements}
-      </div>
-
-      <div>
-        <FormControlLabel
-          control={
-            <Checkbox
               value={includeOpenPCRs}
               onChange={(event, checked) => {
                 setIncludeOpenPCRs(checked);
@@ -332,6 +428,40 @@ const STRTableSelector = ({
           }
           label='Test Log'
         />
+      </div>
+
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              value={stepExecutionState.isEnabled}
+              onChange={(event, checked) => {
+                setStepExecutionState((prev) => ({ ...prev, isEnabled: checked }));
+              }}
+            />
+          }
+          //TODO: enable this after implementation
+          disabled={true}
+          label='Generate Detailed Steps Execution'
+        />
+
+        {stepExecutionState.isEnabled && detailedStepsExecutionElements}
+      </div>
+
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              value={stepAnalysisState.isEnabled}
+              onChange={(event, checked) => {
+                setStepAnalysisState((prev) => ({ ...prev, isEnabled: checked }));
+              }}
+            />
+          }
+          label='Generate Detailed Steps Analysis'
+        />
+
+        {stepAnalysisState.isEnabled && detailedStepsAnalysisElements}
       </div>
 
       <br />
