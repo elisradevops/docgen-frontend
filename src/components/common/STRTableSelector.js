@@ -15,7 +15,7 @@ const checkedIcon = <CheckBoxIcon fontSize='small' />;
 const initialStepsExecutionState = {
   isEnabled: false,
   generateAttachments: { isEnabled: false, attachmentType: 'asEmbedded' },
-  generateRequirements: { isEnabled: false, requirementType: 'linked' },
+  generateRequirements: { isEnabled: false, requirementType: 'linked', includeCustomerId: false },
   traceAnalysisEnabled: false,
 };
 
@@ -195,7 +195,23 @@ const STRTableSelector = ({
 
   const linkedRequirement = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-      <RadioGroup
+      <FormControlLabel
+        label='Include Customer Id'
+        control={
+          <Checkbox
+            label='Include Customer Id'
+            value={stepExecutionState.generateAttachments.includeCustomerId}
+            onChange={(event, checked) => {
+              setStepExecutionState((prev) => ({
+                ...prev,
+                generateAttachments: { ...prev.generateAttachments, includeCustomerId: checked },
+              }));
+            }}
+          />
+        }
+      />
+
+      {/* <RadioGroup
         name='linked-requirement-buttons-group'
         value={stepExecutionState?.generateRequirements?.requirementType ?? 'defaultType'}
         onChange={(event) => {
@@ -219,7 +235,7 @@ const STRTableSelector = ({
           label='From Linked Requirements'
           control={<Radio />}
         />
-      </RadioGroup>
+      </RadioGroup> */}
     </Box>
   );
 
@@ -440,8 +456,6 @@ const STRTableSelector = ({
               }}
             />
           }
-          //TODO: enable this after implementation
-          disabled={true}
           label='Generate Detailed Steps Execution'
         />
 
