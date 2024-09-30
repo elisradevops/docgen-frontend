@@ -42,6 +42,7 @@ const STRTableSelector = ({
   });
   const [selectedTestSuites, setSelectedTestSuites] = useState([]);
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
+  const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
   const [includeConfigurations, setIncludeConfigurations] = useState(false);
   const [includeHierarchy, setIncludeHierarchy] = useState(false);
   const [includeOpenPCRs, setIncludeOpenPCRs] = useState(false);
@@ -74,25 +75,26 @@ const STRTableSelector = ({
 
   function UpdateDocumentRequestObject() {
     let testSuiteIdList = undefined;
+    if (isSuiteSpecific) {
+      testSuiteIdList = [];
 
-    testSuiteIdList = [];
+      // Function to recursively add children suites
+      const addChildrenSuites = (suiteId) => {
+        const suite = testSuiteList.find((suite) => suite.id === suiteId);
+        if (suite && !testSuiteIdList.includes(suiteId)) {
+          testSuiteIdList.push(suiteId);
+          const children = testSuiteList.filter((child) => child.parent === suiteId);
+          children.forEach((child) => {
+            addChildrenSuites(child.id);
+          });
+        }
+      };
 
-    // Function to recursively add children suites
-    const addChildrenSuites = (suiteId) => {
-      const suite = testSuiteList.find((suite) => suite.id === suiteId);
-      if (suite && !testSuiteIdList.includes(suiteId)) {
-        testSuiteIdList.push(suiteId);
-        const children = testSuiteList.filter((child) => child.parent === suiteId);
-        children.forEach((child) => {
-          addChildrenSuites(child.id);
-        });
-      }
-    };
-
-    // Add suites selected and their children
-    selectedTestSuites.forEach((suite) => {
-      addChildrenSuites(suite.id);
-    });
+      // Add suites selected and their children
+      selectedTestSuites.forEach((suite) => {
+        addChildrenSuites(suite.id);
+      });
+    }
     addToDocumentRequestObject(
       {
         type: type,
@@ -356,38 +358,52 @@ const STRTableSelector = ({
         />
       </div>
       <div>
-        <Autocomplete
-          style={{ marginBlock: 8, width: 300 }}
-          multiple
-          options={filteredTestSuiteList}
-          disableCloseOnSelect
-          autoHighlight
-          groupBy={(option) => option.parent}
-          getOptionLabel={(option) => `${option.name} - (${option.id})`}
-          renderOption={(option, { selected }) => (
-            <React.Fragment>
-              <Checkbox
-                icon={icon}
-                checkedIcon={checkedIcon}
-                style={{ marginRight: 8 }}
-                checked={selected}
-              />
-              {`${option.name} - (${option.id})`}
-            </React.Fragment>
-          )}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='With suite cases'
-              variant='outlined'
+        <FormControlLabel
+          control={
+            <Checkbox
+              value={isSuiteSpecific}
+              onChange={(event, checked) => {
+                setIsSuiteSpecific(checked);
+              }}
             />
-          )}
-          onChange={async (event, newValue) => {
-            setSelectedTestSuites(newValue);
-          }}
+          }
+          label='Enable suite specific selection'
         />
       </div>
-
+      {isSuiteSpecific && (
+        <div>
+          <Autocomplete
+            style={{ marginBlock: 8, width: 300 }}
+            multiple
+            options={filteredTestSuiteList}
+            disableCloseOnSelect
+            autoHighlight
+            groupBy={(option) => option.parent}
+            getOptionLabel={(option) => `${option.name} - (${option.id})`}
+            renderOption={(option, { selected }) => (
+              <React.Fragment>
+                <Checkbox
+                  icon={icon}
+                  checkedIcon={checkedIcon}
+                  style={{ marginRight: 8 }}
+                  checked={selected}
+                />
+                {`${option.name} - (${option.id})`}
+              </React.Fragment>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label='With suite cases'
+                variant='outlined'
+              />
+            )}
+            onChange={async (event, newValue) => {
+              setSelectedTestSuites(newValue);
+            }}
+          />
+        </div>
+      )}
       <div>
         <FormControlLabel
           control={
