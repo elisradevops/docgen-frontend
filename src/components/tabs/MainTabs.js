@@ -11,6 +11,9 @@ import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
 import Button from '@material-ui/core/Button';
 import { makeStyles } from '@material-ui/core/styles';
+import { Box, Container, Grid } from '@material-ui/core';
+import STRGuide from '../common/STRGuide';
+import STDGuide from '../common/STDGuide';
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -31,6 +34,17 @@ const MainTabs = observer(({ store }) => {
   const logout = () => {
     removeCookie('azuredevopsUrl');
     removeCookie('azuredevopsPat');
+  };
+
+  const generateGuide = (docType) => {
+    switch (docType) {
+      case 'STD':
+        return <STDGuide />;
+      case 'STR':
+        return <STRGuide />;
+      default:
+        return null;
+    }
   };
 
   return (
@@ -71,10 +85,28 @@ const MainTabs = observer(({ store }) => {
       </AppBar>
       {store.documentTypes.map((docType, key) => {
         return selectedTab === key ? (
-          <DocFormGenerator
-            docType={docType}
-            store={store}
-          />
+          <Grid
+            container
+            spacing={2}
+          >
+            <Grid
+              item
+              xs={3}
+            >
+              <Box sx={{ mx: 1 }}>
+                <DocFormGenerator
+                  docType={docType}
+                  store={store}
+                />
+              </Box>
+            </Grid>
+            <Grid
+              item
+              xs={9}
+            >
+              {generateGuide(docType)}
+            </Grid>
+          </Grid>
         ) : null;
       })}
       {selectedTab === 4 ? (
