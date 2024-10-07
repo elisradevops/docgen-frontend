@@ -117,6 +117,9 @@ const TestContentSelector = ({
   return (
     <>
       <div>
+        {/*
+        
+        TODO: add this later if needed
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
@@ -134,7 +137,7 @@ const TestContentSelector = ({
           onChange={async (event, newValue) => {
             setContentHeadingLevel(newValue.key);
           }}
-        />
+        /> */}
       </div>
       <div>
         <Autocomplete

@@ -10,6 +10,7 @@ import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
+import STRGuide from '../../common/STRGuide';
 
 const DocFormGenerator = observer(({ docType, store }) => {
   const [loading, setLoading] = useState(false);
@@ -151,8 +152,12 @@ const DocFormGenerator = observer(({ docType, store }) => {
           }}
         />
       </div>
+
       {selectedDocForm && (
-        <div>
+        <Grid
+          container
+          spacing={2}
+        >
           <Autocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
@@ -203,12 +208,9 @@ const DocFormGenerator = observer(({ docType, store }) => {
             {docForm && docForm.contentControls
               ? docForm.contentControls.map((contentControl, key) => {
                   return (
-                    <Grid
-                      item
-                      xs={3}
-                    >
+                    <Grid item>
                       <typography
-                        fontWeight='fontWeughtBold'
+                        fontWeight='fontWeightBold'
                         fontSize={20}
                         m={1}
                       >
@@ -227,7 +229,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
             disabled={loading}
           />
           {loading && <CircularProgress />}
-        </div>
+        </Grid>
       )}
     </>
   );

@@ -283,6 +283,8 @@ const STRTableSelector = ({
         label='Trace Analysis'
         control={
           <Checkbox
+            // TODO: remove this after implementation
+            disabled={true}
             value={stepAnalysisState.traceAnalysisEnabled}
             onChange={(event, checked) => {
               setStepExecutionState((prev) => ({
