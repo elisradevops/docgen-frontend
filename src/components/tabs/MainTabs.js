@@ -118,7 +118,6 @@ const MainTabs = observer(({ store }) => {
             spacing={2}
           >
             <Grid
-              container
               item
               xs={3}
             >

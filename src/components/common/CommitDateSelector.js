@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { PrimaryButton } from '@fluentui/react';
-import { headingLevelOptions } from '../../store/data/dropDownOptions';
+// import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
+import { Grid } from '@mui/material';
 
 const CommitDateSelector = ({
   store,
@@ -65,7 +67,7 @@ const CommitDateSelector = ({
 
   return (
     <div>
-      <Autocomplete
+      {/* <Autocomplete
         disableClearable
         style={{ marginBlock: 8, width: 300 }}
         autoHighlight
@@ -82,7 +84,7 @@ const CommitDateSelector = ({
         onChange={async (event, newValue) => {
           setContentHeadingLevel(newValue.key);
         }}
-      />
+      /> */}
 
       <Autocomplete
         disableClearable
@@ -133,19 +135,33 @@ const CommitDateSelector = ({
       ) : null}
 
       <LocalizationProvider dateAdapter={AdapterDateFns}>
-        <DatePicker
-          label='StartDate'
-          disableFuture
-          value={selectedStartDate}
-          onChange={setSelectedStartDate}
-        />
-
-        <DatePicker
-          label='EndDate'
-          disableFuture
-          value={selectedEndDate}
-          onChange={setSelectedEndDate}
-        />
+        <Grid
+          container
+          spacing={2}
+        >
+          <Grid
+            item
+            xs={12}
+          >
+            <DatePicker
+              label='Start Date'
+              disableFuture
+              value={selectedStartDate}
+              onChange={setSelectedStartDate}
+            />
+          </Grid>
+          <Grid
+            item
+            xs={12}
+          >
+            <DatePicker
+              label='End Date'
+              disableFuture
+              value={selectedEndDate}
+              onChange={setSelectedEndDate}
+            />
+          </Grid>
+        </Grid>
       </LocalizationProvider>
       <br />
       <br />

@@ -119,7 +119,7 @@ class DocGenDataStore {
   //Every time selecting a tab of a certain doctype then all the specified files from that type are returned
   fetchDocTemplates(docType) {
     this.documentTemplates = [];
-    getBucketFileList('document-forms', docType).then(async (data = []) => {
+    return getBucketFileList('document-forms', docType).then(async (data = []) => {
       await Promise.all(
         data.map(async (form) => {
           let fileName = '';
@@ -136,6 +136,7 @@ class DocGenDataStore {
           this.documentTemplates.push(jsonFormTemplate);
         })
       );
+      return this.documentTemplates; // Return the documentTemplates after fetching is done
     });
   }
 

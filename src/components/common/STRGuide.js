@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { List, ListItem, ListItemText, Collapse, Box, Typography } from '@mui/material';
+import {
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Collapse,
+  Box,
+  Typography,
+  ListItemIcon,
+} from '@mui/material';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 
@@ -21,10 +30,7 @@ export default function STRGuide() {
       >
         Guide to the STR Generator Form
       </Typography>
-      <List
-        component='nav'
-        aria-labelledby='nested-list-subheader'
-      >
+      <List>
         {/* Main List Items */}
         <ListItem>
           <ListItemText
@@ -61,16 +67,13 @@ export default function STRGuide() {
         </ListItem>
 
         {/* Collapsible for Generate Detailed Steps Execution */}
-        <ListItem
-          button
-          onClick={handleClickStepsExecution}
-        >
+        <ListItemButton onClick={handleClickStepsExecution}>
+          <ListItemIcon>{openStepsExecution ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Generate Detailed Steps Execution'
             secondary='The STD / ATP will be generated, for each step in test procedure table, the Run status and the Actual Result (Comment) will be generated in 2 different columns.'
           />
-          {openStepsExecution ? <ExpandLess /> : <ExpandMore />}
-        </ListItem>
+        </ListItemButton>
         <Collapse
           in={openStepsExecution}
           timeout='auto'
@@ -102,16 +105,13 @@ export default function STRGuide() {
         </Collapse>
 
         {/* Collapsible for Generate Detailed Steps Analysis */}
-        <ListItem
-          button
-          onClick={handleClickStepsAnalysis}
-        >
+        <ListItemButton onClick={handleClickStepsAnalysis}>
+          <ListItemIcon>{openStepsAnalysis ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Generate Detailed Steps Analysis'
             secondary='The Test Run Comments and the Test Run Attachments will be appear in that Appendix.'
           />
-          {openStepsAnalysis ? <ExpandLess /> : <ExpandMore />}
-        </ListItem>
+        </ListItemButton>
         <Collapse
           in={openStepsAnalysis}
           timeout='auto'
@@ -131,16 +131,13 @@ export default function STRGuide() {
         </Collapse>
 
         {/* Collapsible for Attachment Types */}
-        <ListItem
-          button
-          onClick={handleClickAttachmentTypes}
-        >
+        <ListItemButton onClick={handleClickAttachmentTypes}>
+          <ListItemIcon>{openAttachmentTypes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Attachment Types'
-            secondary='If the document is zipped, then please extract the files using WinRAR and open them.'
+            secondary='If the document is zipped, then please extract the files.'
           />
-          {openAttachmentTypes ? <ExpandLess /> : <ExpandMore />}
-        </ListItem>
+        </ListItemButton>
         <Collapse
           in={openAttachmentTypes}
           timeout='auto'

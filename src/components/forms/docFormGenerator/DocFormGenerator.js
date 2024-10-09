@@ -10,23 +10,39 @@ import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
+import { Box } from '@mui/material';
 
 const DocFormGenerator = observer(({ docType, store }) => {
   const [loading, setLoading] = useState(false);
+  const [loadingForm, setLoadingForm] = useState(false);
   const [docTemplates, setDocTemplates] = useState([]);
   const [selectedDocForm, setSelectedDocForm] = useState(null);
   const [docForm, setDocForm] = useState(null);
 
   useEffect(() => {
     if (docType !== '') {
-      store.fetchDocTemplates(docType);
-      setDocTemplates(store.documentTemplates);
+      setLoadingForm(true);
+      store.fetchDocTemplates(docType).then((templates) => {
+        setDocTemplates(templates); // Set state after templates are fetched
+        setLoadingForm(false);
+      });
     }
   }, [store, docType, setDocTemplates]);
 
+  // Automatically select the first doc template when docTemplates change
+  useEffect(() => {
+    if (docTemplates.length > 0) {
+      setSelectedDocForm({
+        key: 0,
+        text: docTemplates[0].documentTitle, // Automatically selecting the first template
+      });
+    }
+  }, [docTemplates]);
+
+  // Update docForm based on selected document
   useEffect(() => {
     if (selectedDocForm !== null && docTemplates.length > 0) {
-      var temp = docTemplates.find((docForm) =>
+      const temp = docTemplates.find((docForm) =>
         docForm.documentTitle.toLowerCase().includes(selectedDocForm.text.toLowerCase())
       );
       setDocForm(temp);
@@ -127,130 +143,103 @@ const DocFormGenerator = observer(({ docType, store }) => {
   };
 
   return (
-    <>
-      {/* <Grid
-        container
-        item
-        spacing={2}
-      > */}
-      <Grid
-        item
-        xs={12}
-      >
-        <Autocomplete
-          disableClearable
-          style={{ marginBlock: 8, width: 300 }}
-          autoHighlight
-          openOnFocus
-          options={docTemplates.map((docForm, key) => {
-            return { key: key, text: docForm.documentTitle };
-          })}
-          getOptionLabel={(option) => `${option.text}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='Select a Document Form'
-              variant='outlined'
-            />
-          )}
-          onChange={async (event, newValue) => {
-            console.log(`Selected form ${JSON.stringify(newValue)}`);
-            setSelectedDocForm(newValue);
-          }}
-        />
-      </Grid>
-      {selectedDocForm && (
-        <>
-          <Grid
-            item
-            xs={12}
-          >
-            <Autocomplete
-              disableClearable
-              style={{ marginBlock: 8, width: 300 }}
-              autoHighlight
-              openOnFocus
-              options={store.teamProjectsList.map((teamProject) => {
-                return { key: teamProject.id, text: teamProject.name };
-              })}
-              getOptionLabel={(option) => `${option.text}`}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='Select a TeamProject'
-                  variant='outlined'
-                />
-              )}
-              onChange={async (event, newValue) => {
-                store.setTeamProject(newValue.key, newValue.text);
-              }}
-            />
-          </Grid>
-          <Grid
-            item
-            xs={12}
-          >
-            <Autocomplete
-              disableClearable
-              style={{ marginBlock: 8, width: 300 }}
-              autoHighlight
-              openOnFocus
-              options={store.templateList
-                .filter((template) => template.name.toLowerCase().includes(docType.toLowerCase()))
-                .map((template) => {
-                  return { url: template.url, text: template.name };
+    <Box sx={{ minHeight: '400px' }}>
+      {loadingForm ? (
+        <CircularProgress />
+      ) : (
+        selectedDocForm && (
+          <Grid container>
+            <Grid
+              item
+              xs={12}
+            >
+              <Autocomplete
+                disableClearable
+                style={{ marginBlock: 8, width: 300 }}
+                autoHighlight
+                openOnFocus
+                options={store.teamProjectsList.map((teamProject) => {
+                  return { key: teamProject.id, text: teamProject.name };
                 })}
-              getOptionLabel={(option) => `${option.text}`}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='Select a Template'
-                  variant='outlined'
-                />
-              )}
-              onChange={async (event, newValue) => {
-                store.setSelectedTemplate(newValue);
-              }}
-            />
-          </Grid>
+                getOptionLabel={(option) => `${option.text}`}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label='Select a TeamProject'
+                    variant='outlined'
+                  />
+                )}
+                onChange={async (event, newValue) => {
+                  store.setTeamProject(newValue.key, newValue.text);
+                }}
+              />
+            </Grid>
+            <Grid
+              item
+              xs={12}
+            >
+              <Autocomplete
+                disableClearable
+                style={{ marginBlock: 8, width: 300 }}
+                autoHighlight
+                openOnFocus
+                options={store.templateList
+                  .filter((template) => template.name.toLowerCase().includes(docType.toLowerCase()))
+                  .map((template) => {
+                    return { url: template.url, text: template.name };
+                  })}
+                getOptionLabel={(option) => `${option.text}`}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label='Select a Template'
+                    variant='outlined'
+                  />
+                )}
+                onChange={async (event, newValue) => {
+                  store.setSelectedTemplate(newValue);
+                }}
+              />
+            </Grid>
 
-          <Grid
-            container
-            item
-            spacing={3}
-          >
-            {docForm && docForm.contentControls
-              ? docForm.contentControls.map((contentControl, key) => {
-                  return (
-                    <Grid item>
-                      <typography
-                        fontWeight='fontWeightBold'
-                        fontSize={20}
-                        m={1}
-                      >
-                        {contentControl.title}:
-                      </typography>
-                      {generateFormControls(contentControl, key)}
-                    </Grid>
-                  );
-                })
-              : null}
+            <Grid
+              container
+              item
+              spacing={3}
+            >
+              {docForm && docForm.contentControls
+                ? docForm.contentControls.map((contentControl, key) => {
+                    return (
+                      <Grid item>
+                        <typography
+                          fontWeight='fontWeightBold'
+                          fontSize={20}
+                          m={1}
+                        >
+                          {contentControl.title}:
+                        </typography>
+                        {generateFormControls(contentControl, key)}
+                      </Grid>
+                    );
+                  })
+                : null}
+            </Grid>
+            <Grid
+              item
+              xs={12}
+            >
+              <PrimaryButton
+                text='Send Request'
+                onClick={handleSendRequest}
+                disabled={loading}
+              />
+              {loading && <CircularProgress />}
+            </Grid>
           </Grid>
-          <Grid
-            item
-            xs={12}
-          >
-            <PrimaryButton
-              text='Send Request'
-              onClick={handleSendRequest}
-              disabled={loading}
-            />
-            {loading && <CircularProgress />}
-          </Grid>
-        </>
+        )
       )}
       {/* </Grid> */}
-    </>
+    </Box>
   );
 });
 
