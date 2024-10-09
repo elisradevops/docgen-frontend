@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import { headingLevelOptions } from "../../store/data/dropDownOptions";
-import { Dropdown } from "office-ui-fabric-react/lib/Dropdown";
-import { PrimaryButton } from "office-ui-fabric-react";
-import Autocomplete from '@material-ui/lab/Autocomplete';
-import TextFieldM from '@material-ui/core/TextField';
+import React, { useState } from 'react';
+import { headingLevelOptions } from '../../store/data/dropDownOptions';
+import { Dropdown } from '@fluentui/react/lib/Dropdown';
+import { PrimaryButton } from '@fluentui/react';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
 
 const dropdownStyles = {
   dropdown: { width: 300 },
@@ -20,8 +20,8 @@ const QueryContentSelector = ({
 }) => {
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
   const [selectedSharedQuery, setselectedSharedQuery] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
   return (
     <div>
@@ -33,10 +33,10 @@ const QueryContentSelector = ({
         options={headingLevelOptions}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextFieldM
+          <TextField
             {...params}
-            label="Select an Heading level"
-            variant="outlined"
+            label='Select an Heading level'
+            variant='outlined'
           />
         )}
         onChange={async (event, newValue) => {
@@ -44,8 +44,8 @@ const QueryContentSelector = ({
         }}
       />
       <Dropdown
-        placeholder="Select a Query"
-        label="Select a Query"
+        placeholder='Select a Query'
+        label='Select a Query'
         value={selectedSharedQuery.id}
         options={sharedQueriesList.map((query) => {
           return { id: query.id, text: query.queryName };
@@ -60,7 +60,7 @@ const QueryContentSelector = ({
       {/* works only in document managing mode */}
       {editingMode ? (
         <PrimaryButton
-          text="Add Content To Document"
+          text='Add Content To Document'
           onClick={() => {
             addToDocumentRequestObject(
               {

@@ -1,19 +1,18 @@
-import React, { useState } from "react";
-import CommitRangeSelector from "./CommitRangeSelector";
-import CommitDateSelector from "./CommitDateSelector";
-import PipelineSelector from "./PipelineSelector";
-import ReleaseSelector from "./ReleaseSelector";
-import { observer } from "mobx-react";
-import Autocomplete from "@material-ui/lab/Autocomplete";
-import TextFieldM from "@material-ui/core/TextField";
-import PullRequestSelector from "./PullRequestSelector";
+import React, { useState } from 'react';
+import CommitRangeSelector from './CommitRangeSelector';
+import CommitDateSelector from './CommitDateSelector';
+import PipelineSelector from './PipelineSelector';
+import ReleaseSelector from './ReleaseSelector';
+import { observer } from 'mobx-react';
+import { Autocomplete, TextField } from '@mui/material';
+import PullRequestSelector from './PullRequestSelector';
 
 const baseDataType = [
- // { key: 0, text: "commit-range", type: "range" },
-  { key: 1, text: "commit-date", type: "date" },
- // { key: 2, text: "pipeline-range", type: "pipeline" },
- // { key: 3, text: "release-range", type: "release" },
- // { key: 4, text: "pullrequest-range", type: "pullrequest" },
+  // { key: 0, text: "commit-range", type: "range" },
+  { key: 1, text: 'commit-date', type: 'date' },
+  // { key: 2, text: "pipeline-range", type: "pipeline" },
+  // { key: 3, text: "release-range", type: "release" },
+  // { key: 4, text: "pullrequest-range", type: "pullrequest" },
 ];
 
 const ChangeTableSelector = observer(
@@ -26,7 +25,7 @@ const ChangeTableSelector = observer(
     addToDocumentRequestObject,
     contentControlIndex,
   }) => {
-    const [selectedType, setselectedType] = useState("");
+    const [selectedType, setselectedType] = useState('');
 
     return (
       <div>
@@ -38,21 +37,21 @@ const ChangeTableSelector = observer(
           options={baseDataType}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
-            <TextFieldM
+            <TextField
               {...params}
-              label="Select Base Data Type"
-              variant="outlined"
+              label='Select Base Data Type'
+              variant='outlined'
             />
           )}
           onChange={(event, newValue) => {
             setselectedType(newValue.type);
           }}
         />
-        {selectedType === "range" ? (
+        {selectedType === 'range' ? (
           <CommitRangeSelector
             store={store}
             contentControlTitle={contentControlTitle}
-            skin="change-table"
+            skin='change-table'
             repoList={store.repoList}
             branchesList={store.branchesList}
             gitRepoCommits={store.gitRepoCommits}
@@ -61,11 +60,11 @@ const ChangeTableSelector = observer(
             contentControlIndex={contentControlIndex}
           />
         ) : null}
-        {selectedType === "date" ? (
+        {selectedType === 'date' ? (
           <CommitDateSelector
             store={store}
             contentControlTitle={contentControlTitle}
-            skin="change-table"
+            skin='change-table'
             repoList={store.repoList}
             branchesList={store.branchesList}
             editingMode={editingMode}
@@ -73,11 +72,11 @@ const ChangeTableSelector = observer(
             contentControlIndex={contentControlIndex}
           />
         ) : null}
-        {selectedType === "pipeline" ? (
+        {selectedType === 'pipeline' ? (
           <PipelineSelector
             store={store}
             contentControlTitle={contentControlTitle}
-            skin="change-table"
+            skin='change-table'
             pipelineList={store.pipelineList}
             pipelineRunHistory={store.pipelineRunHistory}
             editingMode={editingMode}
@@ -85,11 +84,11 @@ const ChangeTableSelector = observer(
             contentControlIndex={contentControlIndex}
           />
         ) : null}
-        {selectedType === "release" ? (
+        {selectedType === 'release' ? (
           <ReleaseSelector
             store={store}
             contentControlTitle={contentControlTitle}
-            skin="change-table"
+            skin='change-table'
             releaseDefinitionList={store.releaseDefinitionList}
             releaseDefinitionHistory={store.releaseDefinitionHistory}
             editingMode={editingMode}
@@ -97,11 +96,11 @@ const ChangeTableSelector = observer(
             contentControlIndex={contentControlIndex}
           />
         ) : null}
-                {selectedType === "pullrequest" ? (
+        {selectedType === 'pullrequest' ? (
           <PullRequestSelector
             store={store}
             contentControlTitle={contentControlTitle}
-            skin="change-table"
+            skin='change-table'
             repoList={store.repoList}
             pullRequests={store.pullRequestList}
             editingMode={editingMode}

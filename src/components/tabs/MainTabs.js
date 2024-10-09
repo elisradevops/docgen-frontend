@@ -6,28 +6,61 @@ import DeveloperForm from '../forms/develeoperForm/DeveloperForm';
 import DocFormGenerator from '../forms/docFormGenerator/DocFormGenerator';
 import DocumentsTab from '../forms/documentsTab/DocumentsTab';
 
-import AppBar from '@material-ui/core/AppBar';
-import Tabs from '@material-ui/core/Tabs';
-import Tab from '@material-ui/core/Tab';
-import Button from '@material-ui/core/Button';
-import { makeStyles } from '@material-ui/core/styles';
-import { Box, Container, Grid } from '@material-ui/core';
+import AppBar from '@mui/material/AppBar';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import Button from '@mui/material/Button';
+import { styled } from '@mui/material/styles';
+import { Box, Grid } from '@mui/material';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
 
-const useStyles = makeStyles((theme) => ({
-  root: {
+const StyledTabs = styled((props) => (
+  <Tabs
+    {...props}
+    TabIndicatorProps={{ children: <span className='MuiTabs-indicatorSpan' /> }}
+  />
+))({
+  '& .MuiTabs-indicator': {
     display: 'flex',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
-  button: {
-    color: 'white',
+  '& .MuiTabs-indicatorSpan': {
+    maxWidth: 40,
+    width: '100%',
     backgroundColor: 'red',
+  },
+});
+
+const StyledTab = styled((props) => (
+  <Tab
+    disableRipple
+    {...props}
+  />
+))(({ theme }) => ({
+  textTransform: 'none',
+  fontWeight: theme.typography.fontWeightRegular,
+  fontSize: theme.typography.pxToRem(15),
+  marginRight: theme.spacing(1),
+  color: 'rgba(255, 255, 255, 0.7)',
+  '&.Mui-selected': {
+    color: '#fff',
+  },
+  '&.Mui-focusVisible': {
+    backgroundColor: 'rgba(100, 95, 228, 0.32)',
+  },
+}));
+
+const StyledButton = styled(Button)(({ theme }) => ({
+  color: 'white',
+  backgroundColor: 'red',
+  '&:hover': {
+    backgroundColor: 'darkred',
   },
 }));
 
 const MainTabs = observer(({ store }) => {
-  const classes = useStyles();
   const [selectedTab, setSelectedTab] = useState(4);
   const [cookies, setCookie, removeCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
 
@@ -50,8 +83,8 @@ const MainTabs = observer(({ store }) => {
   return (
     <div>
       <AppBar position='static'>
-        <div className={classes.root}>
-          <Tabs
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <StyledTabs
             value={selectedTab}
             onChange={(event, newValue) => {
               setSelectedTab(newValue);
@@ -60,28 +93,23 @@ const MainTabs = observer(({ store }) => {
           >
             {store.documentTypes.map((docType, key) => {
               return (
-                <Tab
+                <StyledTab
                   label={docType}
                   value={key}
                 />
               );
             })}
-            <Tab
+            <StyledTab
               label='Developer Tab'
               value={4}
             />
-            <Tab
+            <StyledTab
               label='Documents'
               value={99}
             />
-          </Tabs>
-          <Button
-            className={classes.button}
-            onClick={logout}
-          >
-            Logout
-          </Button>
-        </div>
+          </StyledTabs>
+          <StyledButton onClick={logout}>Logout</StyledButton>
+        </Box>
       </AppBar>
       {store.documentTypes.map((docType, key) => {
         return selectedTab === key ? (
@@ -90,16 +118,16 @@ const MainTabs = observer(({ store }) => {
             spacing={2}
           >
             <Grid
+              container
               item
               xs={3}
             >
-              <Box sx={{ mx: 1 }}>
-                <DocFormGenerator
-                  docType={docType}
-                  store={store}
-                />
-              </Box>
+              <DocFormGenerator
+                docType={docType}
+                store={store}
+              />
             </Grid>
+
             <Grid
               item
               xs={9}

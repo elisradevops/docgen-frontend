@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react";
-import { PrimaryButton } from "office-ui-fabric-react";
-import { headingLevelOptions } from "../../store/data/dropDownOptions";
-import Autocomplete from "@material-ui/lab/Autocomplete";
-import Checkbox from "@material-ui/core/Checkbox";
-import CheckBoxIcon from "@material-ui/icons/CheckBox";
-import CheckBoxOutlineBlankIcon from "@material-ui/icons/CheckBoxOutlineBlank";
-import TextField from "@material-ui/core/TextField";
+import React, { useState, useEffect } from 'react';
+import { PrimaryButton } from '@fluentui/react';
+import { headingLevelOptions } from '../../store/data/dropDownOptions';
+import Autocomplete from '@mui/material/Autocomplete';
+import Checkbox from '@mui/material/Checkbox';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import TextField from '@mui/material/TextField';
 
-const icon = <CheckBoxOutlineBlankIcon fontSize="small" />;
-const checkedIcon = <CheckBoxIcon fontSize="small" />;
+const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
+const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
 const PullRequestSelector = ({
   store,
@@ -21,8 +21,8 @@ const PullRequestSelector = ({
   contentControlIndex,
 }) => {
   const [selectedRepo, setSelectedRepo] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
   const [selectedPullRequests, setSelectedPullRequests] = useState([]);
 
@@ -39,7 +39,7 @@ const PullRequestSelector = ({
     });
     addToDocumentRequestObject(
       {
-        type: "pr-change-description-table",
+        type: 'pr-change-description-table',
         title: contentControlTitle,
         skin: skin,
         headingLevel: contentHeadingLevel,
@@ -67,8 +67,8 @@ const PullRequestSelector = ({
         renderInput={(params) => (
           <TextField
             {...params}
-            label="Select an Heading level"
-            variant="outlined"
+            label='Select an Heading level'
+            variant='outlined'
           />
         )}
         onChange={async (event, newValue) => {
@@ -85,7 +85,11 @@ const PullRequestSelector = ({
         })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextField {...params} label="Select a Repo" variant="outlined" />
+          <TextField
+            {...params}
+            label='Select a Repo'
+            variant='outlined'
+          />
         )}
         onChange={async (event, newValue) => {
           store.fetchRepoPullRequests(newValue.key);
@@ -93,18 +97,16 @@ const PullRequestSelector = ({
         }}
       />
 
-      {selectedRepo.key !== "" ? (
+      {selectedRepo.key !== '' ? (
         <Autocomplete
           style={{ marginBlock: 8, width: 300 }}
           multiple
           options={pullRequests}
           disableCloseOnSelect
           autoHighlight
-          getOptionLabel={(option) =>
-            `${option.title} - (${option.pullRequestId})`
-          }
-          renderOption={(option, { selected }) => (
-            <React.Fragment>
+          getOptionLabel={(option) => `${option.title} - (${option.pullRequestId})`}
+          renderOption={(props, option, { selected }) => (
+            <li {...props}>
               <Checkbox
                 icon={icon}
                 checkedIcon={checkedIcon}
@@ -112,13 +114,13 @@ const PullRequestSelector = ({
                 checked={selected}
               />
               {`${option.title} - (${option.pullRequestId})`}
-            </React.Fragment>
+            </li>
           )}
           renderInput={(params) => (
             <TextField
               {...params}
-              label="selected pull requests"
-              variant="outlined"
+              label='selected pull requests'
+              variant='outlined'
             />
           )}
           onChange={async (event, newValue) => {
@@ -131,7 +133,7 @@ const PullRequestSelector = ({
       <br />
       {editingMode ? (
         <PrimaryButton
-          text="Add Content To Document"
+          text='Add Content To Document'
           onClick={() => {
             UpdateDocumentRequestObject();
           }}

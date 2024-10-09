@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { List, ListItem, ListItemText, ListSubheader, Collapse, Box, Typography } from '@material-ui/core';
-import ExpandLess from '@material-ui/icons/ExpandLess';
-import ExpandMore from '@material-ui/icons/ExpandMore';
+import { List, ListItem, ListItemText, Collapse, Box, Typography } from '@mui/material';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 
 export default function STDGuide() {
   // State for handling open/collapse status of nested lists

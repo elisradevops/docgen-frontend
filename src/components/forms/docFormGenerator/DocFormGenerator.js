@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
-import Grid from '@material-ui/core/Grid';
-import Autocomplete from '@material-ui/lab/Autocomplete';
-import TextFieldM from '@material-ui/core/TextField';
-import { PrimaryButton } from 'office-ui-fabric-react';
-import CircularProgress from '@material-ui/core/CircularProgress';
+import Grid from '@mui/material/Grid';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
+import { PrimaryButton } from '@fluentui/react';
+import CircularProgress from '@mui/material/CircularProgress';
 import TestContentSelector from '../../common/TestContentSelector';
 import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
-import STRGuide from '../../common/STRGuide';
 
 const DocFormGenerator = observer(({ docType, store }) => {
   const [loading, setLoading] = useState(false);
@@ -129,7 +128,15 @@ const DocFormGenerator = observer(({ docType, store }) => {
 
   return (
     <>
-      <div>
+      {/* <Grid
+        container
+        item
+        spacing={2}
+      > */}
+      <Grid
+        item
+        xs={12}
+      >
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
@@ -140,7 +147,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
           })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
-            <TextFieldM
+            <TextField
               {...params}
               label='Select a Document Form'
               variant='outlined'
@@ -151,58 +158,65 @@ const DocFormGenerator = observer(({ docType, store }) => {
             setSelectedDocForm(newValue);
           }}
         />
-      </div>
-
+      </Grid>
       {selectedDocForm && (
-        <Grid
-          container
-          spacing={2}
-        >
-          <Autocomplete
-            disableClearable
-            style={{ marginBlock: 8, width: 300 }}
-            autoHighlight
-            openOnFocus
-            options={store.teamProjectsList.map((teamProject) => {
-              return { key: teamProject.id, text: teamProject.name };
-            })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextFieldM
-                {...params}
-                label='Select a TeamProject'
-                variant='outlined'
-              />
-            )}
-            onChange={async (event, newValue) => {
-              store.setTeamProject(newValue.key, newValue.text);
-            }}
-          />
-          <Autocomplete
-            disableClearable
-            style={{ marginBlock: 8, width: 300 }}
-            autoHighlight
-            openOnFocus
-            options={store.templateList
-              .filter((template) => template.name.toLowerCase().includes(docType.toLowerCase()))
-              .map((template) => {
-                return { url: template.url, text: template.name };
+        <>
+          <Grid
+            item
+            xs={12}
+          >
+            <Autocomplete
+              disableClearable
+              style={{ marginBlock: 8, width: 300 }}
+              autoHighlight
+              openOnFocus
+              options={store.teamProjectsList.map((teamProject) => {
+                return { key: teamProject.id, text: teamProject.name };
               })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextFieldM
-                {...params}
-                label='Select a Template'
-                variant='outlined'
-              />
-            )}
-            onChange={async (event, newValue) => {
-              store.setSelectedTemplate(newValue);
-            }}
-          />
-          <br />
+              getOptionLabel={(option) => `${option.text}`}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label='Select a TeamProject'
+                  variant='outlined'
+                />
+              )}
+              onChange={async (event, newValue) => {
+                store.setTeamProject(newValue.key, newValue.text);
+              }}
+            />
+          </Grid>
+          <Grid
+            item
+            xs={12}
+          >
+            <Autocomplete
+              disableClearable
+              style={{ marginBlock: 8, width: 300 }}
+              autoHighlight
+              openOnFocus
+              options={store.templateList
+                .filter((template) => template.name.toLowerCase().includes(docType.toLowerCase()))
+                .map((template) => {
+                  return { url: template.url, text: template.name };
+                })}
+              getOptionLabel={(option) => `${option.text}`}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label='Select a Template'
+                  variant='outlined'
+                />
+              )}
+              onChange={async (event, newValue) => {
+                store.setSelectedTemplate(newValue);
+              }}
+            />
+          </Grid>
+
           <Grid
             container
+            item
             spacing={3}
           >
             {docForm && docForm.contentControls
@@ -222,15 +236,20 @@ const DocFormGenerator = observer(({ docType, store }) => {
                 })
               : null}
           </Grid>
-
-          <PrimaryButton
-            text='Send Request'
-            onClick={handleSendRequest}
-            disabled={loading}
-          />
-          {loading && <CircularProgress />}
-        </Grid>
+          <Grid
+            item
+            xs={12}
+          >
+            <PrimaryButton
+              text='Send Request'
+              onClick={handleSendRequest}
+              disabled={loading}
+            />
+            {loading && <CircularProgress />}
+          </Grid>
+        </>
       )}
+      {/* </Grid> */}
     </>
   );
 });

@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { PrimaryButton } from "office-ui-fabric-react";
-import { headingLevelOptions } from "../../store/data/dropDownOptions";
-import Autocomplete from '@material-ui/lab/Autocomplete';
-import TextFieldM from '@material-ui/core/TextField';
-import {
-  DatePicker,
-  MuiPickersUtilsProvider,
-} from '@material-ui/pickers';
-import DateFnsUtils from '@date-io/date-fns';
-import FormControlLabel from '@material-ui/core/FormControlLabel';
-import Checkbox from '@material-ui/core/Checkbox';
-import Tooltip from "@material-ui/core/Tooltip";
+import React, { useState, useEffect } from 'react';
+import { PrimaryButton } from '@fluentui/react';
+import { headingLevelOptions } from '../../store/data/dropDownOptions';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Checkbox from '@mui/material/Checkbox';
 
 const CommitDateSelector = ({
   store,
@@ -20,16 +16,16 @@ const CommitDateSelector = ({
   branchesList,
   editingMode,
   addToDocumentRequestObject,
-  contentControlIndex
+  contentControlIndex,
 }) => {
   const [selectedRepo, setSelectedRepo] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
 
   const [selectedBranch, setSelectedBranch] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
 
   const [selectedStartDate, setSelectedStartDate] = useState(new Date());
@@ -41,32 +37,32 @@ const CommitDateSelector = ({
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 
   useEffect(() => {
-    if (editingMode === false){  
+    if (editingMode === false) {
       UpdateDocumentRequestObject();
     }
   });
 
-  function UpdateDocumentRequestObject(){
+  function UpdateDocumentRequestObject() {
     addToDocumentRequestObject(
       {
-        type:"change-description-table",
+        type: 'change-description-table',
         title: contentControlTitle,
         skin: skin,
         headingLevel: contentHeadingLevel,
         data: {
-          repoId:selectedRepo.key,
-          from:selectedStartDate,
-          to:selectedEndDate,
-          rangeType:"date",
-          linkTypeFilterArray:null,
-          branchName:selectedBranch.key,
-          includePullRequests: includePullRequests  // Added this line
+          repoId: selectedRepo.key,
+          from: selectedStartDate,
+          to: selectedEndDate,
+          rangeType: 'date',
+          linkTypeFilterArray: null,
+          branchName: selectedBranch.key,
+          includePullRequests: includePullRequests, // Added this line
         },
       },
       contentControlIndex
     );
   }
-    
+
   return (
     <div>
       <Autocomplete
@@ -77,10 +73,10 @@ const CommitDateSelector = ({
         options={headingLevelOptions}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextFieldM
+          <TextField
             {...params}
-            label="Select a Heading level"
-            variant="outlined"
+            label='Select a Heading level'
+            variant='outlined'
           />
         )}
         onChange={async (event, newValue) => {
@@ -98,22 +94,22 @@ const CommitDateSelector = ({
         })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextFieldM
-          {...params} 
-          label="Select a Repo" 
-          variant="outlined"
+          <TextField
+            {...params}
+            label='Select a Repo'
+            variant='outlined'
           />
-          )}
-      onChange={async (event, newValue) => {
-        store.fetchGitRepoBrances(newValue.key);
-        setSelectedRepo(newValue);
-      }}
+        )}
+        onChange={async (event, newValue) => {
+          store.fetchGitRepoBrances(newValue.key);
+          setSelectedRepo(newValue);
+        }}
       />
 
-      {selectedRepo.key !== "" ? (
+      {selectedRepo.key !== '' ? (
         <Autocomplete
           disableClearable
-          style={{ marginBlock: 8 , width: 300 }}
+          style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
           options={branchesList.map((branch) => {
@@ -121,13 +117,13 @@ const CommitDateSelector = ({
             let indexAfterHeads = splitName.indexOf('heads') + 1;
             let elementsAfterHeads = splitName.slice(indexAfterHeads).join('/');
             return { key: elementsAfterHeads, text: elementsAfterHeads };
-          })}      
+          })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
-            <TextFieldM
-            {...params} 
-            label="Select a branch" 
-            variant="outlined"
+            <TextField
+              {...params}
+              label='Select a branch'
+              variant='outlined'
             />
           )}
           onChange={async (event, newValue) => {
@@ -136,23 +132,21 @@ const CommitDateSelector = ({
         />
       ) : null}
 
-      <MuiPickersUtilsProvider utils={DateFnsUtils}>
-        <DatePicker 
-        autoOk
-        label="StartDate"
-        disableFuture
-        value={selectedStartDate}
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <DatePicker
+          label='StartDate'
+          disableFuture
+          value={selectedStartDate}
           onChange={setSelectedStartDate}
         />
 
-        <DatePicker 
-        autoOk
-        label="EndDate"
-        disableFuture
-        value={selectedEndDate}
-          onChange={setSelectedEndDate} 
+        <DatePicker
+          label='EndDate'
+          disableFuture
+          value={selectedEndDate}
+          onChange={setSelectedEndDate}
         />
-      </MuiPickersUtilsProvider>
+      </LocalizationProvider>
       <br />
       <br />
 
@@ -165,14 +159,14 @@ const CommitDateSelector = ({
             }}
           />
         }
-        label="Only Pull Requests"
+        label='Only Pull Requests'
       />
 
       {editingMode ? (
         <PrimaryButton
-          text="Add Content To Document"
+          text='Add Content To Document'
           onClick={() => {
-            UpdateDocumentRequestObject()
+            UpdateDocumentRequestObject();
           }}
         />
       ) : null}

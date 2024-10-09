@@ -1,5 +1,5 @@
 import { observable, action, makeObservable, computed } from 'mobx';
-import { enableLogging } from 'mobx-logger';
+import { configureLogger } from 'mobx-log';
 import RestApi from './actions/AzuredevopsRestapi';
 import cookies from 'js-cookies';
 import {
@@ -109,7 +109,7 @@ class DocGenDataStore {
       await Promise.all(
         data
           .filter((file) => file.prefix !== undefined)
-          .map((file) => {
+          .forEach((file) => {
             this.documentTypes.push(file.prefix.replace('/', ''));
           })
       );
@@ -373,13 +373,14 @@ class DocGenDataStore {
   }
 }
 
-let config = {
-  action: true,
-  reaction: false,
-  transaction: false,
-  compute: true,
+const config = {
+  actions: true, // Log actions
+  reactions: false, // Don't log reactions
+  transactions: false, // Don't log transactions
+  computeds: true, // Log computed values
 };
-enableLogging(config);
+configureLogger(config);
+
 var store = new DocGenDataStore();
 
 export default store;

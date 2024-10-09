@@ -1,17 +1,17 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
 
-import { Dropdown } from "office-ui-fabric-react/lib/Dropdown";
+import { Dropdown } from '@fluentui/react/lib/Dropdown';
 
-import TestContentSelector from "./TestContentSelector";
-import QueryContentSelector from "./QueryContentSelector";
-import LinkTypeSelector from "./LinkTypeSelector";
+import TestContentSelector from './TestContentSelector';
+import QueryContentSelector from './QueryContentSelector';
+import LinkTypeSelector from './LinkTypeSelector';
 
 const dropdownStyles = {
   dropdown: { width: 300 },
 };
 const baseDataType = [
-  { key: 0, text: "test-plan based", type: "test" },
-  { key: 1, text: "query based", type: "query" },
+  { key: 0, text: 'test-plan based', type: 'test' },
+  { key: 1, text: 'query based', type: 'query' },
 ];
 
 const TraceTableSelector = ({
@@ -21,13 +21,13 @@ const TraceTableSelector = ({
   editingMode,
   addToDocumentRequestObject,
 }) => {
-  const [selectedType, setselectedType] = useState("query");
+  const [selectedType, setselectedType] = useState('query');
 
   return (
     <div>
       <Dropdown
-        placeholder="Select Base Data Type"
-        label="Select Base Data Type"
+        placeholder='Select Base Data Type'
+        label='Select Base Data Type'
         options={baseDataType}
         styles={dropdownStyles}
         onChange={(event, newValue) => {
@@ -39,12 +39,12 @@ const TraceTableSelector = ({
         linkTypeFilter={store.linkTypes}
         updateSelectedLinksFilter={store.updateSelectedLinksFilter}
       />
-      {selectedType === "test" ? (
+      {selectedType === 'test' ? (
         <TestContentSelector
           store={store}
           contentControlTitle={contentControlTitle}
           type={selectedType}
-          skin="trace-table"
+          skin='trace-table'
           testPlansList={store.testPlansList}
           testSuiteList={store.testSuiteList}
           fetchTestSuitesList={store.fetchTestSuitesList}
@@ -54,12 +54,12 @@ const TraceTableSelector = ({
           linkTypeFilterArray={store.linkTypesFilter}
         />
       ) : null}
-      {selectedType === "query" ? (
+      {selectedType === 'query' ? (
         <QueryContentSelector
           contentControlTitle={contentControlTitle}
           teamProjectName={store.teamProject}
           type={selectedType}
-          skin="trace-table"
+          skin='trace-table'
           sharedQueriesList={store.sharedQueries}
           contentControlArrayCell={null}
           editingMode={editingMode}

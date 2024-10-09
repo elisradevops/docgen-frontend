@@ -3,24 +3,20 @@ import { observer } from 'mobx-react';
 
 import { contentTypeOptions } from '../../../store/data/dropDownOptions';
 
-import { Dropdown } from 'office-ui-fabric-react/lib/Dropdown';
-import { TextField } from 'office-ui-fabric-react/lib/TextField';
+import { Dropdown } from '@fluentui/react/lib/Dropdown';
+import { TextField } from '@fluentui/react/lib/TextField';
 
-import { PrimaryButton } from 'office-ui-fabric-react';
-import Autocomplete from '@material-ui/lab/Autocomplete';
-import TextFieldM from '@material-ui/core/TextField';
-import Grid from '@material-ui/core/Grid';
+import { PrimaryButton } from '@fluentui/react';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextFieldM from '@mui/material/TextField';
+import Grid from '@mui/material/Grid';
 
 import TestContentSelector from '../../common/TestContentSelector';
 import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
-import fileDownload from 'react-file-download';
+import fileDownload from 'js-file-download';
 import STRTableSelector from '../../common/STRTableSelector';
-
-const dropdownStyles = {
-  dropdown: { width: 300 },
-};
 
 const DeveloperForm = observer(({ store }) => {
   const [contentControlTitle, setContentControlTitle] = useState(null);

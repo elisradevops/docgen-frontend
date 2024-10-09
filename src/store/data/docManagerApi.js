@@ -2,8 +2,6 @@ import axios from 'axios';
 import C from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 
-var Minio = require('minio');
-
 const headers = {
   headers: {
     'Access-Control-Allow-Origin': '*',
