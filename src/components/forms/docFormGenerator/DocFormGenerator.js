@@ -11,43 +11,52 @@ import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
 import { Box } from '@mui/material';
+import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 
 const DocFormGenerator = observer(({ docType, store }) => {
   const [loading, setLoading] = useState(false);
   const [loadingForm, setLoadingForm] = useState(false);
-  const [docTemplates, setDocTemplates] = useState([]);
+  const [docFormsControls, setDocFormsControls] = useState([]);
+  const [selectedTeamProject, setSelectedTeamProject] = useState('');
   const [selectedDocForm, setSelectedDocForm] = useState(null);
   const [docForm, setDocForm] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   useEffect(() => {
     if (docType !== '') {
+      store.setDocType(docType);
       setLoadingForm(true);
-      store.fetchDocTemplates(docType).then((templates) => {
-        setDocTemplates(templates); // Set state after templates are fetched
-        setLoadingForm(false);
-      });
+      store
+        .fetchDocFormsTemplates(docType)
+        .then((docFormsControls) => {
+          setDocFormsControls(docFormsControls); // Set state after templates are fetched
+          setLoadingForm(false);
+        })
+        .catch(() => {
+          setLoadingForm(false); // Ensure loading state is reset if there's an error
+        });
     }
-  }, [store, docType, setDocTemplates]);
+  }, [store, docType, setDocFormsControls]);
 
   // Automatically select the first doc template when docTemplates change
   useEffect(() => {
-    if (docTemplates.length > 0) {
+    if (docFormsControls.length > 0) {
       setSelectedDocForm({
         key: 0,
-        text: docTemplates[0].documentTitle, // Automatically selecting the first template
+        text: docFormsControls[0].documentTitle, // Automatically selecting the first template
       });
     }
-  }, [docTemplates]);
+  }, [docFormsControls]);
 
   // Update docForm based on selected document
   useEffect(() => {
-    if (selectedDocForm !== null && docTemplates.length > 0) {
-      const temp = docTemplates.find((docForm) =>
+    if (selectedDocForm !== null && docFormsControls.length > 0) {
+      const temp = docFormsControls.find((docForm) =>
         docForm.documentTitle.toLowerCase().includes(selectedDocForm.text.toLowerCase())
       );
       setDocForm(temp);
     }
-  }, [selectedDocForm, docTemplates]);
+  }, [selectedDocForm, docFormsControls]);
 
   const generateFormControls = (formControl, contentControlIndex) => {
     switch (formControl.skin) {
@@ -170,6 +179,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
                   />
                 )}
                 onChange={async (event, newValue) => {
+                  setSelectedTeamProject(newValue.text);
                   store.setTeamProject(newValue.key, newValue.text);
                 }}
               />
@@ -177,28 +187,14 @@ const DocFormGenerator = observer(({ docType, store }) => {
             <Grid
               item
               xs={12}
+              sx={{ justifyContent: 'center' }}
             >
-              <Autocomplete
-                disableClearable
-                style={{ marginBlock: 8, width: 300 }}
-                autoHighlight
-                openOnFocus
-                options={store.templateList
-                  .filter((template) => template.name.toLowerCase().includes(docType.toLowerCase()))
-                  .map((template) => {
-                    return { url: template.url, text: template.name };
-                  })}
-                getOptionLabel={(option) => `${option.text}`}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label='Select a Template'
-                    variant='outlined'
-                  />
-                )}
-                onChange={async (event, newValue) => {
-                  store.setSelectedTemplate(newValue);
-                }}
+              <TemplateFileSelectDialog
+                store={store}
+                docType={docType}
+                selectedTeamProject={selectedTeamProject}
+                selectedTemplate={selectedTemplate}
+                setSelectedTemplate={setSelectedTemplate}
               />
             </Grid>
 

@@ -9,14 +9,20 @@ const headers = {
   },
 };
 
-export const getBucketFileList = async (bucketName, docType = null, isExternalUrl = false) => {
+export const getBucketFileList = async (
+  bucketName,
+  docType = null,
+  isExternalUrl = false,
+  projectName = null
+) => {
   let url;
   try {
     url =
       docType !== null
         ? `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?docType=${docType}&isExternalUrl=${isExternalUrl}`
         : `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}`;
-    let res = await makeRequest(url, undefined, undefined, headers);
+    const urlToSend = projectName === null ? url : `${url}&projectName=${projectName}`;
+    let res = await makeRequest(urlToSend, undefined, undefined, headers);
     return res.bucketFileList;
   } catch (e) {}
 };
@@ -65,5 +71,19 @@ export const sendDocumentTogenerator = async (docJson) => {
     return res.data;
   } catch (err) {
     return [];
+  }
+};
+
+export const uploadTemplateToStorage = async (formData) => {
+  try {
+    // Iterate through formData to check if the file was appended correctly
+    return await axios.post(`${C.jsonDocument_url}/minio/templates/uploadTemplate`, formData, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  } catch (err) {
+    throw err;
   }
 };
