@@ -1,5 +1,5 @@
 import { observable, action, makeObservable, computed } from 'mobx';
-import { enableLogging } from 'mobx-logger';
+import { configureLogger } from 'mobx-log';
 import RestApi from './actions/AzuredevopsRestapi';
 import cookies from 'js-cookies';
 import {
@@ -7,6 +7,7 @@ import {
   getJSONContentFromFile,
   sendDocumentTogenerator,
   createIfBucketDoesentExsist,
+  uploadTemplateToStorage,
 } from '../store/data/docManagerApi';
 
 const azureDevopsUrl = cookies.getItem('azuredevopsUrl');
@@ -37,6 +38,7 @@ class DocGenDataStore {
       gitRepoCommits: observable,
       linkTypes: observable,
       documents: observable,
+      docType: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -65,13 +67,12 @@ class DocGenDataStore {
       setTestPlansList: action,
       fetchTestSuitesList: action,
       setTestSuitesList: action,
+      setDocType: action,
+      uploadTemplateFile: action,
     });
 
-    //TODO: need to call this manually when needed
-    //this.fetchDocTemplates();
     this.fetchDocFolders();
     this.fetchTeamProjects();
-    this.fetchTemplatesList();
     this.fetchCollectionLinkTypes();
   }
 
@@ -99,6 +100,7 @@ class DocGenDataStore {
   pipelineRunHistory = []; //pipeline history of a specific pipeline
   releaseDefinitionList = []; //list of all project releaese Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
+  docType = '';
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -109,34 +111,41 @@ class DocGenDataStore {
       await Promise.all(
         data
           .filter((file) => file.prefix !== undefined)
-          .map((file) => {
+          .forEach((file) => {
             this.documentTypes.push(file.prefix.replace('/', ''));
           })
       );
     });
   }
 
-  //Every time selecting a tab of a certain doctype then all the specified files from that type are returned
-  fetchDocTemplates(docType) {
+  // Every time selecting a tab of a certain doctype, all the specified files from that type are returned
+  async fetchDocFormsTemplates(docType) {
     this.documentTemplates = [];
-    getBucketFileList('document-forms', docType).then(async (data = []) => {
-      await Promise.all(
-        data.map(async (form) => {
-          let fileName = '';
-          let folderName = '';
-          if (form.name.includes('/')) {
-            const formNameSections = form.name.split('/');
-            if (formNameSections.length > 2) {
-              return;
-            }
-            folderName = formNameSections[0];
-            fileName = formNameSections[1];
+
+    // Fetch the list of document forms for the specified docType
+    const data = await getBucketFileList('document-forms', docType);
+
+    // Process each form in the fetched data
+    await Promise.all(
+      (data || []).map(async (form) => {
+        let fileName = '';
+        let folderName = '';
+        if (form.name.includes('/')) {
+          const formNameSections = form.name.split('/');
+          if (formNameSections.length > 2) {
+            return; // Skip if there are more than 2 sections
           }
-          let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
-          this.documentTemplates.push(jsonFormTemplate);
-        })
-      );
-    });
+          folderName = formNameSections[0];
+          fileName = formNameSections[1];
+        }
+        // Fetch the content for each form and add it to the documentTemplates
+        let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
+        this.documentTemplates.push(jsonFormTemplate);
+      })
+    );
+
+    // Return the documentTemplates after fetching is complete
+    return this.documentTemplates;
   }
 
   //for fetching teamProjects
@@ -167,12 +176,33 @@ class DocGenDataStore {
     this.fetchPipelineList();
     this.fetchReleaseDefinitionList();
   }
-  //for fetching templatefiles list
-  fetchTemplatesList() {
-    getBucketFileList('templates').then((data) => {
-      this.templateList = data || [];
-    });
+
+  // For fetching template files list
+  async fetchTemplatesList(docType, projectName = '') {
+    this.templateList = [];
+
+    try {
+      const projects = projectName !== '' ? ['shared', projectName] : ['shared'];
+
+      // Fetch templates concurrently for all projects
+      const allTemplates = await Promise.all(
+        projects.map(async (proj) => {
+          const data = await getBucketFileList('templates', docType, false, proj);
+          return data || []; // Return an empty array if no data
+        })
+      );
+
+      // Flatten the array of template lists
+      this.templateList = allTemplates.flat();
+    } catch (e) {
+      console.log(e.message);
+      console.log(e.stack);
+    } finally {
+      // Return the template list after all templates have been processed
+      return this.templateList;
+    }
   }
+
   //for fetching all the collections links
   fetchCollectionLinkTypes() {
     this.azureRestClient.getCollectionLinkTypes().then((data) => {
@@ -351,8 +381,25 @@ class DocGenDataStore {
     return sendDocumentTogenerator(docReq);
   }
 
+  async uploadTemplateFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('docType', this.docType);
+    formData.append('teamProjectName', this.teamProjectName);
+    formData.append('isExternal', false);
+    return await uploadTemplateToStorage(formData);
+  }
+
+  setDocType(docType) {
+    this.docType = docType || '';
+  }
+
+  get getDocType() {
+    return this.docType;
+  }
+
   get requestJson() {
-    let tempFileName = `${this.teamProjectName}-${new Date()
+    let tempFileName = `${this.teamProjectName}-${this.docType}-${new Date()
       .toISOString()
       .substring(0, 19)
       .replace('T', '-')}`;
@@ -373,13 +420,14 @@ class DocGenDataStore {
   }
 }
 
-let config = {
-  action: true,
-  reaction: false,
-  transaction: false,
-  compute: true,
+const config = {
+  actions: true, // Log actions
+  reactions: false, // Don't log reactions
+  transactions: false, // Don't log transactions
+  computeds: true, // Log computed values
 };
-enableLogging(config);
+configureLogger(config);
+
 var store = new DocGenDataStore();
 
 export default store;

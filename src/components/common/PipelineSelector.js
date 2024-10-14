@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { PrimaryButton } from "office-ui-fabric-react";
-import { headingLevelOptions } from "../../store/data/dropDownOptions";
-import Autocomplete from "@material-ui/lab/Autocomplete";
-import TextFieldM from "@material-ui/core/TextField";
+import React, { useState, useEffect } from 'react';
+import { PrimaryButton } from '@fluentui/react';
+import { headingLevelOptions } from '../../store/data/dropDownOptions';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
 
 const PipelineSelector = ({
   store,
@@ -15,8 +15,8 @@ const PipelineSelector = ({
   contentControlIndex,
 }) => {
   const [selectedPipeline, setSelectedPipeline] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
 
   useEffect(() => {
@@ -28,14 +28,14 @@ const PipelineSelector = ({
   function UpdateDocumentRequestObject() {
     addToDocumentRequestObject(
       {
-        type: "change-description-table",
+        type: 'change-description-table',
         title: contentControlTitle,
         skin: skin,
         headingLevel: contentHeadingLevel,
         data: {
           from: selectedPipelineRunStart.key,
           to: selectedPipelineRunEnd.key,
-          rangeType: "pipeline",
+          rangeType: 'pipeline',
           linkTypeFilterArray: null,
         },
       },
@@ -44,13 +44,13 @@ const PipelineSelector = ({
   }
 
   const [selectedPipelineRunStart, setSelectedPipelineRunStart] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
 
   const [selectedPipelineRunEnd, setSelectedPipelineRunEnd] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
 
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
@@ -65,10 +65,10 @@ const PipelineSelector = ({
         options={headingLevelOptions}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextFieldM
+          <TextField
             {...params}
-            label="Select an Heading level"
-            variant="outlined"
+            label='Select an Heading level'
+            variant='outlined'
           />
         )}
         onChange={async (event, newValue) => {
@@ -85,10 +85,10 @@ const PipelineSelector = ({
         })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextFieldM
+          <TextField
             {...params}
-            label="Select a Pipeline"
-            variant="outlined"
+            label='Select a Pipeline'
+            variant='outlined'
           />
         )}
         onChange={async (event, newValue) => {
@@ -96,7 +96,7 @@ const PipelineSelector = ({
           setSelectedPipeline(newValue);
         }}
       />
-      {selectedPipeline.key !== "" ? (
+      {selectedPipeline.key !== '' ? (
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
@@ -107,10 +107,10 @@ const PipelineSelector = ({
           })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
-            <TextFieldM
+            <TextField
               {...params}
-              label="Select start pipeline run"
-              variant="outlined"
+              label='Select start pipeline run'
+              variant='outlined'
             />
           )}
           onChange={async (event, newValue) => {
@@ -118,7 +118,7 @@ const PipelineSelector = ({
           }}
         />
       ) : null}
-      {selectedPipeline.key !== "" ? (
+      {selectedPipeline.key !== '' ? (
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
@@ -129,10 +129,10 @@ const PipelineSelector = ({
           })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
-            <TextFieldM
+            <TextField
               {...params}
-              label="Select end pipeline run"
-              variant="outlined"
+              label='Select end pipeline run'
+              variant='outlined'
             />
           )}
           onChange={async (event, newValue) => {
@@ -144,7 +144,7 @@ const PipelineSelector = ({
       <br />
       {editingMode ? (
         <PrimaryButton
-          text="Add Content To Document"
+          text='Add Content To Document'
           onClick={() => {
             UpdateDocumentRequestObject();
           }}

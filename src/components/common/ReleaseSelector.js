@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { PrimaryButton } from "office-ui-fabric-react";
-import { headingLevelOptions } from "../../store/data/dropDownOptions";
-import Autocomplete from "@material-ui/lab/Autocomplete";
-import TextFieldM from "@material-ui/core/TextField";
+import React, { useState, useEffect } from 'react';
+import { PrimaryButton } from '@fluentui/react';
+import { headingLevelOptions } from '../../store/data/dropDownOptions';
+import Autocomplete from '@mui/material/Autocomplete';
+import TextField from '@mui/material/TextField';
 
 const ReleaseSelector = ({
   store,
@@ -23,14 +23,14 @@ const ReleaseSelector = ({
   function UpdateDocumentRequestObject() {
     addToDocumentRequestObject(
       {
-        type: "change-description-table",
+        type: 'change-description-table',
         title: contentControlTitle,
         skin: skin,
         headingLevel: contentHeadingLevel,
         data: {
           from: selectedReleaseHistoryStart.key,
           to: selectedReleaseHistoryEnd.key,
-          rangeType: "release",
+          rangeType: 'release',
           linkTypeFilterArray: null,
         },
       },
@@ -39,19 +39,18 @@ const ReleaseSelector = ({
   }
 
   const [SelectedReleaseDefinition, setSelectedReleaseDefinition] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
 
-  const [selectedReleaseHistoryStart, setSelectedReleaseHistoryStart] =
-    useState({
-      key: "",
-      text: "",
-    });
+  const [selectedReleaseHistoryStart, setSelectedReleaseHistoryStart] = useState({
+    key: '',
+    text: '',
+  });
 
   const [selectedReleaseHistoryEnd, setSelectedReleaseHistoryEnd] = useState({
-    key: "",
-    text: "",
+    key: '',
+    text: '',
   });
 
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
@@ -66,10 +65,10 @@ const ReleaseSelector = ({
         options={headingLevelOptions}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextFieldM
+          <TextField
             {...params}
-            label="Select an Heading level"
-            variant="outlined"
+            label='Select an Heading level'
+            variant='outlined'
           />
         )}
         onChange={async (event, newValue) => {
@@ -86,14 +85,18 @@ const ReleaseSelector = ({
         })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
-          <TextFieldM {...params} label="Select a Release" variant="outlined" />
+          <TextField
+            {...params}
+            label='Select a Release'
+            variant='outlined'
+          />
         )}
         onChange={async (event, newValue) => {
           setSelectedReleaseDefinition(newValue);
           store.fetchReleaseDefinitionHistory(newValue.key);
         }}
       />
-      {SelectedReleaseDefinition.key !== "" ? (
+      {SelectedReleaseDefinition.key !== '' ? (
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
@@ -104,10 +107,10 @@ const ReleaseSelector = ({
           })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
-            <TextFieldM
+            <TextField
               {...params}
-              label="Select start release"
-              variant="outlined"
+              label='Select start release'
+              variant='outlined'
             />
           )}
           onChange={async (event, newValue) => {
@@ -115,7 +118,7 @@ const ReleaseSelector = ({
           }}
         />
       ) : null}
-      {SelectedReleaseDefinition.key !== "" ? (
+      {SelectedReleaseDefinition.key !== '' ? (
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
@@ -126,10 +129,10 @@ const ReleaseSelector = ({
           })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
-            <TextFieldM
+            <TextField
               {...params}
-              label="Select end release"
-              variant="outlined"
+              label='Select end release'
+              variant='outlined'
             />
           )}
           onChange={async (event, newValue) => {
@@ -141,7 +144,7 @@ const ReleaseSelector = ({
       <br />
       {editingMode ? (
         <PrimaryButton
-          text="Add Content To Document"
+          text='Add Content To Document'
           onClick={() => {
             UpdateDocumentRequestObject();
           }}

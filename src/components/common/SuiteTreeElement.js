@@ -1,11 +1,11 @@
-import React, { Component } from "react";
-import FormContorlLabel from "@material-ui/core/FormControlLabel";
-import Checkbox from "@material-ui/core/Checkbox";
-import Icon from "@material-ui/core/Icon";
-import C from "../../store/constants";
+import React, { Component } from 'react';
+import FormContorlLabel from '@mui/material/FormControlLabel';
+import Checkbox from '@mui/material/Checkbox';
+import Icon from '@mui/material/Icon';
+import C from '../../store/constants';
 
-import { getTestSuitesBySuiteId } from "../../store/data/azuredevopsApi";
-import { Check } from "office-ui-fabric-react";
+import { getTestSuitesBySuiteId } from '../../store/data/azuredevopsApi';
+import { Check } from '@fluentui/react';
 
 export default class SuiteTreeElement extends Component {
   constructor() {
@@ -31,10 +31,10 @@ export default class SuiteTreeElement extends Component {
           <Icon>add_circle</Icon>
           <FormContorlLabel
             control={<Checkbox onChange={(event, checked) => {}} />}
-            label={this.props.suiteName ? this.props.suiteName : ""}
+            label={this.props.suiteName ? this.props.suiteName : ''}
           />
         </li>
-        <ul style={{ "list-style": "none" }}>
+        <ul style={{ 'list-style': 'none' }}>
           {this.state.testSuites
             ? this.state.testSuites.map((suite, index) => {
                 return (
@@ -54,11 +54,7 @@ export default class SuiteTreeElement extends Component {
   }
 
   async generateSuiteTreeElements(selectedTestPlan, selectedSuite) {
-    let suites = await getTestSuitesBySuiteId(
-      this.props.teamProjectName,
-      selectedTestPlan,
-      selectedSuite
-    );
+    let suites = await getTestSuitesBySuiteId(this.props.teamProjectName, selectedTestPlan, selectedSuite);
     return suites.suites;
   }
 }

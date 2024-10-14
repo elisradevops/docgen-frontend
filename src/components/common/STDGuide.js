@@ -1,7 +1,16 @@
 import React, { useState } from 'react';
-import { List, ListItem, ListItemText, ListSubheader, Collapse, Box, Typography } from '@material-ui/core';
-import ExpandLess from '@material-ui/icons/ExpandLess';
-import ExpandMore from '@material-ui/icons/ExpandMore';
+import {
+  List,
+  ListItem,
+  ListItemText,
+  Collapse,
+  Box,
+  Typography,
+  ListItemButton,
+  ListItemIcon,
+} from '@mui/material';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
 
 export default function STDGuide() {
   // State for handling open/collapse status of nested lists
@@ -21,23 +30,17 @@ export default function STDGuide() {
       >
         Guide to the STD Generator Form
       </Typography>
-      <List
-        component='nav'
-        aria-labelledby='nested-list-subheader'
-      >
+      <List>
         {/* Main List Items */}
 
         {/* Collapsible for Attachment Types */}
-        <ListItem
-          button
-          onClick={handleClickAttachmentTypes}
-        >
+        <ListItemButton onClick={handleClickAttachmentTypes}>
+          <ListItemIcon>{openIncludeAttachmentTypes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Attachment Types'
             secondary='If the document is zipped, then please extract the files.'
           />
-          {openIncludeAttachmentTypes ? <ExpandLess /> : <ExpandMore />}
-        </ListItem>
+        </ListItemButton>
         <Collapse
           in={openIncludeAttachmentTypes}
           timeout='auto'
@@ -80,16 +83,13 @@ export default function STDGuide() {
           </List>
         </Collapse>
 
-        <ListItem
-          button
-          onClick={handleClickRequirements}
-        >
+        <ListItemButton onClick={handleClickRequirements}>
+          <ListItemIcon>{openRequirements ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Include Requirements'
             secondary='Include or exclude the requirements table in the STD document.'
           />
-          {openRequirements ? <ExpandLess /> : <ExpandMore />}
-        </ListItem>
+        </ListItemButton>
         <Collapse
           in={openRequirements}
           timeout='auto'
@@ -108,16 +108,13 @@ export default function STDGuide() {
           </List>
         </Collapse>
 
-        <ListItem
-          button
-          onClick={handleClickBugs}
-        >
+        <ListItemButton onClick={handleClickBugs}>
+          <ListItemIcon>{openBugs ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Include Bugs'
             secondary='Include or exclude the bugs table in the STD document'
           />
-          {openBugs ? <ExpandLess /> : <ExpandMore />}
-        </ListItem>
+        </ListItemButton>
         <Collapse
           in={openBugs}
           timeout='auto'

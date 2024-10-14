@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { headingLevelOptions } from '../../store/data/dropDownOptions';
-import FormControlLabel from '@material-ui/core/FormControlLabel';
-import Checkbox from '@material-ui/core/Checkbox';
-import TextField from '@material-ui/core/TextField';
-import Autocomplete from '@material-ui/lab/Autocomplete';
-import CheckBoxOutlineBlankIcon from '@material-ui/icons/CheckBoxOutlineBlank';
-import CheckBoxIcon from '@material-ui/icons/CheckBox';
-import { PrimaryButton } from 'office-ui-fabric-react';
-import { FormLabel, Box, Radio, RadioGroup } from '@material-ui/core';
+// import { headingLevelOptions } from '../../store/data/dropDownOptions';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Checkbox from '@mui/material/Checkbox';
+import TextField from '@mui/material/TextField';
+import Autocomplete from '@mui/material/Autocomplete';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
+import { PrimaryButton } from '@fluentui/react';
+import { FormLabel, Box, Radio, RadioGroup } from '@mui/material';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
@@ -382,8 +382,8 @@ const STRTableSelector = ({
             autoHighlight
             groupBy={(option) => option.parent}
             getOptionLabel={(option) => `${option.name} - (${option.id})`}
-            renderOption={(option, { selected }) => (
-              <React.Fragment>
+            renderOption={(props, option, { selected }) => (
+              <li {...props}>
                 <Checkbox
                   icon={icon}
                   checkedIcon={checkedIcon}
@@ -391,7 +391,7 @@ const STRTableSelector = ({
                   checked={selected}
                 />
                 {`${option.name} - (${option.id})`}
-              </React.Fragment>
+              </li>
             )}
             renderInput={(params) => (
               <TextField

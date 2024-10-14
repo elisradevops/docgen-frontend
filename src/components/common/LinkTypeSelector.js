@@ -1,6 +1,6 @@
-import React from "react";
+import React from 'react';
 
-import { Dropdown } from "office-ui-fabric-react/lib/Dropdown";
+import { Dropdown } from '@fluentui/react/lib/Dropdown';
 
 const dropdownStyles = {
   dropdown: { width: 300 },
@@ -9,9 +9,9 @@ const dropdownStyles = {
 const LinkTypeSelector = ({ store, linkTypes, updateSelectedLinksFilter }) => {
   return (
     <Dropdown
-      placeholder="Select a LinkType to filter"
+      placeholder='Select a LinkType to filter'
       multiSelect
-      label="Select an LinkType"
+      label='Select an LinkType'
       value={linkTypes}
       options={store.linkTypes}
       styles={dropdownStyles}
