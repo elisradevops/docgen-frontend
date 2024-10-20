@@ -9,6 +9,7 @@ import {
   createIfBucketDoesentExsist,
   uploadTemplateToStorage,
 } from '../store/data/docManagerApi';
+import { toast } from 'react-toastify';
 
 const azureDevopsUrl = cookies.getItem('azuredevopsUrl');
 const azuredevopsPat = cookies.getItem('azuredevopsPat');
@@ -157,6 +158,7 @@ class DocGenDataStore {
       });
     } else {
       console.error('Missing required cookies: azuredevopsUrl or azuredevopsPat');
+      toast.error('Missing required cookies: azuredevopsUrl or azuredevopsPat');
     }
   }
   //for setting focused teamProject
