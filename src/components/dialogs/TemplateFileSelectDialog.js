@@ -13,6 +13,8 @@ import {
 import React, { useEffect, useState } from 'react';
 import UploadFileButton from '../common/UploadFileButton';
 import Subject from '@mui/icons-material/Subject';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export const TemplateFileSelectDialog = ({
   store,
@@ -36,7 +38,7 @@ export const TemplateFileSelectDialog = ({
       setTemplateFiles(templates); // Set templates once fetched
     } catch (err) {
       console.error('Error fetching template files:', err.message);
-      console.error(err.stack);
+      toast.error(`Error while fetching template files: ${err.message}`);
     } finally {
       setLoadingTemplateFiles(false); // Ensure loading state is turned off
     }
@@ -56,8 +58,10 @@ export const TemplateFileSelectDialog = ({
 
   const handleNewFileUploaded = (fileObject) => {
     fetchTemplates();
-    store.setSelectedTemplate(fileObject);
-    setSelectedTemplate(fileObject);
+    if (fileObject) {
+      store.setSelectedTemplate(fileObject);
+      setSelectedTemplate(fileObject);
+    }
   };
 
   return (

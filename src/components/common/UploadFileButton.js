@@ -2,6 +2,7 @@ import { Button } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import React from 'react';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import { toast } from 'react-toastify';
 
 const VisuallyHiddenInput = styled('input')({
   clip: 'rect(0 0 0 0)',
@@ -30,11 +31,12 @@ const UploadFileButton = ({ store, onNewFileUpload }) => {
           const response = await store.uploadTemplateFile(file);
           const { fileItem } = response.data;
           onNewFileUpload(fileItem);
-          alert('File upload successfully');
+          toast.success('Template file uploaded successfully');
         } catch (err) {
-          //TODO: Add Toast messages here
+          toast.error(`Error while uploading template ${err.message}`);
           console.log('Error uploading file:', err.message);
-          alert('File upload failed: ', err.message);
+          //Refresh the template list
+          onNewFileUpload(null);
         }
       }
     }

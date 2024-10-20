@@ -24,7 +24,17 @@ export const getBucketFileList = async (
     const urlToSend = projectName === null ? url : `${url}&projectName=${projectName}`;
     let res = await makeRequest(urlToSend, undefined, undefined, headers);
     return res.bucketFileList;
-  } catch (e) {}
+  } catch (err) {
+    if (err.response) {
+      // If the error has a response, it comes from the server
+      console.log('Error response:', err.response.data);
+      throw new Error(err.response.data.message);
+    } else {
+      // Something else happened during the request setup
+      console.log('Error:', err.message);
+      throw new Error(err.message);
+    }
+  }
 };
 
 export const getJSONContentFromFile = async (bucketName, folderName, fileName) => {
@@ -70,7 +80,17 @@ export const sendDocumentTogenerator = async (docJson) => {
     window.currentdoc = docJson.documentId;
     return res.data;
   } catch (err) {
-    return [];
+    console.log(`error while generating doc ${err.message}`);
+    console.log(`response ${err.response?.data}`);
+    if (err.response) {
+      // If the error has a response, it comes from the server
+      console.log('Error response:', err.response.data);
+      throw new Error(err.response.data.error);
+    } else {
+      // Something else happened during the request setup
+      console.log('Error:', err.message);
+      throw new Error(err.message);
+    }
   }
 };
 
@@ -84,6 +104,14 @@ export const uploadTemplateToStorage = async (formData) => {
       },
     });
   } catch (err) {
-    throw err;
+    if (err.response) {
+      // If the error has a response, it comes from the server
+      console.log('Error response:', err.response.data);
+      throw new Error(err.response.data.error);
+    } else {
+      // Something else happened during the request setup
+      console.log('Error:', err.message);
+      throw new Error(err.message);
+    }
   }
 };
