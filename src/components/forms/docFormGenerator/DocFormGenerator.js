@@ -10,7 +10,7 @@ import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
-import { Box } from '@mui/material';
+import { Box, Collapse } from '@mui/material';
 import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 import { toast } from 'react-toastify';
 
@@ -200,40 +200,56 @@ const DocFormGenerator = observer(({ docType, store }) => {
                 setSelectedTemplate={setSelectedTemplate}
               />
             </Grid>
-
-            <Grid
-              container
-              item
-              spacing={3}
+            <Collapse
+              in={selectedTemplate !== null}
+              timeout='auto'
+              unmountOnExit
             >
-              {docForm && docForm.contentControls
-                ? docForm.contentControls.map((contentControl, key) => {
-                    return (
-                      <Grid item>
-                        <typography
-                          fontWeight='fontWeightBold'
-                          fontSize={20}
-                          m={1}
-                        >
-                          {contentControl.title}:
-                        </typography>
-                        {generateFormControls(contentControl, key)}
-                      </Grid>
-                    );
-                  })
-                : null}
-            </Grid>
-            <Grid
-              item
-              xs={12}
-            >
-              <PrimaryButton
-                text='Send Request'
-                onClick={handleSendRequest}
-                disabled={loading}
+              <TextField
+                label='Selected Template'
+                defaultValue=''
+                value={selectedTemplate?.text?.split('/')?.pop()}
+                InputProps={{
+                  readOnly: true,
+                }}
+                variant='standard'
+                sx={{ my: 2, width: 300 }}
               />
-              {loading && <CircularProgress />}
-            </Grid>
+              <Grid
+                sx={{ pt: 1 }}
+                container
+                item
+                spacing={3}
+              >
+                {docForm && docForm.contentControls
+                  ? docForm.contentControls.map((contentControl, key) => {
+                      return (
+                        <Grid item>
+                          <typography
+                            fontWeight='fontWeightBold'
+                            fontSize={20}
+                            m={1}
+                          >
+                            {contentControl.title}:
+                          </typography>
+                          {generateFormControls(contentControl, key)}
+                        </Grid>
+                      );
+                    })
+                  : null}
+              </Grid>
+              <Grid
+                item
+                xs={12}
+              >
+                <PrimaryButton
+                  text='Send Request'
+                  onClick={handleSendRequest}
+                  disabled={loading}
+                />
+                {loading && <CircularProgress />}
+              </Grid>
+            </Collapse>
           </Grid>
         )
       )}
