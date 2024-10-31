@@ -35,6 +35,8 @@ const CommitDateSelector = ({
   const [selectedEndDate, setSelectedEndDate] = useState(new Date());
 
   const [includePullRequests, setIncludePullRequests] = useState(false);
+  const [includeChangeDescription, setIncludeChangeDescription] = useState(false);
+  const [includeCommittedBy, setIncludeCommittedBy] = useState(false);
 
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 
@@ -59,6 +61,8 @@ const CommitDateSelector = ({
           linkTypeFilterArray: null,
           branchName: selectedBranch.key,
           includePullRequests: includePullRequests, // Added this line
+          includeChangeDescription: includeChangeDescription,
+          includeCommittedBy: includeCommittedBy,
         },
       },
       contentControlIndex
@@ -163,20 +167,51 @@ const CommitDateSelector = ({
           </Grid>
         </Grid>
       </LocalizationProvider>
-      <br />
-      <br />
 
-      <FormControlLabel
-        control={
-          <Checkbox
-            checked={includePullRequests}
-            onChange={(event, checked) => {
-              setIncludePullRequests(checked);
-            }}
-          />
-        }
-        label='Only Pull Requests'
-      />
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={includePullRequests}
+              onChange={(event, checked) => {
+                setIncludePullRequests(checked);
+              }}
+            />
+          }
+          label='Only Pull Requests'
+        />
+      </div>
+
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={includeChangeDescription}
+              onChange={(event, checked) => {
+                setIncludeChangeDescription(checked);
+              }}
+            />
+          }
+          label='Include Description'
+        />
+      </div>
+
+      <div>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={includeCommittedBy}
+              onChange={(event, checked) => {
+                setIncludeCommittedBy(checked);
+              }}
+            />
+          }
+          label='Include Committer'
+        />
+      </div>
+
+      <br />
+      <br />
 
       {editingMode ? (
         <PrimaryButton
