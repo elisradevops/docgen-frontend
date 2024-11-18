@@ -87,7 +87,7 @@ class DocGenDataStore {
   templateList = [];
   contentControls = [];
   selectedTemplate = { key: '', name: '' };
-  sharedQueries = []; // list of queries
+  sharedQueries = { acquiredTrees: null }; // list of queries
   linkTypes = []; // list of link types
   linkTypesFilter = []; // list of selected links to filter by
   testPlansList = []; // list of testplans
@@ -153,7 +153,6 @@ class DocGenDataStore {
   fetchTeamProjects() {
     if (azureDevopsUrl && azuredevopsPat) {
       this.azureRestClient.getTeamProjects().then((data) => {
-        console.log(data);
         this.teamProjectsList = data.value.sort((a, b) => (a.name > b.name ? 1 : -1)) || [];
       });
     } else {
@@ -234,7 +233,8 @@ class DocGenDataStore {
   }
   //for setting shared queries
   setSharedQueries(data) {
-    this.sharedQueries = data;
+    const { reqTestTree, testReqTree } = data;
+    this.sharedQueries.acquiredTrees = { reqTestTree, testReqTree };
   }
   //for fetching repo list
   fetchGitRepoList() {

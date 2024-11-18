@@ -17,10 +17,12 @@ export default function STDGuide() {
   const [openBugs, setOpenBugs] = useState(false);
   const [openRequirements, setOpenRequirements] = useState(false);
   const [openIncludeAttachmentTypes, setIncludeAttachmentTypes] = useState(false);
+  const [openTraceAnalysisMode, setOpenTraceAnalysisMode] = useState(false);
 
-  const handleClickBugs = () => setOpenBugs(!openBugs);
-  const handleClickRequirements = () => setOpenRequirements(!openRequirements);
-  const handleClickAttachmentTypes = () => setIncludeAttachmentTypes(!openIncludeAttachmentTypes);
+  const handleClickBugs = () => setOpenBugs((prev) => !prev);
+  const handleClickRequirements = () => setOpenRequirements((prev) => !prev);
+  const handleClickAttachmentTypes = () => setIncludeAttachmentTypes((prev) => !prev);
+  const handleClickAnalysisType = () => setOpenTraceAnalysisMode((prev) => !prev);
 
   return (
     <Box p={3}>
@@ -139,6 +141,42 @@ export default function STDGuide() {
             secondary='You may select one or more specific suits in the selected Test Plan.'
           />
         </ListItem>
+        <ListItemButton onClick={handleClickAnalysisType}>
+          <ListItemIcon>{openTraceAnalysisMode ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
+          <ListItemText
+            primary='Include Trace Analysis'
+            secondary='Include or exclude trace analysis'
+          />
+        </ListItemButton>
+        <Collapse
+          in={openTraceAnalysisMode}
+          timeout='auto'
+          unmountOnExit
+        >
+          <List
+            component='div'
+            disablePadding
+          >
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='No Trace'
+                secondary='Exclude trace analysis'
+              />
+            </ListItem>
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Based On Linked Requirements'
+                secondary='Fetch trace analysis based on the linked requirements (TBD)'
+              />
+            </ListItem>
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Based On Queries'
+                secondary='Fetch trace analysis based on TFS predefined queries (if disabled there are no saved queries)'
+              />
+            </ListItem>
+          </List>
+        </Collapse>
       </List>
     </Box>
   );

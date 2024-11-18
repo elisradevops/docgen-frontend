@@ -71,6 +71,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
             testPlansList={store.testPlansList}
             testSuiteList={store.testSuiteList}
             fetchTestSuitesList={store.fetchTestSuitesList}
+            sharedQueries={store.sharedQueries}
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}

@@ -16,7 +16,6 @@ const initialStepsExecutionState = {
   isEnabled: false,
   generateAttachments: { isEnabled: false, attachmentType: 'asEmbedded' },
   generateRequirements: { isEnabled: false, requirementType: 'linked', includeCustomerId: false },
-  traceAnalysisEnabled: false,
 };
 
 const initialStepsAnalysisState = {
@@ -278,23 +277,6 @@ const STRTableSelector = ({
         />
         {stepExecutionState.generateRequirements.isEnabled && linkedRequirement}
       </div>
-
-      <FormControlLabel
-        label='Trace Analysis'
-        control={
-          <Checkbox
-            // TODO: remove this after implementation
-            disabled={true}
-            value={stepAnalysisState.traceAnalysisEnabled}
-            onChange={(event, checked) => {
-              setStepExecutionState((prev) => ({
-                ...prev,
-                traceAnalysisEnabled: checked,
-              }));
-            }}
-          />
-        }
-      />
     </Box>
   );
 

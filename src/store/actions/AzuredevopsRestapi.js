@@ -1,4 +1,4 @@
-import AzureRestApi from '@doc-gen/dg-data-provider-azuredevops';
+import AzureRestApi from '@elisra-devops/docgen-data-provider';
 
 export default class AzuredevopsRestapi {
   azureRestApi;

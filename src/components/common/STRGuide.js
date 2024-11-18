@@ -95,12 +95,6 @@ export default function STRGuide() {
                 secondary='Include covered requirement table or not.'
               />
             </ListItem>
-            <ListItem style={{ paddingLeft: 32 }}>
-              <ListItemText
-                primary='Trace Analysis'
-                secondary='TBD'
-              />
-            </ListItem>
           </List>
         </Collapse>
 
