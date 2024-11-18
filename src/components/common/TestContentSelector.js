@@ -353,6 +353,7 @@ const TestContentSelector = ({
               data={queryTrees.reqTestTree}
               onSelectedQuery={setSelectedQueries}
               queryType='req-test'
+              isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
             />
           )}
         </div>
@@ -362,6 +363,7 @@ const TestContentSelector = ({
               data={queryTrees.testReqTree}
               onSelectedQuery={setSelectedQueries}
               queryType='test-req'
+              isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
             />
           )}
         </div>

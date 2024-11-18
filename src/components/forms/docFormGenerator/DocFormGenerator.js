@@ -185,6 +185,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
                 onChange={async (event, newValue) => {
                   setSelectedTeamProject(newValue.text);
                   store.setTeamProject(newValue.key, newValue.text);
+                  store.fetchSharedQueries();
                 }}
               />
             </Grid>

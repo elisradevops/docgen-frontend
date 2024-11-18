@@ -40,6 +40,7 @@ class DocGenDataStore {
       linkTypes: observable,
       documents: observable,
       docType: observable,
+      loadingState: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -69,6 +70,7 @@ class DocGenDataStore {
       fetchTestSuitesList: action,
       setTestSuitesList: action,
       setDocType: action,
+      fetchLoadingState: action,
       uploadTemplateFile: action,
     });
 
@@ -102,6 +104,7 @@ class DocGenDataStore {
   releaseDefinitionList = []; //list of all project releaese Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
   docType = '';
+  loadingState = { sharedQueriesLoadingState: false };
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -171,7 +174,6 @@ class DocGenDataStore {
       this.ProjectBucketName = this.ProjectBucketName + '-bucket';
     }
     this.fetchDocuments();
-    this.fetchSharedQueries();
     this.fetchTestPlans();
     this.fetchGitRepoList();
     this.fetchPipelineList();
@@ -225,11 +227,23 @@ class DocGenDataStore {
   setSelectedTemplate(templateObject) {
     this.selectedTemplate = templateObject;
   }
+
   //for fetching shared quries
   fetchSharedQueries() {
-    this.azureRestClient.getSharedQueries(this.teamProject).then((data) => {
-      this.setSharedQueries(data);
-    });
+    this.loadingState.sharedQueriesLoadingState = true;
+    this.azureRestClient
+      .getSharedQueries(this.teamProject)
+      .then((data) => {
+        this.setSharedQueries(data);
+      })
+      .catch((err) => {})
+      .finally(() => {
+        this.loadingState.sharedQueriesLoadingState = false;
+      });
+  }
+
+  fetchLoadingState() {
+    return this.loadingState;
   }
   //for setting shared queries
   setSharedQueries(data) {
