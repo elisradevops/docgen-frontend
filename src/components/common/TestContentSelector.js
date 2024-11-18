@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toJS } from 'mobx';
 // import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
@@ -7,10 +8,15 @@ import Autocomplete from '@mui/material/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
-import { Box, Radio, RadioGroup, FormLabel } from '@mui/material';
+import { Box, Radio, RadioGroup, FormLabel, Collapse } from '@mui/material';
+import QueryTree from './QueryTree';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
+const defaultSelectedQueries = {
+  reqTestQuery: null,
+  testReqQuery: null,
+};
 
 const TestContentSelector = ({
   store,
@@ -20,6 +26,7 @@ const TestContentSelector = ({
   testPlansList,
   testSuiteList,
   editingMode,
+  sharedQueries,
   addToDocumentRequestObject,
   linkTypeFilterArray,
   contentControlIndex,
@@ -37,12 +44,35 @@ const TestContentSelector = ({
   const [includeCustomerId, setIncludeCustomerId] = useState(false);
   const [includeBugs, setIncludeBugs] = useState(false);
   const [includeSeverity, setIncludeSeverity] = useState(false);
+  const [queryTrees, setQueryTrees] = useState({
+    reqTestTree: [],
+    testReqTree: [],
+  });
+  const [selectedQueries, setSelectedQueries] = useState(defaultSelectedQueries);
+  const [traceAnalysisMode, setTraceAnalysisMode] = useState('none');
 
   useEffect(() => {
     if (editingMode === false) {
       UpdateDocumentRequestObject();
     }
   });
+
+  useEffect(() => {
+    if (sharedQueries.acquiredTrees) {
+      const { acquiredTrees } = toJS(sharedQueries);
+      setQueryTrees((prev) => ({
+        ...prev,
+        ...(acquiredTrees.reqTestTree && { reqTestTree: [acquiredTrees.reqTestTree] }),
+        ...(acquiredTrees.testReqTree && { testReqTree: [acquiredTrees.testReqTree] }),
+      }));
+    }
+  }, [sharedQueries.acquiredTrees]);
+
+  useEffect(() => {
+    if (traceAnalysisMode === 'none') {
+      setSelectedQueries(defaultSelectedQueries);
+    }
+  }, [traceAnalysisMode]);
 
   function UpdateDocumentRequestObject() {
     let testSuiteIdList = undefined;
@@ -81,6 +111,7 @@ const TestContentSelector = ({
           includeCustomerId: includeCustomerId,
           includeBugs: includeBugs,
           includeSeverity: includeSeverity,
+          selectedQueries: selectedQueries,
         },
       },
       contentControlIndex
@@ -109,6 +140,38 @@ const TestContentSelector = ({
           value='asLink'
           label='As Link'
           control={<Radio />}
+        />
+      </RadioGroup>
+    </Box>
+  );
+
+  const traceAnalysisToggle = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
+      <FormLabel id='include-trace-analysis-radio'>Trace Analysis</FormLabel>
+      <RadioGroup
+        defaultValue='none'
+        name='include-trace-analysis-radio'
+        value={traceAnalysisMode}
+        onChange={(event) => {
+          setTraceAnalysisMode(event.target.value);
+        }}
+      >
+        <FormControlLabel
+          value='none'
+          label='No Trace'
+          control={<Radio />}
+        />
+        <FormControlLabel
+          value='linkedRequirement'
+          label='Based On Linked Requirements'
+          control={<Radio />}
+          disabled
+        />
+        <FormControlLabel
+          value='query'
+          label='Based on Queries'
+          control={<Radio />}
+          disabled={!(queryTrees.reqTestTree.length > 0 || queryTrees.testReqTree.length > 0)}
         />
       </RadioGroup>
     </Box>
@@ -203,7 +266,6 @@ const TestContentSelector = ({
           </Box>
         )}
       </div>
-
       <div>
         <FormControlLabel
           control={
@@ -231,7 +293,6 @@ const TestContentSelector = ({
           </Box>
         )}
       </div>
-
       <div>
         <FormControlLabel
           control={
@@ -279,6 +340,33 @@ const TestContentSelector = ({
           />
         ) : null}
       </div>
+
+      <div>{traceAnalysisToggle}</div>
+      <Collapse
+        in={traceAnalysisMode !== 'none'}
+        timeout='auto'
+        unmountOnExit
+      >
+        <div>
+          {queryTrees.reqTestTree.length > 0 && (
+            <QueryTree
+              data={queryTrees.reqTestTree}
+              onSelectedQuery={setSelectedQueries}
+              queryType='req-test'
+            />
+          )}
+        </div>
+        <div>
+          {queryTrees.testReqTree.length > 0 && (
+            <QueryTree
+              data={queryTrees.testReqTree}
+              onSelectedQuery={setSelectedQueries}
+              queryType='test-req'
+            />
+          )}
+        </div>
+      </Collapse>
+
       <br />
       <br />
       {/* works only in document managing mode */}
