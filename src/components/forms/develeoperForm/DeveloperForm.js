@@ -64,6 +64,7 @@ const DeveloperForm = observer(({ store }) => {
             )}
             onChange={async (event, newValue) => {
               store.setTeamProject(newValue.key, newValue.text);
+              store.fetchSharedQueries();
             }}
           />
           <Autocomplete

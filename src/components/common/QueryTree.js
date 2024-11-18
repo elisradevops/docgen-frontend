@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { TreeSelect } from 'antd';
 import { Alert } from '@mui/material';
 
-const QueryTree = ({ data, onSelectedQuery, queryType }) => {
+const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
   const [selectedQuery, setSelectedQuery] = useState(undefined);
 
   const [showQueryNotSelectedAlert, setShowQueryNotSelectedAlert] = useState(false);
@@ -75,6 +75,7 @@ const QueryTree = ({ data, onSelectedQuery, queryType }) => {
           placeholder={placeholder}
           onSelect={handleQuerySelect}
           allowClear
+          loading={isLoading}
         />
       )}
     </div>
