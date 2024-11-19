@@ -236,7 +236,9 @@ class DocGenDataStore {
       .then((data) => {
         this.setSharedQueries(data);
       })
-      .catch((err) => {})
+      .catch((err) => {
+        console.log(err.message);
+      })
       .finally(() => {
         this.loadingState.sharedQueriesLoadingState = false;
       });
@@ -246,9 +248,8 @@ class DocGenDataStore {
     return this.loadingState;
   }
   //for setting shared queries
-  setSharedQueries(data) {
-    const { reqTestTree, testReqTree } = data;
-    this.sharedQueries.acquiredTrees = { reqTestTree, testReqTree };
+  setSharedQueries(queryData) {
+    this.sharedQueries.acquiredTrees = { ...queryData };
   }
   //for fetching repo list
   fetchGitRepoList() {
