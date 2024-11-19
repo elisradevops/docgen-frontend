@@ -58,14 +58,13 @@ const TestContentSelector = ({
   });
 
   useEffect(() => {
-    if (sharedQueries.acquiredTrees) {
-      const { acquiredTrees } = toJS(sharedQueries);
-      setQueryTrees((prev) => ({
-        ...prev,
-        ...(acquiredTrees.reqTestTree && { reqTestTree: [acquiredTrees.reqTestTree] }),
-        ...(acquiredTrees.testReqTree && { testReqTree: [acquiredTrees.testReqTree] }),
-      }));
-    }
+    const { acquiredTrees } = toJS(sharedQueries);
+    acquiredTrees !== null
+      ? setQueryTrees(() => ({
+          reqTestTree: acquiredTrees.reqTestTree ? [acquiredTrees.reqTestTree] : [],
+          testReqTree: acquiredTrees.testReqTree ? [acquiredTrees.testReqTree] : [],
+        }))
+      : setQueryTrees(defaultSelectedQueries);
   }, [sharedQueries.acquiredTrees]);
 
   useEffect(() => {

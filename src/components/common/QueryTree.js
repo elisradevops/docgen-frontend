@@ -3,14 +3,15 @@ import { TreeSelect } from 'antd';
 import { Alert } from '@mui/material';
 
 const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
-  const [selectedQuery, setSelectedQuery] = useState(undefined);
-
-  const [showQueryNotSelectedAlert, setShowQueryNotSelectedAlert] = useState(false);
-  const [isDisabled, setIsDisabled] = useState(false);
-  const [placeholder, setPlaceholder] = useState(noData);
   const noData = `No query for ${
     queryType === 'req-test' ? 'Requirement - Test case' : 'Test case - Requirement'
   } available`;
+
+  const [selectedQuery, setSelectedQuery] = useState(undefined);
+  const [showQueryNotSelectedAlert, setShowQueryNotSelectedAlert] = useState(false);
+  const [isDisabled, setIsDisabled] = useState(false);
+  const [placeholder, setPlaceholder] = useState(noData);
+
   useEffect(() => {
     setIsDisabled(data?.length === 0);
   }, [data]);
