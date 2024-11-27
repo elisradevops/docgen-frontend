@@ -14,6 +14,7 @@ import QueryTree from './QueryTree';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 const defaultSelectedQueries = {
+  traceAnalysisMode: 'none',
   reqTestQuery: null,
   testReqQuery: null,
 };
@@ -48,8 +49,7 @@ const TestContentSelector = ({
     reqTestTree: [],
     testReqTree: [],
   });
-  const [selectedQueries, setSelectedQueries] = useState(defaultSelectedQueries);
-  const [traceAnalysisMode, setTraceAnalysisMode] = useState('none');
+  const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
 
   useEffect(() => {
     if (editingMode === false) {
@@ -66,12 +66,6 @@ const TestContentSelector = ({
         }))
       : setQueryTrees(defaultSelectedQueries);
   }, [sharedQueries.acquiredTrees]);
-
-  useEffect(() => {
-    if (traceAnalysisMode === 'none') {
-      setSelectedQueries(defaultSelectedQueries);
-    }
-  }, [traceAnalysisMode]);
 
   function UpdateDocumentRequestObject() {
     let testSuiteIdList = undefined;
@@ -110,7 +104,7 @@ const TestContentSelector = ({
           includeCustomerId: includeCustomerId,
           includeBugs: includeBugs,
           includeSeverity: includeSeverity,
-          selectedQueries: selectedQueries,
+          traceAnalysisRequest: traceAnalysisRequest,
         },
       },
       contentControlIndex
@@ -144,15 +138,24 @@ const TestContentSelector = ({
     </Box>
   );
 
-  const traceAnalysisToggle = (
+  const handleTraceAnalysisChange = (value) => {
+    if (value === 'query') {
+      setTraceAnalysisRequest((...prev) => ({ ...prev, traceAnalysisMode: value }));
+    } //In case of None or Linked requirement
+    else {
+      setTraceAnalysisRequest({ ...defaultSelectedQueries, traceAnalysisMode: value });
+    }
+  };
+
+  const traceAnalysisToggles = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <FormLabel id='include-trace-analysis-radio'>Trace Analysis</FormLabel>
       <RadioGroup
         defaultValue='none'
         name='include-trace-analysis-radio'
-        value={traceAnalysisMode}
+        value={traceAnalysisRequest.traceAnalysisMode}
         onChange={(event) => {
-          setTraceAnalysisMode(event.target.value);
+          handleTraceAnalysisChange(event.target.value);
         }}
       >
         <FormControlLabel
@@ -164,7 +167,6 @@ const TestContentSelector = ({
           value='linkedRequirement'
           label='Based On Linked Requirements'
           control={<Radio />}
-          disabled
         />
         <FormControlLabel
           value='query'
@@ -340,9 +342,9 @@ const TestContentSelector = ({
         ) : null}
       </div>
 
-      <div>{traceAnalysisToggle}</div>
+      <div>{traceAnalysisToggles}</div>
       <Collapse
-        in={traceAnalysisMode !== 'none'}
+        in={traceAnalysisRequest?.traceAnalysisMode === 'query'}
         timeout='auto'
         unmountOnExit
       >
@@ -350,7 +352,7 @@ const TestContentSelector = ({
           {queryTrees.reqTestTree.length > 0 && (
             <QueryTree
               data={queryTrees.reqTestTree}
-              onSelectedQuery={setSelectedQueries}
+              onSelectedQuery={setTraceAnalysisRequest}
               queryType='req-test'
               isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
             />
@@ -360,7 +362,7 @@ const TestContentSelector = ({
           {queryTrees.testReqTree.length > 0 && (
             <QueryTree
               data={queryTrees.testReqTree}
-              onSelectedQuery={setSelectedQueries}
+              onSelectedQuery={setTraceAnalysisRequest}
               queryType='test-req'
               isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
             />

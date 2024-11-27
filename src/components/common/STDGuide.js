@@ -166,7 +166,7 @@ export default function STDGuide() {
             <ListItem style={{ paddingLeft: 32 }}>
               <ListItemText
                 primary='Based On Linked Requirements'
-                secondary='Fetch trace analysis based on the linked requirements (TBD)'
+                secondary='Fetch trace analysis based on the linked requirements'
               />
             </ListItem>
             <ListItem style={{ paddingLeft: 32 }}>
