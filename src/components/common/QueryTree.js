@@ -27,16 +27,16 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
   const handleQuerySelect = (value, selectedNode) => {
     if (selectedNode.isValidQuery) {
       setSelectedQuery(value);
-      onSelectedQuery((val) =>
+      onSelectedQuery((prev) =>
         queryType === 'req-test'
-          ? { ...val, reqTestQuery: selectedNode }
-          : { ...val, testReqQuery: selectedNode }
+          ? { ...prev, reqTestQuery: selectedNode }
+          : { ...prev, testReqQuery: selectedNode }
       );
       setShowQueryNotSelectedAlert(false);
     } else {
       setSelectedQuery(undefined);
-      onSelectedQuery((val) =>
-        queryType === 'req-test' ? { ...val, reqTestQuery: null } : { ...val, testReqQuery: null }
+      onSelectedQuery((prev) =>
+        queryType === 'req-test' ? { ...prev, reqTestQuery: null } : { ...prev, testReqQuery: null }
       );
       setShowQueryNotSelectedAlert(true);
     }
@@ -45,8 +45,8 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
 
   const handleOnClear = () => {
     setSelectedQuery(undefined);
-    onSelectedQuery((val) =>
-      queryType === 'req-test' ? { ...val, reqTestQuery: null } : { ...val, testReqQuery: null }
+    onSelectedQuery((prev) =>
+      queryType === 'req-test' ? { ...prev, reqTestQuery: null } : { ...prev, testReqQuery: null }
     );
   };
 
