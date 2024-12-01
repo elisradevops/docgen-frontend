@@ -111,8 +111,6 @@ const TestContentSelector = ({
     );
   }
 
-  const filteredTestSuiteList = testSuiteList.slice(1); // Skip the first item of the list
-
   const attachmentTypeElements = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <FormLabel id='include-office-attachment-radio'>Included Office Files Type</FormLabel>
@@ -312,7 +310,7 @@ const TestContentSelector = ({
           <Autocomplete
             style={{ marginBlock: 8, width: 300 }}
             multiple
-            options={filteredTestSuiteList}
+            options={testSuiteList}
             disableCloseOnSelect
             autoHighlight
             groupBy={(option) => option.parent}
