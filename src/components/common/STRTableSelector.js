@@ -114,7 +114,6 @@ const STRTableSelector = ({
       contentControlIndex
     );
   }
-  const filteredTestSuiteList = testSuiteList.slice(1); // Skip the first item of the list
 
   const openPcrsElements = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
@@ -359,7 +358,7 @@ const STRTableSelector = ({
           <Autocomplete
             style={{ marginBlock: 8, width: 300 }}
             multiple
-            options={filteredTestSuiteList}
+            options={testSuiteList}
             disableCloseOnSelect
             autoHighlight
             groupBy={(option) => option.parent}
