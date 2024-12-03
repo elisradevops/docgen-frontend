@@ -165,32 +165,32 @@ export default class StdForm extends Component {
   }
 
   updateTestDescription(tempContent) {
-    console.warn(JSON.stringify(tempContent));
+    logger.warn(JSON.stringify(tempContent));
     let request = this.state.requestJson;
     request.contentControls[0] = tempContent;
     this.setState({
       requestJson: request,
     });
-    console.warn(this.state.requestJson);
+    logger.warn(this.state.requestJson);
   }
 
   async updateTraceTableRequirments(tempContent) {
-    console.warn(JSON.stringify(tempContent));
+    logger.warn(JSON.stringify(tempContent));
     let request = this.state.requestJson;
     request.contentControls[1] = tempContent;
     await this.setState({
       requestJson: request,
     });
-    console.warn(JSON.stringify(this.state.requestJson));
+    logger.warn(JSON.stringify(this.state.requestJson));
   }
   async updateTraceTableTestCases(tempContent) {
-    console.warn(JSON.stringify(tempContent));
+    logger.warn(JSON.stringify(tempContent));
     let request = this.state.requestJson;
     request.contentControls[2] = tempContent;
     await this.setState({
       requestJson: request,
     });
-    console.warn(JSON.stringify(this.state.requestJson));
+    logger.warn(JSON.stringify(this.state.requestJson));
   }
   setTemplate(event, newValue) {
     this.setState({

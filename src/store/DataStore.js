@@ -180,7 +180,6 @@ class DocGenDataStore {
     } else {
       const msg = 'Missing required cookies: azuredevopsUrl or azuredevopsPat';
       logger.error(msg);
-      console.error(msg);
       toast.error(msg);
     }
   }

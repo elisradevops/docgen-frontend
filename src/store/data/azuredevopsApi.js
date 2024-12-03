@@ -112,7 +112,6 @@ export const getTeamProjectTestPlans = async (teamProjectName) => {
     return testPlanList.value;
   } catch (e) {
     logger.warn(`could not get Team project test plans ${e.message}`);
-    console.warn(`no test-plans found - this could mean azure devops connection problems`);
     return [];
   }
 };
@@ -143,7 +142,6 @@ export const getCollectionLinkTypes = async () => {
     return linkData;
   } catch (e) {
     logger.warn(`could not get collection link types ${e.message}`);
-    console.warn(`no linkTypes found - this could mean azure devops connection problems`);
     return [];
   }
 };
