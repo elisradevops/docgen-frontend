@@ -14,12 +14,10 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 
 export default function STDGuide() {
   // State for handling open/collapse status of nested lists
-  const [openBugs, setOpenBugs] = useState(false);
   const [openRequirements, setOpenRequirements] = useState(false);
   const [openIncludeAttachmentTypes, setIncludeAttachmentTypes] = useState(false);
   const [openTraceAnalysisMode, setOpenTraceAnalysisMode] = useState(false);
 
-  const handleClickBugs = () => setOpenBugs((prev) => !prev);
   const handleClickRequirements = () => setOpenRequirements((prev) => !prev);
   const handleClickAttachmentTypes = () => setIncludeAttachmentTypes((prev) => !prev);
   const handleClickAnalysisType = () => setOpenTraceAnalysisMode((prev) => !prev);
@@ -105,31 +103,6 @@ export default function STDGuide() {
               <ListItemText
                 primary='Include Customer ID'
                 secondary='Include Customer ID column to the requirement table.'
-              />
-            </ListItem>
-          </List>
-        </Collapse>
-
-        <ListItemButton onClick={handleClickBugs}>
-          <ListItemIcon>{openBugs ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
-          <ListItemText
-            primary='Include Bugs'
-            secondary='Include or exclude the bugs table in the STD document'
-          />
-        </ListItemButton>
-        <Collapse
-          in={openBugs}
-          timeout='auto'
-          unmountOnExit
-        >
-          <List
-            component='div'
-            disablePadding
-          >
-            <ListItem style={{ paddingLeft: 32 }}>
-              <ListItemText
-                primary='Include Severity'
-                secondary='Include the severity level of the related bug in the table.'
               />
             </ListItem>
           </List>
