@@ -7,6 +7,7 @@ import TestContentSelector from '../../common/TestContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import { PrimaryButton } from '@fluentui/react';
 import { sendDocumentTogenerator } from '../../../store/data/docManagerApi';
+import logger from '../../../utils/logger';
 
 export default class StdForm extends Component {
   constructor() {
@@ -154,8 +155,8 @@ export default class StdForm extends Component {
         <PrimaryButton
           text='Send To Document Generator'
           onClick={() => {
-            console.log('Sending');
-            console.log(JSON.stringify(this.state.requestJson));
+            logger.debug('Sending');
+            logger.debug(JSON.stringify(this.state.requestJson));
             sendDocumentTogenerator(this.state.requestJson);
           }}
         />

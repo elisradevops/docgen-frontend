@@ -6,6 +6,7 @@ import C from '../../store/constants';
 
 import { getTestSuitesBySuiteId } from '../../store/data/azuredevopsApi';
 import { Check } from '@fluentui/react';
+import logger from '../../utils/logger';
 
 export default class SuiteTreeElement extends Component {
   constructor() {
@@ -20,7 +21,7 @@ export default class SuiteTreeElement extends Component {
 
   async getTestSuitesData(planId, suiteId) {
     let testSuites = await this.generateSuiteTreeElements(planId, suiteId);
-    console.log(testSuites);
+    logger.debug(JSON.stringify(testSuites));
     this.setState({ testSuites: testSuites });
   }
 

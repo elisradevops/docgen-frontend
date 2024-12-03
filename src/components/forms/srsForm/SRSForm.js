@@ -9,6 +9,7 @@ import Grid from '@mui/material/Grid';
 import { contentTypeOptions, headingLevelOptions } from '../../../store/data/dropDownOptions';
 import { getSharedQueries } from '../../../store/data/azuredevopsApi';
 import { getBucketFileList, sendDocumentTogenerator } from '../../../store/data/docManagerApi';
+import logger from '../../../utils/logger';
 
 const dropdownStyles = {
   dropdown: { width: 300 },
@@ -40,7 +41,7 @@ export default class SRSForm extends Component {
     };
   } //constructor
   componentWillReceiveProps = (newProps) => {
-    console.log(newProps.collectionName);
+    logger.debug(`collection name ${newProps.collectionName}`);
     this.setState({
       requestJson: {
         ...this.state.requestJson,
@@ -191,7 +192,7 @@ export default class SRSForm extends Component {
             <PrimaryButton
               text='Send To Document Generator'
               onClick={() => {
-                console.log('Sending');
+                logger.debug('Sending');
                 sendDocumentTogenerator(this.state.requestJson);
               }}
             />
