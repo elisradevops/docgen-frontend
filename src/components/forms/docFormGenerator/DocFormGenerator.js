@@ -13,6 +13,7 @@ import STRTableSelector from '../../common/STRTableSelector';
 import { Box, Collapse } from '@mui/material';
 import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 import { toast } from 'react-toastify';
+import logger from '../../../utils/logger';
 
 const DocFormGenerator = observer(({ docType, store }) => {
   const [loading, setLoading] = useState(false);
@@ -148,7 +149,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
       await store.sendRequestToDocGen();
       toast.success(`The request has been generated successfully!`);
     } catch (error) {
-      console.error(error);
+      logger.error(`Error occurred while generating document of type ${docType}: ${error.message}`);
       toast.error(`Failed to generate ${docType}: ${error.message}`);
     } finally {
       setLoading(false);

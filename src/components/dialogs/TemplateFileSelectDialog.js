@@ -15,6 +15,7 @@ import UploadFileButton from '../common/UploadFileButton';
 import Subject from '@mui/icons-material/Subject';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import logger from '../../utils/logger';
 
 export const TemplateFileSelectDialog = ({
   store,
@@ -37,7 +38,7 @@ export const TemplateFileSelectDialog = ({
       const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
       setTemplateFiles(templates); // Set templates once fetched
     } catch (err) {
-      console.error('Error fetching template files:', err.message);
+      logger.error('Error fetching template files:', err.message);
       toast.error(`Error while fetching template files: ${err.message}`);
     } finally {
       setLoadingTemplateFiles(false); // Ensure loading state is turned off

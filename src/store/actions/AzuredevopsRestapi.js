@@ -1,4 +1,5 @@
 import AzureRestApi from '@elisra-devops/docgen-data-provider';
+import logger from '../../utils/logger';
 
 export default class AzuredevopsRestapi {
   azureRestApi;
@@ -97,7 +98,7 @@ export default class AzuredevopsRestapi {
           );
         });
     } catch (e) {
-      console.warn(`no linkTypes found - this could mean azure devops connection problems`);
+      logger.warn(`no linkTypes found - this could mean azure devops connection problems`);
       return [];
     }
   }

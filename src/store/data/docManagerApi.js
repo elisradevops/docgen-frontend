@@ -1,7 +1,7 @@
 import axios from 'axios';
 import C from '../constants';
 import { v4 as uuidv4 } from 'uuid';
-
+import logger from '../../utils/logger';
 const headers = {
   headers: {
     'Access-Control-Allow-Origin': '*',
@@ -27,11 +27,11 @@ export const getBucketFileList = async (
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      console.log('Error response:', err.response.data);
+      logger.error(`Error Response ${JSON.stringify(err.response.data)}`);
       throw new Error(err.response.data.message);
     } else {
       // Something else happened during the request setup
-      console.log('Error:', err.message);
+      logger.error(`Error while getting bucket file list: ${err.message}`);
       throw new Error(err.message);
     }
   }
@@ -43,7 +43,9 @@ export const getJSONContentFromFile = async (bucketName, folderName, fileName) =
     url = `${C.jsonDocument_url}/minio/ContentFromFile/${bucketName}/${folderName}/${fileName}`;
     let res = await makeRequest(url, undefined, undefined, headers);
     return res.contentFromFile;
-  } catch (e) {}
+  } catch (e) {
+    logger.error(`Cannot get Json content for ${bucketName}/${folderName}/${fileName}: ${e.message}`);
+  }
 };
 
 export const createIfBucketDoesentExsist = async (bucketName) => {
@@ -52,7 +54,9 @@ export const createIfBucketDoesentExsist = async (bucketName) => {
   try {
     url = `${C.jsonDocument_url}/minio/createBucket`;
     return await makeRequest(url, 'post', data, headers);
-  } catch (e) {}
+  } catch (e) {
+    logger.error(`Cannot create bucket ${bucketName}: ${e.message}`);
+  }
 };
 
 const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders = {}) => {
@@ -66,9 +70,9 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
     let result = await axios(url, config);
     json = JSON.parse(JSON.stringify(result.data));
   } catch (e) {
-    console.log(`error making request to the api`);
-    console.log(e);
-    console.log(JSON.stringify(e.data));
+    logger.error(`API Request Error for ${url}: ${e.message}`);
+    logger.error('Error stack:');
+    logger.error(e.stack);
   }
   return json;
 };
@@ -80,15 +84,13 @@ export const sendDocumentTogenerator = async (docJson) => {
     window.currentdoc = docJson.documentId;
     return res.data;
   } catch (err) {
-    console.log(`error while generating doc ${err.message}`);
-    console.log(`response ${err.response?.data}`);
     if (err.response) {
       // If the error has a response, it comes from the server
-      console.log('Error response:', err.response.data);
+      logger.error('Error response while sending document to generator:', err.response.data);
       throw new Error(err.response.data.error);
     } else {
       // Something else happened during the request setup
-      console.log('Error:', err.message);
+      logger.error(`Error while sending document to generator: ${JSON.stringify(err.message)}`);
       throw new Error(err.message);
     }
   }
@@ -106,11 +108,13 @@ export const uploadTemplateToStorage = async (formData) => {
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      console.log('Error response:', err.response.data);
+      logger.error(
+        `Error response while uploading template to storage: ${JSON.stringify(err.response.data)}`
+      );
       throw new Error(err.response.data.error);
     } else {
       // Something else happened during the request setup
-      console.log('Error:', err.message);
+      logger.error(`Error while uploading template to storage: ${err.message}`);
       throw new Error(err.message);
     }
   }
