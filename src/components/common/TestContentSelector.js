@@ -43,8 +43,7 @@ const TestContentSelector = ({
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
   const [includeRequirements, setIncludeRequirements] = useState(false);
   const [includeCustomerId, setIncludeCustomerId] = useState(false);
-  const [includeBugs, setIncludeBugs] = useState(false);
-  const [includeSeverity, setIncludeSeverity] = useState(false);
+
   const [queryTrees, setQueryTrees] = useState({
     reqTestTree: [],
     testReqTree: [],
@@ -102,8 +101,6 @@ const TestContentSelector = ({
           attachmentType: attachmentType,
           includeRequirements: includeRequirements,
           includeCustomerId: includeCustomerId,
-          includeBugs: includeBugs,
-          includeSeverity: includeSeverity,
           traceAnalysisRequest: traceAnalysisRequest,
         },
       },
@@ -265,33 +262,7 @@ const TestContentSelector = ({
           </Box>
         )}
       </div>
-      <div>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={includeBugs}
-              onChange={(event, checked) => {
-                setIncludeBugs(checked);
-                if (!checked) setIncludeSeverity(false);
-              }}
-            />
-          }
-          label='Include Bugs'
-        />
-        {includeBugs && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={includeSeverity}
-                  onChange={(event, checked) => setIncludeSeverity(checked)}
-                />
-              }
-              label='Include Severity'
-            />
-          </Box>
-        )}
-      </div>
+
       <div>
         <FormControlLabel
           control={
