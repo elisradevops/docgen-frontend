@@ -4,6 +4,11 @@ import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 
+const defaultSelectedItem = {
+  key: '',
+  text: '',
+};
+
 const PipelineSelector = ({
   store,
   contentControlTitle,
@@ -14,11 +19,8 @@ const PipelineSelector = ({
   addToDocumentRequestObject,
   contentControlIndex,
 }) => {
-  const [selectedPipeline, setSelectedPipeline] = useState({
-    key: '',
-    text: '',
-  });
-
+  const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
+  const [endPointRunHistory, setEndPointRunHistory] = useState([]);
   useEffect(() => {
     if (editingMode === false) {
       UpdateDocumentRequestObject();
@@ -31,7 +33,7 @@ const PipelineSelector = ({
         type: 'change-description-table',
         title: contentControlTitle,
         skin: skin,
-        headingLevel: contentHeadingLevel,
+        headingLevel: 1,
         data: {
           from: selectedPipelineRunStart.key,
           to: selectedPipelineRunEnd.key,
@@ -43,21 +45,20 @@ const PipelineSelector = ({
     );
   }
 
-  const [selectedPipelineRunStart, setSelectedPipelineRunStart] = useState({
-    key: '',
-    text: '',
-  });
+  const [selectedPipelineRunStart, setSelectedPipelineRunStart] = useState(defaultSelectedItem);
 
-  const [selectedPipelineRunEnd, setSelectedPipelineRunEnd] = useState({
-    key: '',
-    text: '',
-  });
+  const [selectedPipelineRunEnd, setSelectedPipelineRunEnd] = useState(defaultSelectedItem);
 
-  const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
+  // const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
+
+  const handleStartPointPipelineSelect = (newValue) => {
+    setSelectedPipelineRunStart(newValue);
+    setEndPointRunHistory(pipelineRunHistory.filter((run) => run.id > newValue.key));
+  };
 
   return (
     <div>
-      <Autocomplete
+      {/* <Autocomplete
         disableClearable
         style={{ marginBlock: 8, width: 300 }}
         autoHighlight
@@ -74,7 +75,7 @@ const PipelineSelector = ({
         onChange={async (event, newValue) => {
           setContentHeadingLevel(newValue.key);
         }}
-      />
+      /> */}
       <Autocomplete
         disableClearable
         style={{ marginBlock: 8, width: 300 }}
@@ -102,9 +103,11 @@ const PipelineSelector = ({
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
-          options={pipelineRunHistory.map((run) => {
-            return { key: run.id, text: run.name };
-          })}
+          options={[...pipelineRunHistory]
+            .sort((a, b) => a.id - b.id)
+            .map((run) => {
+              return { key: run.id, text: run.name };
+            })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
             <TextField
@@ -114,17 +117,17 @@ const PipelineSelector = ({
             />
           )}
           onChange={async (event, newValue) => {
-            setSelectedPipelineRunStart(newValue);
+            handleStartPointPipelineSelect(newValue);
           }}
         />
       ) : null}
-      {selectedPipeline.key !== '' ? (
+      {selectedPipeline.key !== '' && selectedPipelineRunStart !== defaultSelectedItem ? (
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
-          options={pipelineRunHistory.map((run) => {
+          options={endPointRunHistory.map((run) => {
             return { key: run.id, text: run.name };
           })}
           getOptionLabel={(option) => `${option.text}`}
