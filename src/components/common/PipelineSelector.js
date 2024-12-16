@@ -21,6 +21,9 @@ const PipelineSelector = ({
 }) => {
   const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
   const [endPointRunHistory, setEndPointRunHistory] = useState([]);
+  const [selectedPipelineRunStart, setSelectedPipelineRunStart] = useState(defaultSelectedItem);
+  const [selectedPipelineRunEnd, setSelectedPipelineRunEnd] = useState(defaultSelectedItem);
+
   useEffect(() => {
     if (editingMode === false) {
       UpdateDocumentRequestObject();
@@ -44,10 +47,6 @@ const PipelineSelector = ({
       contentControlIndex
     );
   }
-
-  const [selectedPipelineRunStart, setSelectedPipelineRunStart] = useState(defaultSelectedItem);
-
-  const [selectedPipelineRunEnd, setSelectedPipelineRunEnd] = useState(defaultSelectedItem);
 
   // const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 

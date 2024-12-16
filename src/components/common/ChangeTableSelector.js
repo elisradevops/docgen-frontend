@@ -11,7 +11,7 @@ const baseDataType = [
   // { key: 0, text: "commit-range", type: "range" },
   { key: 1, text: 'commit-date', type: 'date' },
   { key: 2, text: 'pipeline-range', type: 'pipeline' },
-  // { key: 3, text: "release-range", type: "release" },
+  { key: 3, text: 'release-range', type: 'release' },
   // { key: 4, text: "pullrequest-range", type: "pullrequest" },
 ];
 
