@@ -3,7 +3,10 @@ import { PrimaryButton } from '@fluentui/react';
 import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
-
+const defaultSelectedItem = {
+  key: '',
+  text: '',
+};
 const ReleaseSelector = ({
   store,
   contentControlTitle,
@@ -14,6 +17,12 @@ const ReleaseSelector = ({
   addToDocumentRequestObject,
   contentControlIndex,
 }) => {
+  const [SelectedReleaseDefinition, setSelectedReleaseDefinition] = useState(defaultSelectedItem);
+  const [selectedReleaseHistoryStart, setSelectedReleaseHistoryStart] = useState(defaultSelectedItem);
+  const [selectedReleaseHistoryEnd, setSelectedReleaseHistoryEnd] = useState(defaultSelectedItem);
+  const [endPointReleaseHistory, setEndPointRunHistory] = useState([]);
+  const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
+
   useEffect(() => {
     if (editingMode === false) {
       UpdateDocumentRequestObject();
@@ -38,26 +47,14 @@ const ReleaseSelector = ({
     );
   }
 
-  const [SelectedReleaseDefinition, setSelectedReleaseDefinition] = useState({
-    key: '',
-    text: '',
-  });
-
-  const [selectedReleaseHistoryStart, setSelectedReleaseHistoryStart] = useState({
-    key: '',
-    text: '',
-  });
-
-  const [selectedReleaseHistoryEnd, setSelectedReleaseHistoryEnd] = useState({
-    key: '',
-    text: '',
-  });
-
-  const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
+  const handleStartPointReleaseSelect = (newValue) => {
+    setSelectedReleaseHistoryStart(newValue);
+    setEndPointRunHistory(releaseDefinitionHistory.filter((run) => run.id > newValue.key));
+  };
 
   return (
     <div>
-      <Autocomplete
+      {/* <Autocomplete
         disableClearable
         style={{ marginBlock: 8, width: 300 }}
         autoHighlight
@@ -74,7 +71,7 @@ const ReleaseSelector = ({
         onChange={async (event, newValue) => {
           setContentHeadingLevel(newValue.key);
         }}
-      />
+      /> */}
       <Autocomplete
         disableClearable
         style={{ marginBlock: 8, width: 300 }}
@@ -102,9 +99,11 @@ const ReleaseSelector = ({
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
-          options={releaseDefinitionHistory.map((run) => {
-            return { key: run.id, text: run.name };
-          })}
+          options={[...releaseDefinitionHistory]
+            .sort((a, b) => a.id - b.id)
+            .map((run) => {
+              return { key: run.id, text: run.name };
+            })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
             <TextField
@@ -114,17 +113,17 @@ const ReleaseSelector = ({
             />
           )}
           onChange={async (event, newValue) => {
-            setSelectedReleaseHistoryStart(newValue);
+            handleStartPointReleaseSelect(newValue);
           }}
         />
       ) : null}
-      {SelectedReleaseDefinition.key !== '' ? (
+      {SelectedReleaseDefinition.key !== '' && selectedReleaseHistoryStart !== defaultSelectedItem ? (
         <Autocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
-          options={releaseDefinitionHistory.map((run) => {
+          options={endPointReleaseHistory.map((run) => {
             return { key: run.id, text: run.name };
           })}
           getOptionLabel={(option) => `${option.text}`}
