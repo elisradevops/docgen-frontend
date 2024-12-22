@@ -16,6 +16,7 @@ const ReleaseSelector = ({
   editingMode,
   addToDocumentRequestObject,
   contentControlIndex,
+  systemOverviewRequest,
 }) => {
   const [SelectedReleaseDefinition, setSelectedReleaseDefinition] = useState(defaultSelectedItem);
   const [selectedReleaseHistoryStart, setSelectedReleaseHistoryStart] = useState(defaultSelectedItem);
@@ -41,6 +42,7 @@ const ReleaseSelector = ({
           to: selectedReleaseHistoryEnd.key,
           rangeType: 'release',
           linkTypeFilterArray: null,
+          systemOverviewQuery: systemOverviewRequest,
         },
       },
       contentControlIndex

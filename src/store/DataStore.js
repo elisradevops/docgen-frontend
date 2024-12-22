@@ -252,7 +252,7 @@ class DocGenDataStore {
   fetchSharedQueries() {
     this.loadingState.sharedQueriesLoadingState = true;
     this.azureRestClient
-      .getSharedQueries(this.teamProject)
+      .getSharedQueries(this.teamProject, this.docType)
       .then((data) => {
         this.setSharedQueries(data);
       })
