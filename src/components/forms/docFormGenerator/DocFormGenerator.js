@@ -136,6 +136,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}
+            sharedQueries={store.sharedQueries}
           />
         );
       default:

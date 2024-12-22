@@ -3,10 +3,6 @@ import { TreeSelect } from 'antd';
 import { Alert } from '@mui/material';
 
 const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
-  const noData = `No query for ${
-    queryType === 'req-test' ? 'Requirement - Test case' : 'Test case - Requirement'
-  } available`;
-
   const [selectedQuery, setSelectedQuery] = useState(undefined);
   const [showQueryNotSelectedAlert, setShowQueryNotSelectedAlert] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
@@ -16,28 +12,51 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
     setIsDisabled(data?.length === 0);
   }, [data]);
 
+  const getTitle = () => {
+    switch (queryType) {
+      case 'req-test':
+        return 'Requirement - Test case';
+      case 'test-req':
+        return 'Test case - Requirement';
+      case 'system-overview':
+        return 'System Overview';
+      default:
+        return 'Default';
+    }
+  };
+
+  const noData = `No query for ${getTitle()} available`;
+
   useEffect(() => {
-    !isDisabled
-      ? setPlaceholder(
-          `Select a ${queryType === 'req-test' ? 'Requirement - Test case' : 'Test case - Requirement'} query`
-        )
-      : setPlaceholder(noData);
+    !isDisabled ? setPlaceholder(`Select a ${getTitle()} query`) : setPlaceholder(noData);
   }, [isDisabled]);
 
-  const handleQuerySelect = (value, selectedNode) => {
-    if (selectedNode.isValidQuery) {
+  const handleQuerySelect = (value, selectedQuery) => {
+    if (selectedQuery.isValidQuery) {
       setSelectedQuery(value);
-      onSelectedQuery((prev) =>
-        queryType === 'req-test'
-          ? { ...prev, reqTestQuery: selectedNode }
-          : { ...prev, testReqQuery: selectedNode }
-      );
+      onSelectedQuery((prev) => {
+        switch (queryType) {
+          case 'req-test':
+            return { ...prev, reqTestQuery: selectedQuery };
+          case 'test-req':
+            return { ...prev, testReqQuery: selectedQuery };
+          default:
+            return { selectedQuery };
+        }
+      });
       setShowQueryNotSelectedAlert(false);
     } else {
       setSelectedQuery(undefined);
-      onSelectedQuery((prev) =>
-        queryType === 'req-test' ? { ...prev, reqTestQuery: null } : { ...prev, testReqQuery: null }
-      );
+      onSelectedQuery((prev) => {
+        switch (queryType) {
+          case 'req-test':
+            return { ...prev, reqTestQuery: null };
+          case 'test-req':
+            return { ...prev, testReqQuery: null };
+          default:
+            return { selectedQuery: null };
+        }
+      });
       setShowQueryNotSelectedAlert(true);
     }
     // Perform actions with selected node IDs
@@ -45,9 +64,16 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
 
   const handleOnClear = () => {
     setSelectedQuery(undefined);
-    onSelectedQuery((prev) =>
-      queryType === 'req-test' ? { ...prev, reqTestQuery: null } : { ...prev, testReqQuery: null }
-    );
+    onSelectedQuery((prev) => {
+      switch (queryType) {
+        case 'req-test':
+          return { ...prev, reqTestQuery: null };
+        case 'test-req':
+          return { ...prev, testReqQuery: null };
+        default:
+          return { selectedQuery: null };
+      }
+    });
   };
 
   return (
@@ -64,7 +90,7 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
         <TreeSelect
           showSearch
           onClear={handleOnClear}
-          style={{ width: '100%', marginTop: 5 }}
+          style={{ marginBlock: 8, width: 300 }}
           dropdownStyle={{
             maxHeight: 400,
             overflow: 'auto',

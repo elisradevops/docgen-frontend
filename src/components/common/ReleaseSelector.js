@@ -16,6 +16,7 @@ const ReleaseSelector = ({
   editingMode,
   addToDocumentRequestObject,
   contentControlIndex,
+  systemOverviewRequest,
 }) => {
   const [SelectedReleaseDefinition, setSelectedReleaseDefinition] = useState(defaultSelectedItem);
   const [selectedReleaseHistoryStart, setSelectedReleaseHistoryStart] = useState(defaultSelectedItem);
@@ -41,6 +42,7 @@ const ReleaseSelector = ({
           to: selectedReleaseHistoryEnd.key,
           rangeType: 'release',
           linkTypeFilterArray: null,
+          systemOverviewQuery: systemOverviewRequest,
         },
       },
       contentControlIndex
@@ -49,7 +51,9 @@ const ReleaseSelector = ({
 
   const handleStartPointReleaseSelect = (newValue) => {
     setSelectedReleaseHistoryStart(newValue);
-    setEndPointRunHistory(releaseDefinitionHistory.filter((run) => run.id > newValue.key));
+    setEndPointRunHistory(releaseDefinitionHistory.filter((run) => run.id > newValue.key)).sort((a, b) =>
+      b.name.localeCompare(a.name)
+    );
   };
 
   return (
@@ -77,9 +81,11 @@ const ReleaseSelector = ({
         style={{ marginBlock: 8, width: 300 }}
         autoHighlight
         openOnFocus
-        options={releaseDefinitionList.map((releaseDefinition) => {
-          return { key: releaseDefinition.id, text: releaseDefinition.name };
-        })}
+        options={releaseDefinitionList
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((releaseDefinition) => {
+            return { key: releaseDefinition.id, text: releaseDefinition.name };
+          })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
           <TextField
@@ -100,7 +106,7 @@ const ReleaseSelector = ({
           autoHighlight
           openOnFocus
           options={[...releaseDefinitionHistory]
-            .sort((a, b) => a.id - b.id)
+            .sort((a, b) => a.name.localeCompare(b.name))
             .map((run) => {
               return { key: run.id, text: run.name };
             })}

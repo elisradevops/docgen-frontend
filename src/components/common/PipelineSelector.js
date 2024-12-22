@@ -18,6 +18,7 @@ const PipelineSelector = ({
   editingMode,
   addToDocumentRequestObject,
   contentControlIndex,
+  systemOverviewRequest,
 }) => {
   const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
   const [endPointRunHistory, setEndPointRunHistory] = useState([]);
@@ -42,6 +43,7 @@ const PipelineSelector = ({
           to: selectedPipelineRunEnd.key,
           rangeType: 'pipeline',
           linkTypeFilterArray: null,
+          systemOverviewQuery: systemOverviewRequest,
         },
       },
       contentControlIndex
@@ -52,7 +54,9 @@ const PipelineSelector = ({
 
   const handleStartPointPipelineSelect = (newValue) => {
     setSelectedPipelineRunStart(newValue);
-    setEndPointRunHistory(pipelineRunHistory.filter((run) => run.id > newValue.key));
+    setEndPointRunHistory(pipelineRunHistory.filter((run) => run.id > newValue.key)).sort((a, b) =>
+      b.name.localeCompare(a.name)
+    );
   };
 
   return (
@@ -80,9 +84,11 @@ const PipelineSelector = ({
         style={{ marginBlock: 8, width: 300 }}
         autoHighlight
         openOnFocus
-        options={pipelineList.map((pipeline) => {
-          return { key: pipeline.id, text: pipeline.name };
-        })}
+        options={pipelineList
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((pipeline) => {
+            return { key: pipeline.id, text: pipeline.name };
+          })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
           <TextField
@@ -103,7 +109,7 @@ const PipelineSelector = ({
           autoHighlight
           openOnFocus
           options={[...pipelineRunHistory]
-            .sort((a, b) => a.id - b.id)
+            .sort((a, b) => a.name.localeCompare(b.name))
             .map((run) => {
               return { key: run.id, text: run.name };
             })}
