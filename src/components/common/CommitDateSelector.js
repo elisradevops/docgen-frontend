@@ -19,7 +19,7 @@ const CommitDateSelector = ({
   editingMode,
   addToDocumentRequestObject,
   contentControlIndex,
-  systemOverviewRequest,
+  queriesRequest,
 }) => {
   const [selectedRepo, setSelectedRepo] = useState({
     key: '',
@@ -64,7 +64,7 @@ const CommitDateSelector = ({
           includePullRequests: includePullRequests, // Added this line
           includeChangeDescription: includeChangeDescription,
           includeCommittedBy: includeCommittedBy,
-          systemOverviewQuery: systemOverviewRequest,
+          systemOverviewQuery: queriesRequest,
         },
       },
       contentControlIndex

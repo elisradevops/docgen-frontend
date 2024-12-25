@@ -26,6 +26,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
 
   useEffect(() => {
     if (docType !== '') {
+      logger.debug(`Fetching doc forms templates for docType: ${docType}`);
       store.setDocType(docType);
       setLoadingForm(true);
       store

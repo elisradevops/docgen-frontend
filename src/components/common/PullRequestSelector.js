@@ -19,7 +19,7 @@ const PullRequestSelector = ({
   editingMode,
   addToDocumentRequestObject,
   contentControlIndex,
-  systemOverviewRequest,
+  queriesRequest,
 }) => {
   const [selectedRepo, setSelectedRepo] = useState({
     key: '',
@@ -48,7 +48,7 @@ const PullRequestSelector = ({
           repoId: selectedRepo.key,
           prIds: pullrequestIdList,
           linkTypeFilterArray: null,
-          systemOverviewQuery: systemOverviewRequest,
+          systemOverviewQuery: queriesRequest,
         },
       },
       contentControlIndex

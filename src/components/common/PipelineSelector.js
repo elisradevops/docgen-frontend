@@ -18,7 +18,7 @@ const PipelineSelector = ({
   editingMode,
   addToDocumentRequestObject,
   contentControlIndex,
-  systemOverviewRequest,
+  queriesRequest,
 }) => {
   const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
   const [endPointRunHistory, setEndPointRunHistory] = useState([]);
@@ -43,7 +43,7 @@ const PipelineSelector = ({
           to: selectedPipelineRunEnd.key,
           rangeType: 'pipeline',
           linkTypeFilterArray: null,
-          systemOverviewQuery: systemOverviewRequest,
+          systemOverviewQuery: queriesRequest,
         },
       },
       contentControlIndex

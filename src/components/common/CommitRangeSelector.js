@@ -15,7 +15,7 @@ const CommitRangeSelector = ({
   editingMode,
   addToDocumentRequestObject,
   contentControlIndex,
-  systemOverviewRequest,
+  queriesRequest,
 }) => {
   const [selectedRepo, setSelectedRepo] = useState({
     key: '',
@@ -47,7 +47,7 @@ const CommitRangeSelector = ({
           rangeType: 'commitSha',
           linkTypeFilterArray: null,
           branchName: selectedBranch.key,
-          systemOverviewQuery: systemOverviewRequest,
+          systemOverviewQuery: queriesRequest,
         },
       },
       contentControlIndex
