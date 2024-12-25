@@ -20,6 +20,8 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
         return 'Test case - Requirement';
       case 'system-overview':
         return 'System Overview';
+      case 'known-bugs':
+        return 'Possible Known Bugs Queries';
       default:
         return 'Default';
     }
@@ -40,22 +42,19 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
             return { ...prev, reqTestQuery: selectedQuery };
           case 'test-req':
             return { ...prev, testReqQuery: selectedQuery };
+          case 'system-overview':
+            return { ...prev, sysOverviewQuery: selectedQuery };
+          case 'known-bugs':
+            return { ...prev, knownBugsQuery: selectedQuery };
           default:
-            return { selectedQuery };
+            break;
         }
       });
       setShowQueryNotSelectedAlert(false);
     } else {
       setSelectedQuery(undefined);
       onSelectedQuery((prev) => {
-        switch (queryType) {
-          case 'req-test':
-            return { ...prev, reqTestQuery: null };
-          case 'test-req':
-            return { ...prev, testReqQuery: null };
-          default:
-            return { selectedQuery: null };
-        }
+        return ClearSelectedQuery(queryType, prev);
       });
       setShowQueryNotSelectedAlert(true);
     }
@@ -65,14 +64,7 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
   const handleOnClear = () => {
     setSelectedQuery(undefined);
     onSelectedQuery((prev) => {
-      switch (queryType) {
-        case 'req-test':
-          return { ...prev, reqTestQuery: null };
-        case 'test-req':
-          return { ...prev, testReqQuery: null };
-        default:
-          return { selectedQuery: null };
-      }
+      return ClearSelectedQuery(queryType, prev);
     });
   };
 
@@ -110,3 +102,17 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
 };
 
 export default QueryTree;
+function ClearSelectedQuery(queryType, prev) {
+  switch (queryType) {
+    case 'req-test':
+      return { ...prev, reqTestQuery: null };
+    case 'test-req':
+      return { ...prev, testReqQuery: null };
+    case 'system-overview':
+      return { ...prev, sysOverviewQuery: null };
+    case 'known-bugs':
+      return { ...prev, knownBugsQuery: null };
+    default:
+      break;
+  }
+}

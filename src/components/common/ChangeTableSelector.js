@@ -19,6 +19,7 @@ const baseDataType = [
 
 const defaultSelectedQueries = {
   systemOverviewQueryTree: null,
+  knownBugsQueryTree: null,
 };
 
 const ChangeTableSelector = observer(
@@ -35,9 +36,11 @@ const ChangeTableSelector = observer(
     const [selectedType, setselectedType] = useState('');
     const [queryTrees, setQueryTrees] = useState({
       systemOverviewQueryTree: [],
+      knownBugsQueryTree: [],
     });
-    const [systemOverviewRequest, setSystemOverviewRequest] = useState(defaultSelectedQueries);
+    const [queriesRequest, setQueriesRequest] = useState(defaultSelectedQueries);
     const [includeSystemOverview, setIncludeSystemOverview] = useState(false);
+    const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
     useEffect(() => {
       const { acquiredTrees } = toJS(sharedQueries);
       acquiredTrees !== null
@@ -45,6 +48,7 @@ const ChangeTableSelector = observer(
             systemOverviewQueryTree: acquiredTrees.systemOverviewQueryTree
               ? [acquiredTrees.systemOverviewQueryTree]
               : [],
+            knownBugsQueryTree: acquiredTrees.knownBugsQueryTree ? [acquiredTrees.knownBugsQueryTree] : [],
           }))
         : setQueryTrees(defaultSelectedQueries);
     }, [sharedQueries.acquiredTrees]);
@@ -53,13 +57,14 @@ const ChangeTableSelector = observer(
       <>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
           <FormControlLabel
+            disabled={!queryTrees.systemOverviewQueryTree || queryTrees.systemOverviewQueryTree?.length === 0}
             control={
               <Checkbox
                 value={includeSystemOverview}
                 onChange={(event, checked) => {
                   setIncludeSystemOverview(checked);
                   if (checked === false) {
-                    setSystemOverviewRequest(defaultSelectedQueries);
+                    setQueriesRequest((prev) => ({ ...prev, systemOverviewQueryTree: null }));
                   }
                 }}
               />
@@ -74,8 +79,39 @@ const ChangeTableSelector = observer(
             {queryTrees.systemOverviewQueryTree.length > 0 && (
               <QueryTree
                 data={queryTrees.systemOverviewQueryTree}
-                onSelectedQuery={setSystemOverviewRequest}
+                onSelectedQuery={setQueriesRequest}
                 queryType={'system-overview'}
+                isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+              />
+            )}
+          </Collapse>
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                disabled={!queryTrees.knownBugsQueryTree || queryTrees.knownBugsQueryTree?.length === 0}
+                value={includeKnownBugs}
+                onChange={(event, checked) => {
+                  setIncludeKnownBugs(checked);
+                  if (checked === false) {
+                    setQueriesRequest((prev) => ({ ...prev, knownBugsQueryTree: null }));
+                  }
+                }}
+              />
+            }
+            label='Include Known Possible Bugs By Query'
+          />
+          <Collapse
+            in={includeKnownBugs}
+            timeout='auto'
+            unmountOnExit
+          >
+            {queryTrees.knownBugsQueryTree.length > 0 && (
+              <QueryTree
+                data={queryTrees.knownBugsQueryTree}
+                onSelectedQuery={setQueriesRequest}
+                queryType={'known-bugs'}
                 isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
               />
             )}
@@ -115,7 +151,7 @@ const ChangeTableSelector = observer(
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
-                systemOverviewRequest={systemOverviewRequest}
+                queriesRequest={queriesRequest}
               />
             ) : null}
             {selectedType === 'date' ? (
@@ -128,7 +164,7 @@ const ChangeTableSelector = observer(
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
-                systemOverviewRequest={systemOverviewRequest}
+                queriesRequest={queriesRequest}
               />
             ) : null}
             {selectedType === 'pipeline' ? (
@@ -141,7 +177,7 @@ const ChangeTableSelector = observer(
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
-                systemOverviewRequest={systemOverviewRequest}
+                queriesRequest={queriesRequest}
               />
             ) : null}
             {selectedType === 'release' ? (
@@ -154,7 +190,7 @@ const ChangeTableSelector = observer(
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
-                systemOverviewRequest={systemOverviewRequest}
+                queriesRequest={queriesRequest}
               />
             ) : null}
             {selectedType === 'pullrequest' ? (
@@ -167,11 +203,11 @@ const ChangeTableSelector = observer(
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
-                systemOverviewRequest={systemOverviewRequest}
+                queriesRequest={queriesRequest}
               />
             ) : null}
           </div>
-          <br />
+
           <br />
         </div>
       </>
