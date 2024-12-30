@@ -145,7 +145,7 @@ export default function STDGuide() {
             <ListItem style={{ paddingLeft: 32 }}>
               <ListItemText
                 primary='Based On Queries'
-                secondary='Fetch trace analysis based on TFS predefined queries (if disabled there are no saved queries)'
+                secondary='Fetch both trace analysis and covered requirements based on the selected queries (disabled if no available queries)'
               />
             </ListItem>
           </List>

@@ -7,15 +7,21 @@ import Autocomplete from '@mui/material/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
-import { FormLabel, Box, Radio, RadioGroup } from '@mui/material';
-
+import { FormLabel, Box, Radio, RadioGroup, Collapse } from '@mui/material';
+import QueryTree from './QueryTree';
+import { toJS } from 'mobx';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
 const initialStepsExecutionState = {
   isEnabled: false,
   generateAttachments: { isEnabled: false, attachmentType: 'asEmbedded' },
-  generateRequirements: { isEnabled: false, requirementType: 'linked', includeCustomerId: false },
+  generateRequirements: {
+    isEnabled: false,
+    includeCustomerId: false,
+    requirementInclusionMode: 'linkedRequirement',
+    testReqQuery: null,
+  },
 };
 
 const initialStepsAnalysisState = {
@@ -34,10 +40,15 @@ const STRTableSelector = ({
   addToDocumentRequestObject,
   editingMode,
   contentControlIndex,
+  sharedQueries,
 }) => {
   const [selectedTestPlan, setSelectedTestPlan] = useState({
     key: '',
     text: '',
+  });
+
+  const [queryTrees, setQueryTrees] = useState({
+    testReqTree: [],
   });
   const [selectedTestSuites, setSelectedTestSuites] = useState([]);
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
@@ -49,6 +60,7 @@ const STRTableSelector = ({
   const [includeTestLog, setIncludeTestLog] = useState(false);
 
   const [stepExecutionState, setStepExecutionState] = useState(initialStepsExecutionState);
+  const [selectedTestReqTree, setSelectedTestReqTree] = useState(null);
   const [stepAnalysisState, setStepAnalysisState] = useState(initialStepsAnalysisState);
 
   useEffect(() => {
@@ -57,6 +69,15 @@ const STRTableSelector = ({
     }
   });
   // }, [editingMode]);
+
+  useEffect(() => {
+    const { acquiredTrees } = toJS(sharedQueries);
+    acquiredTrees !== null
+      ? setQueryTrees(() => ({
+          testReqTree: acquiredTrees.testReqTree ? [acquiredTrees.testReqTree] : [],
+        }))
+      : setQueryTrees(null);
+  }, [sharedQueries.acquiredTrees]);
 
   //For detailed steps execution
   useEffect(() => {
@@ -107,7 +128,13 @@ const STRTableSelector = ({
           includeHierarchy: includeHierarchy,
           includeOpenPCRs: includeOpenPCRs,
           includeTestLog: includeTestLog,
-          stepExecution: stepExecutionState,
+          stepExecution: {
+            ...stepExecutionState,
+            generateRequirements: {
+              ...stepExecutionState.generateRequirements,
+              testReqQuery: selectedTestReqTree?.testReqQuery || null,
+            },
+          },
           stepAnalysis: stepAnalysisState,
         },
       },
@@ -193,6 +220,13 @@ const STRTableSelector = ({
     );
   };
 
+  const handleChangeRequirementInclusionMode = (value) => {
+    setStepExecutionState((prev) => ({
+      ...prev,
+      generateRequirements: { ...prev.generateRequirements, requirementInclusionMode: value },
+    }));
+  };
+
   const linkedRequirement = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <FormControlLabel
@@ -200,42 +234,42 @@ const STRTableSelector = ({
         control={
           <Checkbox
             label='Include Customer Id'
-            value={stepExecutionState.generateAttachments.includeCustomerId}
+            value={stepExecutionState.generateRequirements.includeCustomerId}
             onChange={(event, checked) => {
               setStepExecutionState((prev) => ({
                 ...prev,
-                generateAttachments: { ...prev.generateAttachments, includeCustomerId: checked },
+                generateRequirements: { ...prev.generateRequirements, includeCustomerId: checked },
               }));
             }}
           />
         }
       />
-
-      {/* <RadioGroup
+      <FormLabel
+        id='linked-requirement-buttons-group'
+        label='Requirement Type'
+      >
+        Covered Requirements Base Type
+      </FormLabel>
+      <RadioGroup
+        defaultValue={'linkedRequirement'}
         name='linked-requirement-buttons-group'
-        value={stepExecutionState?.generateRequirements?.requirementType ?? 'defaultType'}
+        value={stepExecutionState.generateRequirements.requirementInclusionMode}
         onChange={(event) => {
-          const newRequirementType = event.target.value || 'query';
-          setStepExecutionState((prev) => ({
-            ...prev,
-            generateRequirements: {
-              ...prev?.generateRequirements,
-              requirementType: newRequirementType,
-            },
-          }));
+          handleChangeRequirementInclusionMode(event.target.value);
         }}
       >
         <FormControlLabel
-          value='query'
-          label='From Query'
+          value='linkedRequirement'
+          label='Based On Linked Requirements'
           control={<Radio />}
         />
         <FormControlLabel
-          value='linked'
-          label='From Linked Requirements'
+          value='query'
+          label='Based on Queries'
           control={<Radio />}
+          disabled={!queryTrees.testReqTree.length > 0}
         />
-      </RadioGroup> */}
+      </RadioGroup>
     </Box>
   );
 
@@ -275,6 +309,22 @@ const STRTableSelector = ({
           }
         />
         {stepExecutionState.generateRequirements.isEnabled && linkedRequirement}
+        <Collapse
+          in={
+            stepExecutionState.generateRequirements.isEnabled &&
+            stepExecutionState.generateRequirements.requirementInclusionMode === 'query' &&
+            queryTrees.testReqTree.length > 0
+          }
+          timeout='auto'
+          unmountOnExit
+        >
+          <QueryTree
+            data={queryTrees.testReqTree}
+            onSelectedQuery={setSelectedTestReqTree}
+            queryType={'test-req'}
+            isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+          />
+        </Collapse>
       </div>
     </Box>
   );
@@ -492,5 +542,4 @@ const STRTableSelector = ({
     </>
   );
 };
-
 export default STRTableSelector;

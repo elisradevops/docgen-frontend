@@ -95,6 +95,12 @@ export default function STRGuide() {
                 secondary='Include covered requirement table or not.'
               />
             </ListItem>
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Covered Requirements Base Type'
+                secondary='Fetch covered requirements based on the selected type.'
+              />
+            </ListItem>
           </List>
         </Collapse>
 
