@@ -88,6 +88,7 @@ const DocFormGenerator = observer(({ docType, store }) => {
             skin={formControl.skin}
             testPlansList={store.testPlansList}
             testSuiteList={store.testSuiteList}
+            sharedQueries={store.sharedQueries}
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}
