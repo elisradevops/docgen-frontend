@@ -105,11 +105,9 @@ const ReleaseSelector = ({
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
-          options={[...releaseDefinitionHistory]
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((run) => {
-              return { key: run.id, text: run.name };
-            })}
+          options={[...releaseDefinitionHistory].map((run) => {
+            return { key: run.id, text: run.name };
+          })}
           getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
             <TextField
