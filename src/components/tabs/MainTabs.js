@@ -11,7 +11,7 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Button from '@mui/material/Button';
 import { styled } from '@mui/material/styles';
-import { Box, Grid } from '@mui/material';
+import { Autocomplete, Box, Grid, TextField } from '@mui/material';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
 
@@ -63,7 +63,7 @@ const StyledButton = styled(Button)(({ theme }) => ({
 const MainTabs = observer(({ store }) => {
   const [selectedTab, setSelectedTab] = useState(4);
   const [cookies, setCookie, removeCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
-
+  const [selectedTeamProject, setSelectedTeamProject] = useState('');
   const logout = () => {
     removeCookie('azuredevopsUrl');
     removeCookie('azuredevopsPat');
@@ -111,45 +111,77 @@ const MainTabs = observer(({ store }) => {
           <StyledButton onClick={logout}>Logout</StyledButton>
         </Box>
       </AppBar>
-      {store.documentTypes.map((docType, key) => {
-        return selectedTab === key ? (
-          <Grid
-            container
-            spacing={2}
-          >
-            <Grid
-              item
-              xs={3}
-            >
-              <DocFormGenerator
-                docType={docType}
-                store={store}
+      <Grid container>
+        <Grid
+          item
+          xs={12}
+        >
+          <Autocomplete
+            disableClearable
+            style={{ marginBlock: 8, width: 300 }}
+            autoHighlight
+            openOnFocus
+            options={store.teamProjectsList.map((teamProject) => {
+              return { key: teamProject.id, text: teamProject.name };
+            })}
+            getOptionLabel={(option) => `${option.text}`}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label='Select a TeamProject'
+                variant='outlined'
               />
-            </Grid>
+            )}
+            onChange={async (event, newValue) => {
+              setSelectedTeamProject(newValue.text);
+              store.setTeamProject(newValue.key, newValue.text);
+            }}
+          />
+        </Grid>
 
-            <Grid
-              item
-              xs={9}
-            >
-              {generateGuide(docType)}
-            </Grid>
+        {store.documentTypes.map((docType, key) => {
+          return selectedTab === key ? (
+            <>
+              <Grid
+                item
+                xs={3}
+              >
+                <DocFormGenerator
+                  docType={docType}
+                  store={store}
+                  selectedTeamProject={selectedTeamProject}
+                />
+              </Grid>
+
+              <Grid
+                item
+                xs={9}
+              >
+                {generateGuide(docType)}
+              </Grid>
+            </>
+          ) : null;
+        })}
+        {selectedTab === 4 ? (
+          <Grid
+            item
+            xs={12}
+          >
+            <DeveloperForm store={store} />{' '}
           </Grid>
-        ) : null;
-      })}
-      {selectedTab === 4 ? (
-        <DeveloperForm
-          store={store}
-          index={0}
-          value={4}
-        />
-      ) : null}
-      {selectedTab === 99 ? (
-        <DocumentsTab
-          store={store}
-          index={0}
-          value={4}
-        />
-      ) : null}
+        ) : null}
+        {selectedTab === 99 ? (
+          <Grid
+            item
+            xs={12}
+          >
+            <DocumentsTab
+              store={store}
+              selectedTeamProject={selectedTeamProject}
+            />
+          </Grid>
+        ) : null}
+      </Grid>
     </div>
   );
 });

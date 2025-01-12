@@ -51,27 +51,6 @@ const DeveloperForm = observer(({ store }) => {
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
-            options={store.teamProjectsList.map((teamProject) => {
-              return { key: teamProject.id, text: teamProject.name };
-            })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextFieldM
-                {...params}
-                label='Select a TeamProject'
-                variant='outlined'
-              />
-            )}
-            onChange={async (event, newValue) => {
-              store.setTeamProject(newValue.key, newValue.text);
-              store.fetchSharedQueries();
-            }}
-          />
-          <Autocomplete
-            disableClearable
-            style={{ marginBlock: 8, width: 300 }}
-            autoHighlight
-            openOnFocus
             options={store.templateList.map((template) => {
               return { url: template.url, text: template.name };
             })}

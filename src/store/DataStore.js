@@ -45,6 +45,7 @@ class DocGenDataStore {
       fetchTeamProjects: action,
       setTeamProject: action,
       fetchTemplatesList: action,
+      fetchDocuments: action,
       fetchDocFolders: action,
       setSelectedTemplate: action,
       fetchSharedQueries: action,
