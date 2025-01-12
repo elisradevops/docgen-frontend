@@ -90,7 +90,6 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
           treeData={data}
           disabled={isDisabled}
           value={selectedQuery}
-          treeDefaultExpandAll
           placeholder={placeholder}
           onSelect={handleQuerySelect}
           allowClear
