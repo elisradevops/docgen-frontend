@@ -11,7 +11,11 @@ function App({ store }) {
   const login = (selectedUrl, selectedPat) => {
     let d = new Date();
     d.setTime(d.getTime() + 525960 * 60 * 1000);
-    setCookie('azuredevopsUrl', selectedUrl, { path: '/', expires: d });
+    // Set the cookies for the selected URL and PAT
+    setCookie('azuredevopsUrl', selectedUrl.endsWith('/') ? selectedUrl : selectedUrl.concat('/'), {
+      path: '/',
+      expires: d,
+    });
     setCookie('azuredevopsPat', selectedPat, { path: '/', expires: d });
     window.location.reload(); // Reload the page after signing in
   };

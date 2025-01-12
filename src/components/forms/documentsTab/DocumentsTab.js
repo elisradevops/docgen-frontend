@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { observer } from 'mobx-react';
 
 import { Dropdown } from '@fluentui/react/lib/Dropdown';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
-import { Autocomplete } from '@mui/material';
+import { Alert, Autocomplete, Grid } from '@mui/material';
 import { TextField } from '@mui/material';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
@@ -16,31 +16,30 @@ const dropdownStyles = {
   dropdown: { width: 300 },
 };
 
-const DocumentsTab = observer(({ store }) => {
+const DocumentsTab = observer(({ store, selectedTeamProject }) => {
+  useEffect(() => {
+    if (selectedTeamProject) {
+      store.fetchDocuments();
+    }
+  }, [store, selectedTeamProject]);
+
   return (
-    <div>
-      <Autocomplete
-        disableClearable
-        style={{ marginBlock: 8, width: 300 }}
-        autoHighlight
-        openOnFocus
-        options={store.teamProjectsList.map((teamProject) => {
-          return { key: teamProject.id, text: teamProject.name };
-        })}
-        getOptionLabel={(option) => `${option.text}`}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label='Select a TeamProject'
-            variant='outlined'
-          />
-        )}
-        onChange={async (event, newValue) => {
-          store.setTeamProject(newValue.key, newValue.text);
-          store.fetchSharedQueries();
-        }}
-      />
-      <div>
+    <Grid
+      container
+      spacing={2}
+    >
+      <Grid
+        item
+        xs={12}
+      >
+        <Alert severity='info'>
+          Please save your documents in your local folders, we have a retention rule of 2 days.
+        </Alert>
+      </Grid>
+      <Grid
+        item
+        xs={12}
+      >
         <TableContainer component={Paper}>
           <Table aria-label='simple table'>
             <TableHead>
@@ -66,15 +65,15 @@ const DocumentsTab = observer(({ store }) => {
                     component='th'
                     scope='row'
                   >
-                    {row.lastModified}
+                    {new Date(row.lastModified).toLocaleString()}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </TableContainer>
-      </div>
-    </div>
+      </Grid>
+    </Grid>
   );
 });
 export default DocumentsTab;

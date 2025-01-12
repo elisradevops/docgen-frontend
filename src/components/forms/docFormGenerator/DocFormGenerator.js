@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import Grid from '@mui/material/Grid';
-import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import { PrimaryButton } from '@fluentui/react';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -15,11 +14,10 @@ import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 import { toast } from 'react-toastify';
 import logger from '../../../utils/logger';
 
-const DocFormGenerator = observer(({ docType, store }) => {
+const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
   const [loadingForm, setLoadingForm] = useState(false);
   const [docFormsControls, setDocFormsControls] = useState([]);
-  const [selectedTeamProject, setSelectedTeamProject] = useState('');
   const [selectedDocForm, setSelectedDocForm] = useState(null);
   const [docForm, setDocForm] = useState(null);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -60,6 +58,12 @@ const DocFormGenerator = observer(({ docType, store }) => {
       setDocForm(temp);
     }
   }, [selectedDocForm, docFormsControls]);
+
+  useEffect(() => {
+    if (selectedTeamProject) {
+      store.fetchSharedQueries();
+    }
+  }, [selectedTeamProject]);
 
   const generateFormControls = (formControl, contentControlIndex) => {
     switch (formControl.skin) {
@@ -166,33 +170,6 @@ const DocFormGenerator = observer(({ docType, store }) => {
       ) : (
         selectedDocForm && (
           <Grid container>
-            <Grid
-              item
-              xs={12}
-            >
-              <Autocomplete
-                disableClearable
-                style={{ marginBlock: 8, width: 300 }}
-                autoHighlight
-                openOnFocus
-                options={store.teamProjectsList.map((teamProject) => {
-                  return { key: teamProject.id, text: teamProject.name };
-                })}
-                getOptionLabel={(option) => `${option.text}`}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label='Select a TeamProject'
-                    variant='outlined'
-                  />
-                )}
-                onChange={async (event, newValue) => {
-                  setSelectedTeamProject(newValue.text);
-                  store.setTeamProject(newValue.key, newValue.text);
-                  store.fetchSharedQueries();
-                }}
-              />
-            </Grid>
             <Grid
               item
               xs={12}
