@@ -1,21 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
+import { Grid, TableContainer, Paper, Table, TableBody, TableRow, TableCell, TableHead } from '@mui/material';
+const TemplatesTab = observer(({ store, selectedTeamProject }) => {
+  const [templates, setTemplates] = useState([]);
 
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import { Alert, Grid } from '@mui/material';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import Paper from '@mui/material/Paper';
+  useEffect(async () => {
+    store.fetchTemplatesListForDownload();
+  }, [selectedTeamProject]);
 
-const DocumentsTab = observer(({ store, selectedTeamProject }) => {
   useEffect(() => {
-    if (selectedTeamProject) {
-      store.fetchDocuments();
-    }
-  }, [store, selectedTeamProject]);
+    setTemplates(store.templateForDownload || []);
+  }, [store.templateForDownload]);
 
   return (
     <Grid
@@ -26,28 +21,20 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
         item
         xs={12}
       >
-        <Alert severity='info'>
-          Please save your documents in your local folders, we have a retention rule of 2 days.
-        </Alert>
-      </Grid>
-      <Grid
-        item
-        xs={12}
-      >
         <TableContainer component={Paper}>
           <Table aria-label='simple table'>
             <TableHead>
               <TableRow>
                 <TableCell>
-                  <strong>Document Title</strong>
+                  <strong>Template File</strong>
                 </TableCell>
                 <TableCell>
-                  <strong>Changed Date</strong>
+                  <strong>Last Modified</strong>
                 </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {store.documents.map((row) => (
+              {templates.map((row) => (
                 <TableRow key={row.name}>
                   <TableCell
                     component='th'
@@ -70,4 +57,5 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
     </Grid>
   );
 });
-export default DocumentsTab;
+
+export default TemplatesTab;
