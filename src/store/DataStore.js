@@ -27,6 +27,7 @@ class DocGenDataStore {
       sharedQueries: observable,
       teamProjectsList: observable,
       templateList: observable,
+      templateForDownload: observable,
       testPlansList: observable,
       testSuiteList: observable,
       pipelineList: observable,
@@ -45,6 +46,7 @@ class DocGenDataStore {
       fetchTeamProjects: action,
       setTeamProject: action,
       fetchTemplatesList: action,
+      fetchTemplatesListForDownload: action,
       fetchDocuments: action,
       fetchDocFolders: action,
       setSelectedTemplate: action,
@@ -88,6 +90,7 @@ class DocGenDataStore {
   teamProjectName = '';
   ProjectBucketName = '';
   templateList = [];
+  templateForDownload = [];
   contentControls = [];
   selectedTemplate = { key: '', name: '' };
   sharedQueries = { acquiredTrees: null }; // list of queries
@@ -188,21 +191,24 @@ class DocGenDataStore {
   setTeamProject(teamProjectId, teamProjectName) {
     this.teamProject = teamProjectId;
     this.teamProjectName = teamProjectName;
-    this.ProjectBucketName = teamProjectName.toLowerCase();
-    this.ProjectBucketName = this.ProjectBucketName.replace('_', '-');
-    this.ProjectBucketName = this.ProjectBucketName.replace(/[^a-z0-9-]/g, '');
-    if (this.ProjectBucketName.length < 3) {
-      this.ProjectBucketName = this.ProjectBucketName + '-bucket';
+    // Set the project bucket name
+    if (teamProjectId !== '' && teamProjectName !== '') {
+      this.ProjectBucketName = teamProjectName.toLowerCase();
+      this.ProjectBucketName = this.ProjectBucketName.replace('_', '-');
+      this.ProjectBucketName = this.ProjectBucketName.replace(/[^a-z0-9-]/g, '');
+      if (this.ProjectBucketName.length < 3) {
+        this.ProjectBucketName = this.ProjectBucketName + '-bucket';
+      }
+      this.fetchDocuments();
+      this.fetchTestPlans();
+      this.fetchGitRepoList();
+      this.fetchPipelineList();
+      this.fetchReleaseDefinitionList();
     }
-    this.fetchDocuments();
-    this.fetchTestPlans();
-    this.fetchGitRepoList();
-    this.fetchPipelineList();
-    this.fetchReleaseDefinitionList();
   }
 
   // For fetching template files list
-  async fetchTemplatesList(docType, projectName = '') {
+  async fetchTemplatesList(docType = null, projectName = '') {
     this.templateList = [];
     try {
       const projects = projectName !== '' ? ['shared', projectName] : ['shared'];
@@ -251,20 +257,22 @@ class DocGenDataStore {
 
   //for fetching shared quries
   fetchSharedQueries() {
-    this.loadingState.sharedQueriesLoadingState = true;
-    this.azureRestClient
-      .getSharedQueries(this.teamProject, this.docType)
-      .then((data) => {
-        this.setSharedQueries(data);
-      })
-      .catch((err) => {
-        logger.error(`Error occurred while fetching queries: ${err.message}`);
-        logger.error('Error stack:');
-        logger.error(err.stack);
-      })
-      .finally(() => {
-        this.loadingState.sharedQueriesLoadingState = false;
-      });
+    if (this.teamProject && this.teamProject !== '' && this.docType && this.docType !== '') {
+      this.loadingState.sharedQueriesLoadingState = true;
+      this.azureRestClient
+        .getSharedQueries(this.teamProject, this.docType)
+        .then((data) => {
+          this.setSharedQueries(data);
+        })
+        .catch((err) => {
+          logger.error(`Error occurred while fetching queries: ${err.message}`);
+          logger.error('Error stack:');
+          logger.error(err.stack);
+        })
+        .finally(() => {
+          this.loadingState.sharedQueriesLoadingState = false;
+        });
+    }
   }
 
   fetchLoadingState() {
@@ -457,6 +465,22 @@ class DocGenDataStore {
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching documents: ${err.message}`);
+        logger.error('Error stack:');
+        logger.error(err.stack);
+      });
+  }
+
+  //for fetching documents
+  fetchTemplatesListForDownload() {
+    getBucketFileList('templates', null, true, this.teamProjectName, true)
+      .then((data) => {
+        data.sort(function (a, b) {
+          return new Date(b.lastModified) - new Date(a.lastModified);
+        });
+        this.templateForDownload = data;
+      })
+      .catch((err) => {
+        logger.error(`Error occurred while fetching templates: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
       });

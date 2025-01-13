@@ -13,14 +13,15 @@ export const getBucketFileList = async (
   bucketName,
   docType = null,
   isExternalUrl = false,
-  projectName = null
+  projectName = null,
+  recurse = false
 ) => {
   let url;
   try {
     url =
       docType !== null
-        ? `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?docType=${docType}&isExternalUrl=${isExternalUrl}`
-        : `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}`;
+        ? `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?docType=${docType}&isExternalUrl=${isExternalUrl}&recurse=${recurse}`
+        : `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}&recurse=${recurse}`;
     const urlToSend = projectName === null ? url : `${url}&projectName=${projectName}`;
     let res = await makeRequest(urlToSend, undefined, undefined, headers);
     return res.bucketFileList;

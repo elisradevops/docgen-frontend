@@ -14,6 +14,9 @@ import { styled } from '@mui/material/styles';
 import { Autocomplete, Box, Grid, TextField } from '@mui/material';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
+import SVDGuide from '../common/SVDGuide';
+import TemplatesTab from '../forms/templatesTab/TemplatesTab';
+import logger from '../../utils/logger';
 
 const StyledTabs = styled((props) => (
   <Tabs
@@ -64,6 +67,7 @@ const MainTabs = observer(({ store }) => {
   const [selectedTab, setSelectedTab] = useState(4);
   const [cookies, setCookie, removeCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
   const [selectedTeamProject, setSelectedTeamProject] = useState('');
+  const [projectClearable, setProjectClearable] = useState(false);
   const logout = () => {
     removeCookie('azuredevopsUrl');
     removeCookie('azuredevopsPat');
@@ -75,6 +79,8 @@ const MainTabs = observer(({ store }) => {
         return <STDGuide />;
       case 'STR':
         return <STRGuide />;
+      case 'SVD':
+        return <SVDGuide />;
       default:
         return null;
     }
@@ -88,6 +94,8 @@ const MainTabs = observer(({ store }) => {
             value={selectedTab}
             onChange={(event, newValue) => {
               setSelectedTab(newValue);
+              // Check if the selected tab is the templates tab
+              setProjectClearable(newValue === 100);
             }}
             aria-label='document tabs'
           >
@@ -107,6 +115,10 @@ const MainTabs = observer(({ store }) => {
               label='Documents'
               value={99}
             />
+            <StyledTab
+              label='Templates'
+              value={100}
+            />
           </StyledTabs>
           <StyledButton onClick={logout}>Logout</StyledButton>
         </Box>
@@ -117,7 +129,7 @@ const MainTabs = observer(({ store }) => {
           xs={12}
         >
           <Autocomplete
-            disableClearable
+            disableClearable={!projectClearable}
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
@@ -133,8 +145,8 @@ const MainTabs = observer(({ store }) => {
               />
             )}
             onChange={async (event, newValue) => {
-              setSelectedTeamProject(newValue.text);
-              store.setTeamProject(newValue.key, newValue.text);
+              setSelectedTeamProject(newValue?.text || '');
+              store.setTeamProject(newValue?.key || '', newValue?.text || '');
             }}
           />
         </Grid>
@@ -176,6 +188,17 @@ const MainTabs = observer(({ store }) => {
             xs={12}
           >
             <DocumentsTab
+              store={store}
+              selectedTeamProject={selectedTeamProject}
+            />
+          </Grid>
+        ) : null}
+        {selectedTab === 100 ? (
+          <Grid
+            item
+            xs={12}
+          >
+            <TemplatesTab
               store={store}
               selectedTeamProject={selectedTeamProject}
             />
