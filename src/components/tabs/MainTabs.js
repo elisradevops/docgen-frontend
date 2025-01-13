@@ -14,6 +14,7 @@ import { styled } from '@mui/material/styles';
 import { Autocomplete, Box, Grid, TextField } from '@mui/material';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
+import SVDGuide from '../common/SVDGuide';
 
 const StyledTabs = styled((props) => (
   <Tabs
@@ -75,6 +76,8 @@ const MainTabs = observer(({ store }) => {
         return <STDGuide />;
       case 'STR':
         return <STRGuide />;
+      case 'SVD':
+        return <SVDGuide />;
       default:
         return null;
     }
