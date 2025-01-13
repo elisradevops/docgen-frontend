@@ -70,6 +70,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       case 'test-std':
         return (
           <TestContentSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
             store={store}
             contentControlTitle={formControl.title}
             type={formControl.type}
@@ -86,6 +87,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       case 'test-str':
         return (
           <STRTableSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
             store={store}
             contentControlTitle={formControl.title}
             type={formControl.type}
@@ -101,6 +103,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       case 'trace-table':
         return (
           <TraceTableSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
             store={store}
             contentControlTitle={formControl.title}
             contentControlArrayCell={null}
@@ -111,6 +114,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       case 'table':
         return (
           <QueryContentSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
             contentControlTitle={formControl.title}
             type={formControl.data.type}
             skin={formControl.skin}
@@ -123,6 +127,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       case 'paragraph':
         return (
           <QueryContentSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
             contentControlTitle={formControl.title}
             type={formControl.data.type}
             skin={formControl.skin}
@@ -135,6 +140,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       case 'change-table':
         return (
           <ChangeTableSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
             store={store}
             type={formControl.type}
             skin={formControl.skin}
