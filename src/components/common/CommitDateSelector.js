@@ -4,7 +4,7 @@ import { PrimaryButton } from '@fluentui/react';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
@@ -149,7 +149,7 @@ const CommitDateSelector = ({
             item
             xs={12}
           >
-            <DatePicker
+            <DateTimePicker
               label='Start Date'
               disableFuture
               value={selectedStartDate}
@@ -160,7 +160,7 @@ const CommitDateSelector = ({
             item
             xs={12}
           >
-            <DatePicker
+            <DateTimePicker
               label='End Date'
               disableFuture
               value={selectedEndDate}
