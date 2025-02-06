@@ -96,6 +96,10 @@ const ReleaseSelector = ({
         )}
         onChange={async (event, newValue) => {
           setSelectedReleaseDefinition(newValue);
+          if (newValue.text) {
+            let convertedRelease = newValue.text.replace(/\s/g, '_');
+            store.setContextName(`release-${convertedRelease}`);
+          }
           store.fetchReleaseDefinitionHistory(newValue.key);
         }}
       />

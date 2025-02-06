@@ -217,6 +217,10 @@ const TestContentSelector = ({
           )}
           onChange={async (event, newValue) => {
             store.fetchTestSuitesList(newValue.key);
+            if (newValue.text) {
+              let testPlanNameForFile = newValue.text.replace(' ', '_');
+              store.setContextName(testPlanNameForFile);
+            }
             setSelectedTestPlan(newValue);
           }}
         />

@@ -41,6 +41,7 @@ class DocGenDataStore {
       linkTypes: observable,
       documents: observable,
       docType: observable,
+      contextName: observable,
       loadingState: observable,
       requestJson: computed,
       fetchTeamProjects: action,
@@ -73,6 +74,7 @@ class DocGenDataStore {
       fetchTestSuitesList: action,
       setTestSuitesList: action,
       setDocType: action,
+      setContextName: action,
       fetchLoadingState: action,
       uploadTemplateFile: action,
     });
@@ -108,6 +110,7 @@ class DocGenDataStore {
   releaseDefinitionList = []; //list of all project releaese Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
   docType = '';
+  contextName = '';
   loadingState = { sharedQueriesLoadingState: false };
 
   setDocumentTypeTitle(documentType) {
@@ -529,6 +532,13 @@ class DocGenDataStore {
     return this.docType;
   }
 
+  setContextName(contextName) {
+    this.contextName = contextName || '';
+  }
+  get getContextName() {
+    return this.contextName;
+  }
+
   getFormattedDate() {
     const now = new Date();
     const year = now.getFullYear();
@@ -542,7 +552,9 @@ class DocGenDataStore {
   }
 
   get requestJson() {
-    let tempFileName = `${this.teamProjectName}-${this.docType}-${this.getFormattedDate()}`;
+    let tempFileName = `${this.teamProjectName}-${this.docType}-${
+      this.contextName
+    }-${this.getFormattedDate()}`;
     return {
       tfsCollectionUri: azureDevopsUrl,
       PAT: azuredevopsPat,

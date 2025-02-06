@@ -34,6 +34,10 @@ const CommitRangeSelector = ({
   });
 
   function UpdateDocumentRequestObject() {
+    if (selectedRepo.text) {
+      let convertedText = selectedRepo.text.replace(/\./g, '-').replace(/\s/g, '_');
+      store.setContextName(`commit-range-${convertedText}-${selectedBranch.text}`);
+    }
     addToDocumentRequestObject(
       {
         type: 'change-description-table',

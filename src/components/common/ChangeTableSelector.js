@@ -33,7 +33,7 @@ const ChangeTableSelector = observer(
     contentControlIndex,
     sharedQueries,
   }) => {
-    const [selectedType, setselectedType] = useState('');
+    const [selectedType, setSelectedType] = useState('');
     const [queryTrees, setQueryTrees] = useState({
       systemOverviewQueryTree: [],
       knownBugsQueryTree: [],
@@ -135,7 +135,7 @@ const ChangeTableSelector = observer(
                 />
               )}
               onChange={(event, newValue) => {
-                setselectedType(newValue.type);
+                setSelectedType(newValue.type);
               }}
             />
           </div>
