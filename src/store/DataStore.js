@@ -187,7 +187,7 @@ class DocGenDataStore {
     } else {
       const msg = 'Missing required cookies: azuredevopsUrl or azuredevopsPat';
       logger.error(msg);
-      toast.error(msg);
+      toast.error(msg, { autoClose: false });
     }
   }
   //for setting focused teamProject

@@ -34,7 +34,7 @@ const UploadFileButton = ({ store, onNewFileUpload }) => {
           onNewFileUpload(fileItem);
           toast.success('Template file uploaded successfully');
         } catch (err) {
-          toast.error(`Error while uploading template ${err.message}`);
+          toast.error(`Error while uploading template ${err.message}`, { autoClose: false });
           logger.error('Error uploading file:', err.message);
           //Refresh the template list
           onNewFileUpload(null);
