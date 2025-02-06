@@ -84,7 +84,7 @@ const ReleaseSelector = ({
         options={releaseDefinitionList
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((releaseDefinition) => {
-            return { key: releaseDefinition.id, text: releaseDefinition.name };
+            return { key: releaseDefinition.id, text: `${releaseDefinition.id} - ${releaseDefinition.name}` };
           })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (

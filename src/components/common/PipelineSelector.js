@@ -87,7 +87,7 @@ const PipelineSelector = ({
         options={pipelineList
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((pipeline) => {
-            return { key: pipeline.id, text: pipeline.name };
+            return { key: pipeline.id, text: `${pipeline.id} - ${pipeline.name}` };
           })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
