@@ -39,7 +39,7 @@ export const TemplateFileSelectDialog = ({
       setTemplateFiles(templates); // Set templates once fetched
     } catch (err) {
       logger.error('Error fetching template files:', err.message);
-      toast.error(`Error while fetching template files: ${err.message}`);
+      toast.error(`Error while fetching template files: ${err.message}`, { autoClose: false });
     } finally {
       setLoadingTemplateFiles(false); // Ensure loading state is turned off
     }

@@ -84,7 +84,7 @@ const ReleaseSelector = ({
         options={releaseDefinitionList
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((releaseDefinition) => {
-            return { key: releaseDefinition.id, text: releaseDefinition.name };
+            return { key: releaseDefinition.id, text: `${releaseDefinition.id} - ${releaseDefinition.name}` };
           })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
@@ -96,6 +96,10 @@ const ReleaseSelector = ({
         )}
         onChange={async (event, newValue) => {
           setSelectedReleaseDefinition(newValue);
+          if (newValue.text) {
+            let convertedRelease = newValue.text.replace(/\s/g, '_');
+            store.setContextName(`release-${convertedRelease}`);
+          }
           store.fetchReleaseDefinitionHistory(newValue.key);
         }}
       />

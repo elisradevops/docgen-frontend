@@ -41,6 +41,7 @@ class DocGenDataStore {
       linkTypes: observable,
       documents: observable,
       docType: observable,
+      contextName: observable,
       loadingState: observable,
       requestJson: computed,
       fetchTeamProjects: action,
@@ -73,6 +74,7 @@ class DocGenDataStore {
       fetchTestSuitesList: action,
       setTestSuitesList: action,
       setDocType: action,
+      setContextName: action,
       fetchLoadingState: action,
       uploadTemplateFile: action,
     });
@@ -108,6 +110,7 @@ class DocGenDataStore {
   releaseDefinitionList = []; //list of all project releaese Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
   docType = '';
+  contextName = '';
   loadingState = { sharedQueriesLoadingState: false };
 
   setDocumentTypeTitle(documentType) {
@@ -184,7 +187,7 @@ class DocGenDataStore {
     } else {
       const msg = 'Missing required cookies: azuredevopsUrl or azuredevopsPat';
       logger.error(msg);
-      toast.error(msg);
+      toast.error(msg, { autoClose: false });
     }
   }
   //for setting focused teamProject
@@ -529,11 +532,29 @@ class DocGenDataStore {
     return this.docType;
   }
 
+  setContextName(contextName) {
+    this.contextName = contextName || '';
+  }
+  get getContextName() {
+    return this.contextName;
+  }
+
+  getFormattedDate() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+
+    return `${year}-${month}-${day}-${hours}:${minutes}:${seconds}`;
+  }
+
   get requestJson() {
-    let tempFileName = `${this.teamProjectName}-${this.docType}-${new Date()
-      .toISOString()
-      .substring(0, 19)
-      .replace('T', '-')}`;
+    let tempFileName = `${this.teamProjectName}-${this.docType}-${
+      this.contextName
+    }-${this.getFormattedDate()}`;
     return {
       tfsCollectionUri: azureDevopsUrl,
       PAT: azuredevopsPat,

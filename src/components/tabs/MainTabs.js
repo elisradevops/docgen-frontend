@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import { useCookies } from 'react-cookie';
 
 import DeveloperForm from '../forms/develeoperForm/DeveloperForm';
 import DocFormGenerator from '../forms/docFormGenerator/DocFormGenerator';
 import DocumentsTab from '../forms/documentsTab/DocumentsTab';
-
+import DeveloperModeIcon from '@mui/icons-material/DeveloperMode';
 import AppBar from '@mui/material/AppBar';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
@@ -17,6 +17,7 @@ import STDGuide from '../common/STDGuide';
 import SVDGuide from '../common/SVDGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import logger from '../../utils/logger';
+import { indigo } from '@mui/material/colors';
 
 const StyledTabs = styled((props) => (
   <Tabs
@@ -55,7 +56,7 @@ const StyledTab = styled((props) => (
   },
 }));
 
-const StyledButton = styled(Button)(({ theme }) => ({
+const StyledLogoutButton = styled(Button)(({ theme }) => ({
   color: 'white',
   backgroundColor: 'red',
   '&:hover': {
@@ -63,8 +64,16 @@ const StyledButton = styled(Button)(({ theme }) => ({
   },
 }));
 
+const StyledButton = styled(Button)(({ theme }) => ({
+  color: theme.palette.getContrastText(indigo[500]),
+  backgroundColor: indigo[500],
+  '&:hover': {
+    backgroundColor: 'indigo[700]',
+  },
+}));
+
 const MainTabs = observer(({ store }) => {
-  const [selectedTab, setSelectedTab] = useState(4);
+  const [selectedTab, setSelectedTab] = useState(99);
   const [cookies, setCookie, removeCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
   const [selectedTeamProject, setSelectedTeamProject] = useState('');
   const [projectClearable, setProjectClearable] = useState(false);
@@ -72,6 +81,12 @@ const MainTabs = observer(({ store }) => {
     removeCookie('azuredevopsUrl');
     removeCookie('azuredevopsPat');
   };
+
+  useEffect(() => {
+    if (store.documentTypes?.length > 0) {
+      setSelectedTab(0);
+    }
+  }, [store.documentTypes?.length]);
 
   const generateGuide = (docType) => {
     switch (docType) {
@@ -108,10 +123,6 @@ const MainTabs = observer(({ store }) => {
               );
             })}
             <StyledTab
-              label='Developer Tab'
-              value={4}
-            />
-            <StyledTab
               label='Documents'
               value={99}
             />
@@ -120,7 +131,19 @@ const MainTabs = observer(({ store }) => {
               value={100}
             />
           </StyledTabs>
-          <StyledButton onClick={logout}>Logout</StyledButton>
+          <Box
+            gap={1}
+            px={1}
+            sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+          >
+            <StyledButton
+              startIcon={<DeveloperModeIcon />}
+              onClick={() => setSelectedTab(4)}
+            >
+              Developer
+            </StyledButton>
+            <StyledLogoutButton onClick={logout}>Logout</StyledLogoutButton>
+          </Box>
         </Box>
       </AppBar>
       <Grid container>

@@ -87,7 +87,7 @@ const PipelineSelector = ({
         options={pipelineList
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((pipeline) => {
-            return { key: pipeline.id, text: pipeline.name };
+            return { key: pipeline.id, text: `${pipeline.id} - ${pipeline.name}` };
           })}
         getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
@@ -99,6 +99,10 @@ const PipelineSelector = ({
         )}
         onChange={async (event, newValue) => {
           store.fetchPipelineRunHistory(newValue.key);
+          if (newValue.text) {
+            let convertedPipeline = newValue.text.replace(/\s/g, '_');
+            store.setContextName(`pipeline-${convertedPipeline}`);
+          }
           setSelectedPipeline(newValue);
         }}
       />
