@@ -10,6 +10,7 @@ import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
 import { Box, Radio, RadioGroup, FormLabel, Collapse } from '@mui/material';
 import QueryTree from './QueryTree';
+import logger from '../../utils/logger';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
@@ -218,7 +219,7 @@ const TestContentSelector = ({
           onChange={async (event, newValue) => {
             store.fetchTestSuitesList(newValue.key);
             if (newValue.text) {
-              let testPlanNameForFile = newValue.text.replace(' ', '_');
+              let testPlanNameForFile = newValue.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
               store.setContextName(testPlanNameForFile);
             }
             setSelectedTestPlan(newValue);

@@ -100,7 +100,7 @@ const PipelineSelector = ({
         onChange={async (event, newValue) => {
           store.fetchPipelineRunHistory(newValue.key);
           if (newValue.text) {
-            let convertedPipeline = newValue.text.replace(/\s/g, '_');
+            let convertedPipeline = newValue.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
             store.setContextName(`pipeline-${convertedPipeline}`);
           }
           setSelectedPipeline(newValue);

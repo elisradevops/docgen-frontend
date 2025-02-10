@@ -49,7 +49,7 @@ const CommitDateSelector = ({
 
   function UpdateDocumentRequestObject() {
     if (selectedRepo.text) {
-      let convertedText = selectedRepo.text.replace(/\./g, '-').replace(/\s/g, '_');
+      let convertedText = selectedRepo.text.trim().replace(/\./g, '-').replace(/\s/g, '_');
       store.setContextName(`commit-date-${convertedText}-${selectedBranch.text}`);
     }
 

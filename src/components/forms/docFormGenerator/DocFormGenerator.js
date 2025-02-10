@@ -163,6 +163,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       toast.success(`The request has been generated successfully!`);
     } catch (error) {
       logger.error(`Error occurred while generating document of type ${docType}: ${error.message}`);
+      logger.error('Error Stack:', error.stack);
       toast.error(`Failed to generate ${docType}: ${error.message}`, { autoClose: false });
     } finally {
       setLoading(false);
