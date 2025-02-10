@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { PrimaryButton } from '@fluentui/react';
-import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 const defaultSelectedItem = {
@@ -97,7 +96,7 @@ const ReleaseSelector = ({
         onChange={async (event, newValue) => {
           setSelectedReleaseDefinition(newValue);
           if (newValue.text) {
-            let convertedRelease = newValue.text.replace(/\s/g, '_');
+            let convertedRelease = newValue.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
             store.setContextName(`release-${convertedRelease}`);
           }
           store.fetchReleaseDefinitionHistory(newValue.key);

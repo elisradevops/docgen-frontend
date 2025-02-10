@@ -387,7 +387,7 @@ const STRTableSelector = ({
           onChange={async (event, newValue) => {
             store.fetchTestSuitesList(newValue.key);
             if (newValue.text) {
-              let testPlanNameForFile = newValue.text.replace(' ', '_');
+              let testPlanNameForFile = newValue.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
               store.setContextName(testPlanNameForFile);
             }
             setSelectedTestPlan(newValue);
