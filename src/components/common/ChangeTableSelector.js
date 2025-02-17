@@ -18,8 +18,8 @@ const baseDataType = [
 ];
 
 const defaultSelectedQueries = {
-  systemOverviewQueryTree: null,
-  knownBugsQueryTree: null,
+  sysOverviewQuery: null,
+  knownBugsQuery: null,
 };
 
 const ChangeTableSelector = observer(
@@ -53,6 +53,14 @@ const ChangeTableSelector = observer(
         : setQueryTrees(defaultSelectedQueries);
     }, [sharedQueries.acquiredTrees]);
 
+    const onSelectedSystemOverviewQuery = (query) => {
+      setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: query }));
+    };
+
+    const onSelectedKnownBugsQuery = (query) => {
+      setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: query }));
+    };
+
     return (
       <>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -60,11 +68,11 @@ const ChangeTableSelector = observer(
             disabled={!queryTrees.systemOverviewQueryTree || queryTrees.systemOverviewQueryTree?.length === 0}
             control={
               <Checkbox
-                value={includeSystemOverview}
+                checked={includeSystemOverview}
                 onChange={(event, checked) => {
                   setIncludeSystemOverview(checked);
                   if (checked === false) {
-                    setQueriesRequest((prev) => ({ ...prev, systemOverviewQueryTree: null }));
+                    setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: null }));
                   }
                 }}
               />
@@ -79,7 +87,8 @@ const ChangeTableSelector = observer(
             {queryTrees.systemOverviewQueryTree.length > 0 && (
               <QueryTree
                 data={queryTrees.systemOverviewQueryTree}
-                onSelectedQuery={setQueriesRequest}
+                prevSelectedQuery={queriesRequest.sysOverviewQuery}
+                onSelectedQuery={onSelectedSystemOverviewQuery}
                 queryType={'system-overview'}
                 isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
               />
@@ -91,11 +100,11 @@ const ChangeTableSelector = observer(
             control={
               <Checkbox
                 disabled={!queryTrees.knownBugsQueryTree || queryTrees.knownBugsQueryTree?.length === 0}
-                value={includeKnownBugs}
+                checked={includeKnownBugs}
                 onChange={(event, checked) => {
                   setIncludeKnownBugs(checked);
                   if (checked === false) {
-                    setQueriesRequest((prev) => ({ ...prev, knownBugsQueryTree: null }));
+                    setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: null }));
                   }
                 }}
               />
@@ -110,7 +119,8 @@ const ChangeTableSelector = observer(
             {queryTrees.knownBugsQueryTree.length > 0 && (
               <QueryTree
                 data={queryTrees.knownBugsQueryTree}
-                onSelectedQuery={setQueriesRequest}
+                prevSelectedQuery={queriesRequest.knownBugsQuery}
+                onSelectedQuery={onSelectedKnownBugsQuery}
                 queryType={'known-bugs'}
                 isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
               />

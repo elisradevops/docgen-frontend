@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { toJS } from 'mobx';
 // import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
@@ -8,9 +7,8 @@ import Autocomplete from '@mui/material/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
-import { Box, Radio, RadioGroup, FormLabel, Collapse } from '@mui/material';
-import QueryTree from './QueryTree';
-import logger from '../../utils/logger';
+import { Box, Radio, RadioGroup, FormLabel, Collapse, Typography } from '@mui/material';
+import TraceAnalysisDialog from '../dialogs/TraceAnalysisDialog';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
@@ -18,6 +16,7 @@ const defaultSelectedQueries = {
   traceAnalysisMode: 'none',
   reqTestQuery: null,
   testReqQuery: null,
+  includeCommonColumnsMode: 'both',
 };
 
 const TestContentSelector = ({
@@ -44,11 +43,6 @@ const TestContentSelector = ({
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
   const [includeRequirements, setIncludeRequirements] = useState(false);
   const [includeCustomerId, setIncludeCustomerId] = useState(false);
-
-  const [queryTrees, setQueryTrees] = useState({
-    reqTestTree: [],
-    testReqTree: [],
-  });
   const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
 
   useEffect(() => {
@@ -56,16 +50,6 @@ const TestContentSelector = ({
       UpdateDocumentRequestObject();
     }
   });
-
-  useEffect(() => {
-    const { acquiredTrees } = toJS(sharedQueries);
-    acquiredTrees !== null
-      ? setQueryTrees(() => ({
-          reqTestTree: acquiredTrees.reqTestTree ? [acquiredTrees.reqTestTree] : [],
-          testReqTree: acquiredTrees.testReqTree ? [acquiredTrees.testReqTree] : [],
-        }))
-      : setQueryTrees(defaultSelectedQueries);
-  }, [sharedQueries.acquiredTrees]);
 
   function UpdateDocumentRequestObject() {
     let testSuiteIdList = undefined;
@@ -109,6 +93,43 @@ const TestContentSelector = ({
     );
   }
 
+  const generateIncludedTraceAnalysisSettings = () => {
+    const settings = [];
+    if (traceAnalysisRequest.includeCommonColumnsMode !== 'both') {
+      settings.push(
+        `Include Common Columns for ${
+          traceAnalysisRequest.includeCommonColumnsMode !== 'reqOnly' ? 'Test Case Only' : 'Requirement Only'
+        }`
+      );
+    }
+    if (traceAnalysisRequest.traceAnalysisMode !== 'none') {
+      const traceMode =
+        traceAnalysisRequest.traceAnalysisMode === 'query' ? 'from Query' : 'from Linked Requirements';
+      settings.push(`Requirements ${traceMode}`);
+
+      if (traceAnalysisRequest.traceAnalysisMode === 'query') {
+        if (traceAnalysisRequest.reqTestQuery?.value) {
+          settings.push(`Requirement to Test Query: ${traceAnalysisRequest.reqTestQuery.value}`);
+        }
+        if (traceAnalysisRequest.testReqQuery?.value) {
+          settings.push(`Test to Requirement Query: ${traceAnalysisRequest.testReqQuery.value}`);
+        }
+      }
+    }
+
+    return (
+      <Box>
+        <Typography
+          variant='subtitle2'
+          color='textSecondary'
+          sx={{ whiteSpace: 'pre-line' }}
+        >
+          {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No trace analysis settings enabled'}
+        </Typography>
+      </Box>
+    );
+  };
+
   const attachmentTypeElements = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <FormLabel id='include-office-attachment-radio'>Included Office Files Type</FormLabel>
@@ -129,46 +150,6 @@ const TestContentSelector = ({
           value='asLink'
           label='As Link'
           control={<Radio />}
-        />
-      </RadioGroup>
-    </Box>
-  );
-
-  const handleTraceAnalysisChange = (value) => {
-    if (value === 'query') {
-      setTraceAnalysisRequest((...prev) => ({ ...prev, traceAnalysisMode: value }));
-    } //In case of None or Linked requirement
-    else {
-      setTraceAnalysisRequest({ ...defaultSelectedQueries, traceAnalysisMode: value });
-    }
-  };
-
-  const traceAnalysisToggles = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-      <FormLabel id='include-trace-analysis-radio'>Trace Analysis</FormLabel>
-      <RadioGroup
-        defaultValue='none'
-        name='include-trace-analysis-radio'
-        value={traceAnalysisRequest.traceAnalysisMode}
-        onChange={(event) => {
-          handleTraceAnalysisChange(event.target.value);
-        }}
-      >
-        <FormControlLabel
-          value='none'
-          label='No Trace'
-          control={<Radio />}
-        />
-        <FormControlLabel
-          value='linkedRequirement'
-          label='Based On Linked Requirements'
-          control={<Radio />}
-        />
-        <FormControlLabel
-          value='query'
-          label='Based on Queries'
-          control={<Radio />}
-          disabled={!(queryTrees.reqTestTree.length > 0 || queryTrees.testReqTree.length > 0)}
         />
       </RadioGroup>
     </Box>
@@ -230,7 +211,7 @@ const TestContentSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={includeAttachments}
+              checked={includeAttachments}
               onChange={(event, checked) => {
                 setIncludeAttachments(checked);
               }}
@@ -267,12 +248,11 @@ const TestContentSelector = ({
           </Box>
         )}
       </div>
-
       <div>
         <FormControlLabel
           control={
             <Checkbox
-              value={isSuiteSpecific}
+              checked={isSuiteSpecific}
               onChange={(event, checked) => {
                 setIsSuiteSpecific(checked);
               }}
@@ -315,34 +295,13 @@ const TestContentSelector = ({
           />
         ) : null}
       </div>
-
-      <div>{traceAnalysisToggles}</div>
-      <Collapse
-        in={traceAnalysisRequest?.traceAnalysisMode === 'query'}
-        timeout='auto'
-        unmountOnExit
-      >
-        <div>
-          {queryTrees.reqTestTree.length > 0 && (
-            <QueryTree
-              data={queryTrees.reqTestTree}
-              onSelectedQuery={setTraceAnalysisRequest}
-              queryType='req-test'
-              isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-            />
-          )}
-        </div>
-        <div>
-          {queryTrees.testReqTree.length > 0 && (
-            <QueryTree
-              data={queryTrees.testReqTree}
-              onSelectedQuery={setTraceAnalysisRequest}
-              queryType='test-req'
-              isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-            />
-          )}
-        </div>
-      </Collapse>
+      <TraceAnalysisDialog
+        store={store}
+        sharedQueries={sharedQueries}
+        prevTraceAnalysisRequest={traceAnalysisRequest}
+        onTraceAnalysisChange={setTraceAnalysisRequest}
+      />
+      {generateIncludedTraceAnalysisSettings()}
 
       <br />
       <br />
