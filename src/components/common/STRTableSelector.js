@@ -7,9 +7,9 @@ import Autocomplete from '@mui/material/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
-import { FormLabel, Box, Radio, RadioGroup, Collapse } from '@mui/material';
-import QueryTree from './QueryTree';
+import { FormLabel, Box, Radio, RadioGroup, Collapse, Typography } from '@mui/material';
 import { toJS } from 'mobx';
+import DetailedStepsSettingsDialog from '../dialogs/DetailedStepsSettingsDialog';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
@@ -60,7 +60,6 @@ const STRTableSelector = ({
   const [includeTestLog, setIncludeTestLog] = useState(false);
 
   const [stepExecutionState, setStepExecutionState] = useState(initialStepsExecutionState);
-  const [selectedTestReqTree, setSelectedTestReqTree] = useState(null);
   const [stepAnalysisState, setStepAnalysisState] = useState(initialStepsAnalysisState);
 
   useEffect(() => {
@@ -128,13 +127,7 @@ const STRTableSelector = ({
           includeHierarchy: includeHierarchy,
           includeOpenPCRs: includeOpenPCRs,
           includeTestLog: includeTestLog,
-          stepExecution: {
-            ...stepExecutionState,
-            generateRequirements: {
-              ...stepExecutionState.generateRequirements,
-              testReqQuery: selectedTestReqTree?.testReqQuery || null,
-            },
-          },
+          stepExecution: stepExecutionState,
           stepAnalysis: stepAnalysisState,
         },
       },
@@ -204,12 +197,6 @@ const STRTableSelector = ({
         <FormLabel id={`include-office-${attachmentProp}-attachment-radio`}>
           Included Office Files Type
         </FormLabel>
-        {attachmentProp === 'execution' &&
-          getRadioGroup(
-            `include-office-execution-attachment-radio`,
-            stepExecutionState?.generateAttachments?.attachmentType,
-            (event) => handleChange(event, setStepExecutionState, 'generateAttachments')
-          )}
         {attachmentProp === 'analysis' &&
           getRadioGroup(
             `include-office-analysis-attachment-radio`,
@@ -220,115 +207,6 @@ const STRTableSelector = ({
     );
   };
 
-  const handleChangeRequirementInclusionMode = (value) => {
-    setStepExecutionState((prev) => ({
-      ...prev,
-      generateRequirements: { ...prev.generateRequirements, requirementInclusionMode: value },
-    }));
-  };
-
-  const linkedRequirement = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-      <FormControlLabel
-        label='Include Customer Id'
-        control={
-          <Checkbox
-            label='Include Customer Id'
-            value={stepExecutionState.generateRequirements.includeCustomerId}
-            onChange={(event, checked) => {
-              setStepExecutionState((prev) => ({
-                ...prev,
-                generateRequirements: { ...prev.generateRequirements, includeCustomerId: checked },
-              }));
-            }}
-          />
-        }
-      />
-      <FormLabel
-        id='linked-requirement-buttons-group'
-        label='Requirement Type'
-      >
-        Covered Requirements Base Type
-      </FormLabel>
-      <RadioGroup
-        defaultValue={'linkedRequirement'}
-        name='linked-requirement-buttons-group'
-        value={stepExecutionState.generateRequirements.requirementInclusionMode}
-        onChange={(event) => {
-          handleChangeRequirementInclusionMode(event.target.value);
-        }}
-      >
-        <FormControlLabel
-          value='linkedRequirement'
-          label='Based On Linked Requirements'
-          control={<Radio />}
-        />
-        <FormControlLabel
-          value='query'
-          label='Based on Queries'
-          control={<Radio />}
-          disabled={!queryTrees.testReqTree.length > 0}
-        />
-      </RadioGroup>
-    </Box>
-  );
-
-  const detailedStepsExecutionElements = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-      <div>
-        <FormControlLabel
-          label='Generate Attachments'
-          control={
-            <Checkbox
-              value={stepExecutionState.generateAttachments.isEnabled}
-              onChange={(event, checked) => {
-                setStepExecutionState((prev) => ({
-                  ...prev,
-                  generateAttachments: { ...prev.generateAttachments, isEnabled: checked },
-                }));
-              }}
-            />
-          }
-        />
-        {stepExecutionState.generateAttachments.isEnabled && attachmentTypeElements('execution')}
-      </div>
-
-      <div>
-        <FormControlLabel
-          label='Generate Covered Requirements'
-          control={
-            <Checkbox
-              value={stepExecutionState.generateRequirements.isEnabled}
-              onChange={(event, checked) => {
-                setStepExecutionState((prev) => ({
-                  ...prev,
-                  generateRequirements: { ...prev.generateRequirements, isEnabled: checked },
-                }));
-              }}
-            />
-          }
-        />
-        {stepExecutionState.generateRequirements.isEnabled && linkedRequirement}
-        <Collapse
-          in={
-            stepExecutionState.generateRequirements.isEnabled &&
-            stepExecutionState.generateRequirements.requirementInclusionMode === 'query' &&
-            queryTrees.testReqTree.length > 0
-          }
-          timeout='auto'
-          unmountOnExit
-        >
-          <QueryTree
-            data={queryTrees.testReqTree}
-            onSelectedQuery={setSelectedTestReqTree}
-            queryType={'test-req'}
-            isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-          />
-        </Collapse>
-      </div>
-    </Box>
-  );
-
   const detailedStepsAnalysisElements = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <div>
@@ -336,7 +214,7 @@ const STRTableSelector = ({
           label='Generate Run Attachments'
           control={
             <Checkbox
-              value={stepAnalysisState.generateRunAttachments.isEnabled}
+              checked={stepAnalysisState.generateRunAttachments.isEnabled}
               onChange={(event, checked) =>
                 setStepAnalysisState((prev) => ({
                   ...prev,
@@ -354,7 +232,7 @@ const STRTableSelector = ({
           label='Generate Linked PCRs'
           control={
             <Checkbox
-              value={stepAnalysisState.isGenerateLinkPcrsEnabled}
+              checked={stepAnalysisState.isGenerateLinkPcrsEnabled}
               onChange={(event, checked) => {
                 setStepAnalysisState((prev) => ({ ...prev, isGenerateLinkPcrsEnabled: checked }));
               }}
@@ -364,6 +242,46 @@ const STRTableSelector = ({
       </div> */}
     </Box>
   );
+
+  const generateIncludedStepExecutionSettings = () => {
+    const settings = [];
+
+    if (stepExecutionState.isEnabled) {
+      if (stepExecutionState.generateAttachments.isEnabled) {
+        settings.push(
+          `Attachments as ${
+            stepExecutionState.generateAttachments.attachmentType === 'asEmbedded' ? 'Embedded' : 'Link'
+          }`
+        );
+      }
+
+      if (stepExecutionState.generateRequirements.isEnabled) {
+        const reqMode =
+          stepExecutionState.generateRequirements.requirementInclusionMode === 'query'
+            ? 'from Query'
+            : 'from Linked Requirements';
+        const customerId = stepExecutionState.generateRequirements.includeCustomerId
+          ? ' with Customer ID'
+          : '';
+        settings.push(`Requirements ${reqMode}${customerId}`);
+        if (stepExecutionState.generateRequirements.testReqQuery?.value) {
+          settings.push(`Selected Query: ${stepExecutionState.generateRequirements.testReqQuery.value}`);
+        }
+      }
+    }
+
+    return (
+      <Box sx={{ maxWidth: 300 }}>
+        <Typography
+          variant='subtitle2'
+          color='textSecondary'
+          sx={{ whiteSpace: 'pre-line' }}
+        >
+          {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No additional settings enabled'}
+        </Typography>
+      </Box>
+    );
+  };
 
   return (
     <>
@@ -398,7 +316,7 @@ const STRTableSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={isSuiteSpecific}
+              checked={isSuiteSpecific}
               onChange={(event, checked) => {
                 setIsSuiteSpecific(checked);
               }}
@@ -445,7 +363,7 @@ const STRTableSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={includeConfigurations}
+              checked={includeConfigurations}
               onChange={(event, checked) => {
                 setIncludeConfigurations(checked);
               }}
@@ -459,7 +377,7 @@ const STRTableSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={includeHierarchy}
+              checked={includeHierarchy}
               onChange={(event, checked) => {
                 setIncludeHierarchy(checked);
               }}
@@ -473,7 +391,7 @@ const STRTableSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={includeOpenPCRs}
+              checked={includeOpenPCRs}
               onChange={(event, checked) => {
                 setIncludeOpenPCRs(checked);
               }}
@@ -489,7 +407,7 @@ const STRTableSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={includeTestLog}
+              checked={includeTestLog}
               onChange={(event, checked) => {
                 setIncludeTestLog(checked);
               }}
@@ -503,7 +421,7 @@ const STRTableSelector = ({
         <FormControlLabel
           control={
             <Checkbox
-              value={stepExecutionState.isEnabled}
+              checked={stepExecutionState.isEnabled}
               onChange={(event, checked) => {
                 setStepExecutionState((prev) => ({ ...prev, isEnabled: checked }));
               }}
@@ -512,14 +430,26 @@ const STRTableSelector = ({
           label='Generate Detailed Steps Execution'
         />
 
-        {stepExecutionState.isEnabled && detailedStepsExecutionElements}
+        <Collapse
+          in={stepExecutionState.isEnabled}
+          timeout='auto'
+          unmountOnExit
+        >
+          <DetailedStepsSettingsDialog
+            store={store}
+            queryTrees={queryTrees}
+            prevStepExecution={stepExecutionState}
+            onStepExecutionStateChange={setStepExecutionState}
+          />
+          <div>{generateIncludedStepExecutionSettings()}</div>
+        </Collapse>
       </div>
 
       <div>
         <FormControlLabel
           control={
             <Checkbox
-              value={stepAnalysisState.isEnabled}
+              checked={stepAnalysisState.isEnabled}
               onChange={(event, checked) => {
                 setStepAnalysisState((prev) => ({ ...prev, isEnabled: checked }));
               }}

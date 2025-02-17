@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { TreeSelect } from 'antd';
 import { Alert } from '@mui/material';
 
-const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
-  const [selectedQuery, setSelectedQuery] = useState(undefined);
+const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoading }) => {
+  const [selectedQuery, setSelectedQuery] = useState(prevSelectedQuery);
   const [showQueryNotSelectedAlert, setShowQueryNotSelectedAlert] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
   const [placeholder, setPlaceholder] = useState(noData);
@@ -36,26 +36,13 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
   const handleQuerySelect = (value, selectedQuery) => {
     if (selectedQuery.isValidQuery) {
       setSelectedQuery(value);
-      onSelectedQuery((prev) => {
-        switch (queryType) {
-          case 'req-test':
-            return { ...prev, reqTestQuery: selectedQuery };
-          case 'test-req':
-            return { ...prev, testReqQuery: selectedQuery };
-          case 'system-overview':
-            return { ...prev, sysOverviewQuery: selectedQuery };
-          case 'known-bugs':
-            return { ...prev, knownBugsQuery: selectedQuery };
-          default:
-            break;
-        }
-      });
+
+      onSelectedQuery(selectedQuery);
       setShowQueryNotSelectedAlert(false);
     } else {
       setSelectedQuery(undefined);
-      onSelectedQuery((prev) => {
-        return ClearSelectedQuery(queryType, prev);
-      });
+
+      onSelectedQuery(null);
       setShowQueryNotSelectedAlert(true);
     }
     // Perform actions with selected node IDs
@@ -63,9 +50,7 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
 
   const handleOnClear = () => {
     setSelectedQuery(undefined);
-    onSelectedQuery((prev) => {
-      return ClearSelectedQuery(queryType, prev);
-    });
+    onSelectedQuery(null);
   };
 
   return (
@@ -86,6 +71,7 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
           dropdownStyle={{
             maxHeight: 400,
             overflow: 'auto',
+            zIndex: 1500, // Higher z-index than the drawer
           }}
           treeData={data}
           disabled={isDisabled}
@@ -101,17 +87,3 @@ const QueryTree = ({ data, onSelectedQuery, queryType, isLoading }) => {
 };
 
 export default QueryTree;
-function ClearSelectedQuery(queryType, prev) {
-  switch (queryType) {
-    case 'req-test':
-      return { ...prev, reqTestQuery: null };
-    case 'test-req':
-      return { ...prev, testReqQuery: null };
-    case 'system-overview':
-      return { ...prev, sysOverviewQuery: null };
-    case 'known-bugs':
-      return { ...prev, knownBugsQuery: null };
-    default:
-      break;
-  }
-}
