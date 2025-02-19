@@ -99,7 +99,11 @@ const TraceAnalysisDialog = ({ store, sharedQueries, prevTraceAnalysisRequest, o
           value='query'
           label='Queries'
           control={<Radio />}
-          disabled={!(queryTrees.reqTestTree.length > 0 || queryTrees.testReqTree.length > 0)}
+          disabled={
+            !queryTrees.reqTestTree ||
+            !queryTrees.testReqTree ||
+            !(queryTrees.reqTestTree.length > 0 || queryTrees.testReqTree.length > 0)
+          }
         />
       </RadioGroup>
     </Box>
@@ -185,7 +189,7 @@ const TraceAnalysisDialog = ({ store, sharedQueries, prevTraceAnalysisRequest, o
               >
                 <Typography variant='subtitle1'>Select a Requirement to Test Case Query</Typography>
                 <div>
-                  {queryTrees.reqTestTree.length > 0 && (
+                  {queryTrees.reqTestTree?.length > 0 && (
                     <QueryTree
                       data={queryTrees.reqTestTree}
                       prevSelectedQuery={traceAnalysisRequest.reqTestQuery}
@@ -197,7 +201,7 @@ const TraceAnalysisDialog = ({ store, sharedQueries, prevTraceAnalysisRequest, o
                 </div>
                 <Typography variant='subtitle1'>Select a Test Case to Requirement Query</Typography>
                 <div>
-                  {queryTrees.testReqTree.length > 0 && (
+                  {queryTrees.testReqTree?.length > 0 && (
                     <QueryTree
                       data={queryTrees.testReqTree}
                       prevSelectedQuery={traceAnalysisRequest.testReqQuery}
