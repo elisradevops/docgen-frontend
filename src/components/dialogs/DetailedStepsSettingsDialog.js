@@ -59,15 +59,30 @@ const DetailedStepsSettingsDialog = ({
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-        <FormLabel id={`include-office-${attachmentProp}-attachment-radio`}>
-          Included Office Files Type
-        </FormLabel>
-        {attachmentProp === 'execution' &&
-          getRadioGroup(
-            `include-office-execution-attachment-radio`,
-            stepExecutionState?.generateAttachments?.attachmentType,
-            (event) => handleChange(event, setStepExecutionState, 'generateAttachments')
-          )}
+        <div>
+          <FormLabel id={`include-office-${attachmentProp}-attachment-radio`}>
+            Included Office Files Type
+          </FormLabel>
+          {attachmentProp === 'execution' &&
+            getRadioGroup(
+              `include-office-execution-attachment-radio`,
+              stepExecutionState?.generateAttachments?.attachmentType,
+              (event) => handleChange(event, setStepExecutionState, 'generateAttachments')
+            )}
+        </div>
+        <div>
+          <FormControlLabel
+            checked={stepExecutionState.generateAttachments.includeAttachmentContent}
+            control={<Checkbox />}
+            onChange={(event, checked) => {
+              setStepExecutionState((prev) => ({
+                ...prev,
+                generateAttachments: { ...prev.generateAttachments, includeAttachmentContent: checked },
+              }));
+            }}
+            label='Include Attachment Content'
+          />
+        </div>
       </Box>
     );
   };
