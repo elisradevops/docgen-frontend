@@ -84,7 +84,7 @@ const ChangeTableSelector = observer(
             timeout='auto'
             unmountOnExit
           >
-            {queryTrees.systemOverviewQueryTree.length > 0 && (
+            {queryTrees.systemOverviewQueryTree?.length > 0 && (
               <QueryTree
                 data={queryTrees.systemOverviewQueryTree}
                 prevSelectedQuery={queriesRequest.sysOverviewQuery}
@@ -116,7 +116,7 @@ const ChangeTableSelector = observer(
             timeout='auto'
             unmountOnExit
           >
-            {queryTrees.knownBugsQueryTree.length > 0 && (
+            {queryTrees.knownBugsQueryTree?.length > 0 && (
               <QueryTree
                 data={queryTrees.knownBugsQueryTree}
                 prevSelectedQuery={queriesRequest.knownBugsQuery}
