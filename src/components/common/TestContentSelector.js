@@ -39,6 +39,7 @@ const TestContentSelector = ({
   const [selectedTestSuites, setSelectedTestSuites] = useState([]);
   const [includeAttachments, setIncludeAttachments] = useState(false);
   const [attachmentType, setAttachmentType] = useState('asEmbedded');
+  const [includeAttachmentContent, setIncludeAttachmentContent] = useState(false);
   const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
   const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
   const [includeRequirements, setIncludeRequirements] = useState(false);
@@ -84,6 +85,7 @@ const TestContentSelector = ({
           testSuiteArray: testSuiteIdList,
           includeAttachments: includeAttachments,
           attachmentType: attachmentType,
+          includeAttachmentContent: includeAttachmentContent,
           includeRequirements: includeRequirements,
           includeCustomerId: includeCustomerId,
           traceAnalysisRequest: traceAnalysisRequest,
@@ -132,26 +134,39 @@ const TestContentSelector = ({
 
   const attachmentTypeElements = (
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-      <FormLabel id='include-office-attachment-radio'>Included Office Files Type</FormLabel>
-      <RadioGroup
-        defaultValue='asEmbedded'
-        name='include-office-attachment-radio'
-        value={attachmentType}
-        onChange={(event) => {
-          setAttachmentType(event.target.value);
-        }}
-      >
+      <div>
+        <FormLabel id='include-office-attachment-radio'>Included Office Files Type</FormLabel>
+        <RadioGroup
+          defaultValue='asEmbedded'
+          name='include-office-attachment-radio'
+          value={attachmentType}
+          onChange={(event) => {
+            setAttachmentType(event.target.value);
+          }}
+        >
+          <FormControlLabel
+            value='asEmbedded'
+            label='As Embedded'
+            control={<Radio />}
+          />
+          <FormControlLabel
+            value='asLink'
+            label='As Link'
+            control={<Radio />}
+          />
+        </RadioGroup>
+      </div>
+      <div>
         <FormControlLabel
-          value='asEmbedded'
-          label='As Embedded'
-          control={<Radio />}
+          control={
+            <Checkbox
+              checked={includeAttachmentContent}
+              onChange={(event, checked) => setIncludeAttachmentContent(checked)}
+            />
+          }
+          label='Include Attachment Content'
         />
-        <FormControlLabel
-          value='asLink'
-          label='As Link'
-          control={<Radio />}
-        />
-      </RadioGroup>
+      </div>
     </Box>
   );
 

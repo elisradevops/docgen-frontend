@@ -8,14 +8,14 @@ import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
 import { FormLabel, Box, Radio, RadioGroup, Collapse, Typography } from '@mui/material';
-import { toJS } from 'mobx';
+import { set, toJS } from 'mobx';
 import DetailedStepsSettingsDialog from '../dialogs/DetailedStepsSettingsDialog';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
 const initialStepsExecutionState = {
   isEnabled: false,
-  generateAttachments: { isEnabled: false, attachmentType: 'asEmbedded' },
+  generateAttachments: { isEnabled: false, attachmentType: 'asEmbedded', includeAttachmentContent: false },
   generateRequirements: {
     isEnabled: false,
     includeCustomerId: false,
@@ -26,7 +26,7 @@ const initialStepsExecutionState = {
 
 const initialStepsAnalysisState = {
   isEnabled: false,
-  generateRunAttachments: { isEnabled: false, attachmentType: 'asEmbedded' },
+  generateRunAttachments: { isEnabled: false, attachmentType: 'asEmbedded', includeAttachmentContent: false },
   isGenerateLinkPcrsEnabled: false,
 };
 
@@ -194,15 +194,30 @@ const STRTableSelector = ({
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-        <FormLabel id={`include-office-${attachmentProp}-attachment-radio`}>
-          Included Office Files Type
-        </FormLabel>
-        {attachmentProp === 'analysis' &&
-          getRadioGroup(
-            `include-office-analysis-attachment-radio`,
-            stepAnalysisState?.generateRunAttachments?.attachmentType,
-            (event) => handleChange(event, setStepAnalysisState, 'generateRunAttachments')
-          )}
+        <div>
+          <FormLabel id={`include-office-${attachmentProp}-attachment-radio`}>
+            Included Office Files Type
+          </FormLabel>
+          {attachmentProp === 'analysis' &&
+            getRadioGroup(
+              `include-office-analysis-attachment-radio`,
+              stepAnalysisState?.generateRunAttachments?.attachmentType,
+              (event) => handleChange(event, setStepAnalysisState, 'generateRunAttachments')
+            )}
+        </div>
+        <div>
+          <FormControlLabel
+            checked={stepAnalysisState.generateRunAttachments.includeAttachmentContent}
+            control={<Checkbox />}
+            onChange={(event, checked) => {
+              setStepAnalysisState((prev) => ({
+                ...prev,
+                generateRunAttachments: { ...prev.generateRunAttachments, includeAttachmentContent: checked },
+              }));
+            }}
+            label='Include Attachment Content'
+          />
+        </div>
       </Box>
     );
   };
