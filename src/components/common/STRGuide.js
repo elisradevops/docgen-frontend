@@ -177,6 +177,35 @@ export default function STRGuide() {
                 }
               />
             </ListItem>
+
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Evidence By - Optional'
+                secondary={
+                  <Typography
+                    component='span'
+                    variant='body2'
+                  >
+                    Select the source of the attachments to be presented in the STR document.
+                  </Typography>
+                }
+              />
+            </ListItem>
+
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Include Attachment Content - Optional'
+                secondary={
+                  <Typography
+                    component='span'
+                    variant='body2'
+                  >
+                    Include the content of the attached files in the STR document. (Only word documents are
+                    supported for this feature)
+                  </Typography>
+                }
+              />
+            </ListItem>
           </List>
         </Collapse>
       </List>

@@ -80,6 +80,20 @@ export default function STDGuide() {
                 }
               />
             </ListItem>
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Include Attachment Content'
+                secondary={
+                  <Typography
+                    component='span'
+                    variant='body2'
+                  >
+                    Include the content of the attached files in the STD document. (Only word documents are
+                    supported for this feature)
+                  </Typography>
+                }
+              />
+            </ListItem>
           </List>
         </Collapse>
 
@@ -146,6 +160,12 @@ export default function STDGuide() {
               <ListItemText
                 primary='Based On Queries'
                 secondary='Fetch both trace analysis and covered requirements based on the selected queries (disabled if no available queries)'
+              />
+            </ListItem>
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Include Common Columns'
+                secondary='When there is a duplicated column, you may select to include both or only one of them.'
               />
             </ListItem>
           </List>
