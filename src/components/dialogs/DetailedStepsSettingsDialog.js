@@ -46,13 +46,24 @@ const DetailedStepsSettingsDialog = ({
       </RadioGroup>
     );
 
-    const handleChange = (event, setState, key) => {
+    const handleAttachmentTypeChange = (event, setState, key) => {
       const newAttachmentType = event.target.value || 'asEmbedded'; // Fallback to 'asEmbedded' if empty
       setState((prevState) => ({
         ...prevState,
         [key]: {
           ...prevState[key],
           attachmentType: newAttachmentType,
+        },
+      }));
+    };
+
+    const handleRunAttachmentModeUpdate = (event, setState, key) => {
+      const newMode = event.target.value || 'both'; // Fallback to 'both' if empty
+      setState((prevState) => ({
+        ...prevState,
+        [key]: {
+          ...prevState[key],
+          runAttachmentMode: newMode,
         },
       }));
     };
@@ -67,9 +78,37 @@ const DetailedStepsSettingsDialog = ({
             getRadioGroup(
               `include-office-execution-attachment-radio`,
               stepExecutionState?.generateAttachments?.attachmentType,
-              (event) => handleChange(event, setStepExecutionState, 'generateAttachments')
+              (event) => handleAttachmentTypeChange(event, setStepExecutionState, 'generateAttachments')
             )}
         </div>
+        <Box>
+          <FormLabel id='run-attachments-mode-radio'>Evidence By:</FormLabel>
+          <RadioGroup
+            defaultValue='both'
+            row
+            name='run-attachments-mode-radio'
+            value={stepExecutionState?.generateAttachments?.runAttachmentMode ?? 'both'}
+            onChange={(event) => {
+              handleRunAttachmentModeUpdate(event, setStepExecutionState, 'generateAttachments');
+            }}
+          >
+            <FormControlLabel
+              value='both'
+              label='Both'
+              control={<Radio />}
+            />
+            <FormControlLabel
+              value='runOnly'
+              label='Run Only'
+              control={<Radio />}
+            />
+            <FormControlLabel
+              value='planOnly'
+              label='Plan Only'
+              control={<Radio />}
+            />
+          </RadioGroup>
+        </Box>
         <div>
           <FormControlLabel
             checked={stepExecutionState.generateAttachments.includeAttachmentContent}
