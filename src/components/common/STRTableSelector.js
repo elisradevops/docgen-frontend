@@ -8,14 +8,19 @@ import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
 import { FormLabel, Box, Radio, RadioGroup, Collapse, Typography } from '@mui/material';
-import { set, toJS } from 'mobx';
+import { toJS } from 'mobx';
 import DetailedStepsSettingsDialog from '../dialogs/DetailedStepsSettingsDialog';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
 const initialStepsExecutionState = {
   isEnabled: false,
-  generateAttachments: { isEnabled: false, attachmentType: 'asEmbedded', includeAttachmentContent: false },
+  generateAttachments: {
+    isEnabled: false,
+    attachmentType: 'asEmbedded',
+    includeAttachmentContent: false,
+    runAttachmentMode: 'both',
+  },
   generateRequirements: {
     isEnabled: false,
     includeCustomerId: false,
@@ -268,6 +273,18 @@ const STRTableSelector = ({
             stepExecutionState.generateAttachments.attachmentType === 'asEmbedded' ? 'Embedded' : 'Link'
           }`
         );
+        if (stepExecutionState.generateAttachments.runAttachmentMode !== 'both') {
+          settings.push(
+            `Evidence Attachment by ${
+              stepExecutionState.generateAttachments.runAttachmentMode === 'runOnly'
+                ? 'Run Only'
+                : 'Plan Only'
+            }`
+          );
+        }
+        if (stepExecutionState.generateAttachments.includeAttachmentContent) {
+          settings.push('Include Attachment Content');
+        }
       }
 
       if (stepExecutionState.generateRequirements.isEnabled) {
