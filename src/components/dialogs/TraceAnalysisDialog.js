@@ -176,41 +176,38 @@ const TraceAnalysisDialog = ({ store, sharedQueries, prevTraceAnalysisRequest, o
               item
               xs={12}
             >
-              {includeSpecialColumnsToggle}
-            </Grid>
-            <Grid
-              item
-              xs={12}
-            >
               <Collapse
                 in={traceAnalysisRequest?.traceAnalysisMode === 'query'}
                 timeout='auto'
                 unmountOnExit
               >
-                <Typography variant='subtitle1'>Select a Requirement to Test Case Query</Typography>
-                <div>
-                  {queryTrees.reqTestTree?.length > 0 && (
-                    <QueryTree
-                      data={queryTrees.reqTestTree}
-                      prevSelectedQuery={traceAnalysisRequest.reqTestQuery}
-                      onSelectedQuery={onReqTestQuerySelected}
-                      queryType='req-test'
-                      isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                    />
-                  )}
-                </div>
-                <Typography variant='subtitle1'>Select a Test Case to Requirement Query</Typography>
-                <div>
-                  {queryTrees.testReqTree?.length > 0 && (
-                    <QueryTree
-                      data={queryTrees.testReqTree}
-                      prevSelectedQuery={traceAnalysisRequest.testReqQuery}
-                      onSelectedQuery={onTestReqQuerySelected}
-                      queryType='test-req'
-                      isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                    />
-                  )}
-                </div>
+                {includeSpecialColumnsToggle}
+                <Box>
+                  <Typography variant='subtitle1'>Select a Requirement to Test Case Query</Typography>
+                  <div>
+                    {queryTrees.reqTestTree?.length > 0 && (
+                      <QueryTree
+                        data={queryTrees.reqTestTree}
+                        prevSelectedQuery={traceAnalysisRequest.reqTestQuery}
+                        onSelectedQuery={onReqTestQuerySelected}
+                        queryType='req-test'
+                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                      />
+                    )}
+                  </div>
+                  <Typography variant='subtitle1'>Select a Test Case to Requirement Query</Typography>
+                  <div>
+                    {queryTrees.testReqTree?.length > 0 && (
+                      <QueryTree
+                        data={queryTrees.testReqTree}
+                        prevSelectedQuery={traceAnalysisRequest.testReqQuery}
+                        onSelectedQuery={onTestReqQuerySelected}
+                        queryType='test-req'
+                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                      />
+                    )}
+                  </div>
+                </Box>
               </Collapse>
             </Grid>
           </Grid>
