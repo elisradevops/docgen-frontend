@@ -32,7 +32,12 @@ export default function STDGuide() {
       </Typography>
       <List>
         {/* Main List Items */}
-
+        <ListItem>
+          <ListItemText
+            primary='Generate STD for Manual Formal Testing (Hard Copy)'
+            secondary='Retrieve the STD document for manual formal testing.'
+          />
+        </ListItem>
         {/* Collapsible for Attachment Types */}
         <ListItemButton onClick={handleClickAttachmentTypes}>
           <ListItemIcon>{openIncludeAttachmentTypes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
