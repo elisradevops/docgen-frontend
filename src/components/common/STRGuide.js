@@ -66,6 +66,13 @@ export default function STRGuide() {
           />
         </ListItem>
 
+        <ListItem>
+          <ListItemText
+            primary='Generate STR for Manual Formal Testing (Hard Copy)'
+            secondary='Retrieve the STR document for manual formal testing.'
+          />
+        </ListItem>
+
         {/* Collapsible for Generate Detailed Steps Execution */}
         <ListItemButton onClick={handleClickStepsExecution}>
           <ListItemIcon>{openStepsExecution ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>

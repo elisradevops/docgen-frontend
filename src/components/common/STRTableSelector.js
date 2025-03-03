@@ -63,6 +63,7 @@ const STRTableSelector = ({
   const [includeOpenPCRs, setIncludeOpenPCRs] = useState(false);
   const [openPCRsSelection, setOpenPCRsSelection] = useState('linked');
   const [includeTestLog, setIncludeTestLog] = useState(false);
+  const [includeHardCopyRun, setIncludeHardCopyRun] = useState(false);
 
   const [stepExecutionState, setStepExecutionState] = useState(initialStepsExecutionState);
   const [stepAnalysisState, setStepAnalysisState] = useState(initialStepsAnalysisState);
@@ -134,6 +135,7 @@ const STRTableSelector = ({
           includeTestLog: includeTestLog,
           stepExecution: stepExecutionState,
           stepAnalysis: stepAnalysisState,
+          includeHardCopyRun: includeHardCopyRun,
         },
       },
       contentControlIndex
@@ -446,6 +448,18 @@ const STRTableSelector = ({
             />
           }
           label='Test Log'
+        />
+      </div>
+
+      <div>
+        <FormControlLabel
+          label='Generate STR for Manual Formal Testing (Hard Copy)'
+          control={
+            <Checkbox
+              checked={includeHardCopyRun}
+              onChange={(event, checked) => setIncludeHardCopyRun(checked)}
+            />
+          }
         />
       </div>
 

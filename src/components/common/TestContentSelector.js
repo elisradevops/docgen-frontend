@@ -37,6 +37,7 @@ const TestContentSelector = ({
     text: '',
   });
   const [selectedTestSuites, setSelectedTestSuites] = useState([]);
+  const [includeHardCopyRun, setIncludeHardCopyRun] = useState(false);
   const [includeAttachments, setIncludeAttachments] = useState(false);
   const [attachmentType, setAttachmentType] = useState('asEmbedded');
   const [includeAttachmentContent, setIncludeAttachmentContent] = useState(false);
@@ -85,6 +86,7 @@ const TestContentSelector = ({
           testSuiteArray: testSuiteIdList,
           includeAttachments: includeAttachments,
           attachmentType: attachmentType,
+          includeHardCopyRun: includeHardCopyRun,
           includeAttachmentContent: includeAttachmentContent,
           includeRequirements: includeRequirements,
           includeCustomerId: includeCustomerId,
@@ -220,6 +222,17 @@ const TestContentSelector = ({
             }
             setSelectedTestPlan(newValue);
           }}
+        />
+      </div>
+      <div>
+        <FormControlLabel
+          label='Generate STD for Manual Formal Testing (Hard Copy)'
+          control={
+            <Checkbox
+              checked={includeHardCopyRun}
+              onChange={(event, checked) => setIncludeHardCopyRun(checked)}
+            />
+          }
         />
       </div>
       <div>
