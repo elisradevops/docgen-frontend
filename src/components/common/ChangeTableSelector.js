@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { toJS } from 'mobx';
-import CommitRangeSelector from './CommitRangeSelector';
+import GitObjectRangeSelector from './GitObjectRangeSelector';
 import CommitDateSelector from './CommitDateSelector';
 import PipelineSelector from './PipelineSelector';
 import ReleaseSelector from './ReleaseSelector';
@@ -10,7 +10,7 @@ import PullRequestSelector from './PullRequestSelector';
 import QueryTree from './QueryTree';
 
 const baseDataType = [
-  // { key: 0, text: "commit-range", type: "range" },
+  { key: 0, text: 'git-object-range', type: 'range' },
   { key: 1, text: 'commit-date', type: 'date' },
   { key: 2, text: 'pipeline-range', type: 'pipeline' },
   { key: 3, text: 'release-range', type: 'release' },
@@ -151,13 +151,11 @@ const ChangeTableSelector = observer(
           </div>
           <div>
             {selectedType === 'range' ? (
-              <CommitRangeSelector
+              <GitObjectRangeSelector
                 store={store}
                 contentControlTitle={contentControlTitle}
                 skin='change-table'
                 repoList={store.repoList}
-                branchesList={store.branchesList}
-                gitRepoCommits={store.gitRepoCommits}
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}

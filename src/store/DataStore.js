@@ -323,18 +323,10 @@ class DocGenDataStore {
     this.branchesList = data.value || [];
   }
   //for fetching git repo commits
-  fetchGitRepoCommits(RepoId, branchName) {
-    this.azureRestClient
-      .getGitRepoCommits(RepoId, this.teamProject, branchName)
-      .then((data) => {
-        this.setGitRepoCommits(data);
-      })
-      .catch((err) => {
-        logger.error(`Error occurred while fetching git repo commits: ${err.message}`);
-        logger.error('Error stack:');
-        logger.error(err.stack);
-      });
+  async fetchGitRepoCommits(RepoId) {
+    return await this.azureRestClient.getGitRepoCommits(RepoId, this.teamProject);
   }
+
   //for setting git repo commits
   setGitRepoCommits(data) {
     this.gitRepoCommits = data.value || [];
@@ -487,6 +479,10 @@ class DocGenDataStore {
         logger.error('Error stack:');
         logger.error(err.stack);
       });
+  }
+
+  async fetchGitObjectRefsByType(selectedRepo, gitObjectType) {
+    return await this.azureRestClient.GetRepoReferences(selectedRepo, this.teamProject, gitObjectType);
   }
 
   //add a content control object to the doc object
