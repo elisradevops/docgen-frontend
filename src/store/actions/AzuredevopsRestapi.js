@@ -13,7 +13,7 @@ export default class AzuredevopsRestapi {
 
   async getSharedQueries(teamProjectId = null, docType = '') {
     let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
-    return ticketDataProvider.GetSharedQueries(teamProjectId, '', docType);
+    return ticketDataProvider.GetSharedQueries(teamProjectId, 'My%20Queries', docType);
   }
 
   async getQueryResults(queryId = null, teamProjectId = '') {
@@ -40,9 +40,9 @@ export default class AzuredevopsRestapi {
     return gitDataProvider.GetRepoBranches(teamProjectId, RepoId);
   }
 
-  async getGitRepoCommits(RepoId = '', teamProjectId = '', branchName = '') {
+  async getGitRepoCommits(RepoId = '', teamProjectId = '', versionIdentifier = '') {
     let gitDataProvider = await this.azureRestApi.getGitDataProvider();
-    return gitDataProvider.GetCommitsForRepo(teamProjectId, RepoId, branchName);
+    return gitDataProvider.GetCommitsForRepo(teamProjectId, RepoId, versionIdentifier);
   }
 
   async getReleaseDefinitionList(teamProjectId = '') {
@@ -72,6 +72,11 @@ export default class AzuredevopsRestapi {
   async GetRepoBranches(RepoId = '', teamProjectId = '') {
     let gitDataProvider = await this.azureRestApi.getGitDataProvider();
     return gitDataProvider.GetRepoBranches(teamProjectId, RepoId);
+  }
+
+  async GetRepoReferences(RepoId, teamProjectId, gitObjectType) {
+    let gitDataProvider = await this.azureRestApi.getGitDataProvider();
+    return gitDataProvider.GetRepoReferences(teamProjectId, RepoId, gitObjectType);
   }
 
   async getCollectionLinkTypes() {
