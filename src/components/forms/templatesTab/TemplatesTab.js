@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
-import { Grid } from '@mui/material';
+import { Alert, Grid } from '@mui/material';
 import { Button, Table, Tooltip } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import { toast } from 'react-toastify';
@@ -68,6 +68,15 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       container
       spacing={2}
     >
+      <Grid
+        item
+        xs={12}
+      >
+        <Alert severity='info'>
+          To download a template for a specific project, pick the project from the dropdown above. Otherwise,
+          you'll see the shared templates.
+        </Alert>
+      </Grid>
       <Grid
         item
         xs={12}
