@@ -120,3 +120,23 @@ export const uploadTemplateToStorage = async (formData) => {
     }
   }
 };
+
+export const deleteTemplateFile = async (template, projectName) => {
+  try {
+    return await axios.delete(
+      `${C.jsonDocument_url}/minio/templates/deleteTemplate/${projectName}/${template.etag}`,
+      headers
+    );
+  } catch (err) {
+    if (err.response) {
+      // If the error has a response, it comes from the server
+      logger.error(`Error response while deleting template file: ${JSON.stringify(err.response.data)}`);
+      const errorMessage = err.response.data.error;
+      throw new Error(errorMessage);
+    } else {
+      // Something else happened during the request setup
+      logger.error(`Error while deleting template file: ${err.message}`);
+      throw new Error(err.message);
+    }
+  }
+};

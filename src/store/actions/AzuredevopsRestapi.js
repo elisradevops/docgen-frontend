@@ -13,7 +13,7 @@ export default class AzuredevopsRestapi {
 
   async getSharedQueries(teamProjectId = null, docType = '') {
     let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
-    return ticketDataProvider.GetSharedQueries(teamProjectId, 'My%20Queries', docType);
+    return ticketDataProvider.GetSharedQueries(teamProjectId, '', docType);
   }
 
   async getQueryResults(queryId = null, teamProjectId = '') {
