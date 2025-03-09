@@ -8,6 +8,7 @@ import {
   sendDocumentTogenerator,
   createIfBucketDoesentExsist,
   uploadTemplateToStorage,
+  deleteTemplateFile,
 } from '../store/data/docManagerApi';
 import { toast } from 'react-toastify';
 import logger from '../utils/logger';
@@ -479,6 +480,11 @@ class DocGenDataStore {
         logger.error('Error stack:');
         logger.error(err.stack);
       });
+  }
+
+  //Delete template file
+  async deleteTemplate(template) {
+    return await deleteTemplateFile(template, this.teamProjectName);
   }
 
   async fetchGitObjectRefsByType(selectedRepo, gitObjectType) {

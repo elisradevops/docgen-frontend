@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
-import { Grid, TableContainer, Paper, Table, TableBody, TableRow, TableCell, TableHead } from '@mui/material';
+import { Grid } from '@mui/material';
+import { Button, Table, Tooltip } from 'antd';
+import { DeleteOutlined } from '@ant-design/icons';
+import { toast } from 'react-toastify';
+import { set } from 'mobx';
 const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   const [templates, setTemplates] = useState([]);
-
+  const [deletingTemplateEtag, setDeletingTemplateEtag] = useState(null);
   useEffect(async () => {
     store.fetchTemplatesListForDownload();
   }, [selectedTeamProject]);
@@ -11,6 +15,53 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   useEffect(() => {
     setTemplates(store.templateForDownload || []);
   }, [store.templateForDownload]);
+
+  const handleTemplateDelete = (template) => {
+    setDeletingTemplateEtag(template.etag);
+    store
+      .deleteTemplate(template)
+      .then((res) => {
+        toast.success('Template deleted successfully');
+      })
+      .catch((err) => {
+        const templateName = template.name.split('/').pop();
+        toast.error(`Error while deleting template ${templateName}: ${err.message}`, { autoClose: false });
+      })
+      .finally(() => {
+        setDeletingTemplateEtag(null);
+        store.fetchTemplatesListForDownload();
+      });
+  };
+
+  const columns = [
+    {
+      title: 'Template File',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text, record) => <a href={record.url}>{text}</a>,
+    },
+    {
+      title: 'Last Modified',
+      dataIndex: 'lastModified',
+      key: 'lastModified',
+      render: (text) => new Date(text).toLocaleString(),
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_, record) => (
+        <Tooltip title='Delete Template'>
+          <Button
+            loading={deletingTemplateEtag === record.etag}
+            disabled={record.name.startsWith('shared/')}
+            onClick={() => handleTemplateDelete(record)}
+            icon={<DeleteOutlined />}
+            danger
+          />
+        </Tooltip>
+      ),
+    },
+  ];
 
   return (
     <Grid
@@ -21,38 +72,14 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         item
         xs={12}
       >
-        <TableContainer component={Paper}>
-          <Table aria-label='simple table'>
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <strong>Template File</strong>
-                </TableCell>
-                <TableCell>
-                  <strong>Last Modified</strong>
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {templates.map((row) => (
-                <TableRow key={row.name}>
-                  <TableCell
-                    component='th'
-                    scope='row'
-                  >
-                    <a href={row.url}>{row.name}</a>
-                  </TableCell>
-                  <TableCell
-                    component='th'
-                    scope='row'
-                  >
-                    {new Date(row.lastModified).toLocaleString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Table
+          columns={columns}
+          dataSource={templates.map((row, index) => ({
+            ...row,
+            key: row.name || index, // Adding a key property required by Ant Design
+          }))}
+          pagination={false} // Optional: removes pagination if not needed
+        />
       </Grid>
     </Grid>
   );
