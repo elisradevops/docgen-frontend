@@ -11,14 +11,16 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Button from '@mui/material/Button';
 import { styled } from '@mui/material/styles';
-import { Autocomplete, Box, Grid, TextField } from '@mui/material';
+import { Autocomplete, Box, Grid, TextField, Tooltip } from '@mui/material';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
 import SVDGuide from '../common/SVDGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
+import ClearIcon from '@mui/icons-material/Clear';
 import logger from '../../utils/logger';
 import { indigo } from '@mui/material/colors';
 
+const defaultItem = { key: '', text: '' };
 const StyledTabs = styled((props) => (
   <Tabs
     {...props}
@@ -75,7 +77,7 @@ const StyledButton = styled(Button)(({ theme }) => ({
 const MainTabs = observer(({ store }) => {
   const [selectedTab, setSelectedTab] = useState(99);
   const [cookies, setCookie, removeCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
-  const [selectedTeamProject, setSelectedTeamProject] = useState('');
+  const [selectedTeamProject, setSelectedTeamProject] = useState(defaultItem);
   const [projectClearable, setProjectClearable] = useState(false);
   const logout = () => {
     removeCookie('azuredevopsUrl');
@@ -155,27 +157,59 @@ const MainTabs = observer(({ store }) => {
           item
           xs={12}
         >
-          <Autocomplete
-            disableClearable={!projectClearable}
-            style={{ marginBlock: 8, width: 300 }}
-            autoHighlight
-            openOnFocus
-            options={store.teamProjectsList.map((teamProject) => {
-              return { key: teamProject.id, text: teamProject.name };
-            })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select a TeamProject'
-                variant='outlined'
+          <Grid
+            container
+            justifyContent='center'
+            alignItems='start'
+          >
+            <Grid
+              item
+              xs={12}
+              sx={{ display: 'flex', justifyContent: 'flex-start', gap: '8px', alignItems: 'center' }}
+            >
+              <Autocomplete
+                disableClearable
+                style={{ marginBlock: 8, width: 300 }}
+                autoHighlight
+                openOnFocus
+                options={store.teamProjectsList.map((teamProject) => {
+                  return { key: teamProject.id, text: teamProject.name };
+                })}
+                getOptionLabel={(option) => `${option.text}`}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label='Select a TeamProject'
+                    variant='outlined'
+                  />
+                )}
+                onChange={async (event, newValue) => {
+                  setSelectedTeamProject(newValue || defaultItem);
+                  store.setTeamProject(newValue?.key || '', newValue?.text || '');
+                }}
+                value={selectedTeamProject}
               />
-            )}
-            onChange={async (event, newValue) => {
-              setSelectedTeamProject(newValue?.text || '');
-              store.setTeamProject(newValue?.key || '', newValue?.text || '');
-            }}
-          />
+              {projectClearable && (
+                <Tooltip
+                  title='Clear the selected TeamProject to view all shared templates'
+                  placement='right'
+                >
+                  <Button
+                    style={{ marginBlock: 8 }}
+                    variant='outlined'
+                    color='error'
+                    startIcon={<ClearIcon />}
+                    onClick={() => {
+                      setSelectedTeamProject(defaultItem);
+                      store.setTeamProject('', '');
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </Tooltip>
+              )}
+            </Grid>
+          </Grid>
         </Grid>
 
         {store.documentTypes.map((docType, key) => {
@@ -188,7 +222,7 @@ const MainTabs = observer(({ store }) => {
                 <DocFormGenerator
                   docType={docType}
                   store={store}
-                  selectedTeamProject={selectedTeamProject}
+                  selectedTeamProject={selectedTeamProject.text}
                 />
               </Grid>
 
