@@ -25,6 +25,9 @@ const DetailedStepsSettingsDialog = ({
 }) => {
   const [openDialog, setOpenDialog] = useState(false);
   const [stepExecutionState, setStepExecutionState] = useState(prevStepExecution);
+  useState(() => {
+    if (prevStepExecution) setStepExecutionState(prevStepExecution);
+  }, [prevStepExecution]);
   const attachmentTypeElements = (attachmentProp) => {
     const getRadioGroup = (name, value, onChange) => (
       <RadioGroup

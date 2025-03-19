@@ -17,6 +17,7 @@ function App({ store }) {
       expires: d,
     });
     setCookie('azuredevopsPat', selectedPat, { path: '/', expires: d });
+    store.fetchUserDetails();
     window.location.reload(); // Reload the page after signing in
   };
 

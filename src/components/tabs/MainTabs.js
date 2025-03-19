@@ -83,6 +83,10 @@ const MainTabs = observer(({ store }) => {
   };
 
   useEffect(() => {
+    if (cookies.azuredevopsUrl && cookies.azuredevopsPat) store.fetchUserDetails();
+  }, [cookies]);
+
+  useEffect(() => {
     if (store.documentTypes?.length > 0) {
       setSelectedTab(0);
     }

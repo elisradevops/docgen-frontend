@@ -9,6 +9,9 @@ import {
   createIfBucketDoesentExsist,
   uploadTemplateToStorage,
   deleteTemplateFile,
+  getFavoriteList,
+  deleteFavoriteFromDb,
+  createFavorite,
 } from '../store/data/docManagerApi';
 import { toast } from 'react-toastify';
 import logger from '../utils/logger';
@@ -32,7 +35,6 @@ class DocGenDataStore {
       testPlansList: observable,
       testSuiteList: observable,
       pipelineList: observable,
-      pipelineRunHistory: observable,
       releaseDefinitionList: observable,
       releaseDefinitionHistory: observable,
       repoList: observable,
@@ -40,10 +42,13 @@ class DocGenDataStore {
       pullRequestList: observable,
       gitRepoCommits: observable,
       linkTypes: observable,
+      userDetails: observable,
       documents: observable,
       docType: observable,
       contextName: observable,
       loadingState: observable,
+      favoriteList: observable,
+      selectedFavorite: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -65,11 +70,9 @@ class DocGenDataStore {
       fetchPipelineList: action,
       setPipelineList: action,
       fetchPipelineRunHistory: action,
-      setPipelineRunHistory: action,
       fetchReleaseDefinitionList: action,
       setReleaseDefinitionList: action,
       fetchReleaseDefinitionHistory: action,
-      setReleaseDefinitionHistory: action,
       fetchTestPlans: action,
       setTestPlansList: action,
       fetchTestSuitesList: action,
@@ -78,6 +81,11 @@ class DocGenDataStore {
       setContextName: action,
       fetchLoadingState: action,
       uploadTemplateFile: action,
+      fetchUserDetails: action,
+      fetchFavoritesList: action,
+      deleteFavorite: action,
+      saveFavorite: action,
+      loadFavorite: action,
     });
     makeLoggable(this);
     this.fetchDocFolders();
@@ -98,6 +106,7 @@ class DocGenDataStore {
   selectedTemplate = { key: '', name: '' };
   sharedQueries = { acquiredTrees: null }; // list of queries
   linkTypes = []; // list of link types
+  userDetails = [];
   linkTypesFilter = []; // list of selected links to filter by
   testPlansList = []; // list of testplans
   testSuiteList = []; // list of testsuites
@@ -107,12 +116,13 @@ class DocGenDataStore {
   pullRequestList = []; //list of all pull requests of specific repo
   gitRepoCommits = []; //commit history of a specific repo
   pipelineList = []; //list of all project pipelines
-  pipelineRunHistory = []; //pipeline history of a specific pipeline
   releaseDefinitionList = []; //list of all project releaese Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
   docType = '';
   contextName = '';
   loadingState = { sharedQueriesLoadingState: false };
+  favoriteList = [];
+  selectedFavorite = null;
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -243,6 +253,17 @@ class DocGenDataStore {
       this.linkTypes = data || [];
     });
   }
+
+  fetchUserDetails() {
+    this.azureRestClient.getUserDetails().then((data) => {
+      if (data.identity) {
+        const { DisplayName: name, TeamFoundationId: userId } = data.identity;
+        logger.debug(`User details: ${name} - ${userId}`);
+        this.userDetails = { name, userId };
+      }
+    });
+  }
+
   //for setting the selected link type filters
   updateSelectedLinksFilter = (selectedLinkType) => {
     logger.debug(`selected linked Type ${JSON.stringify(selectedLinkType)}`);
@@ -316,7 +337,7 @@ class DocGenDataStore {
 
   // for setting repo list
   setGitRepoList(data) {
-    this.repoList = data.value || [];
+    this.repoList = data;
   }
 
   // for setting branch list
@@ -360,23 +381,17 @@ class DocGenDataStore {
     this.pipelineList = data.value || [];
   }
   //for fetching pipeline run history
-  fetchPipelineRunHistory(pipelineId) {
-    this.azureRestClient
-      .getPipelineRunHistory(pipelineId, this.teamProject)
-      .then((data) => {
-        this.setPipelineRunHistory(data);
-        logger.debug(data);
-      })
-      .catch((err) => {
-        logger.error(`Error occurred while fetching pipeline run history: ${err.message}`);
-        logger.error('Error stack:');
-        logger.error(err.stack);
-      });
+  async fetchPipelineRunHistory(pipelineId) {
+    try {
+      const data = await this.azureRestClient.getPipelineRunHistory(pipelineId, this.teamProject);
+      return data.value || [];
+    } catch (err) {
+      logger.error(`Error occurred while fetching pipeline run history: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+    }
   }
-  //for setting pipeline run history
-  setPipelineRunHistory(data) {
-    this.pipelineRunHistory = data.value || [];
-  }
+
   //for fetching release list
   fetchReleaseDefinitionList() {
     this.azureRestClient
@@ -395,22 +410,20 @@ class DocGenDataStore {
     this.releaseDefinitionList = data.value || [];
   }
   //for fetching release history
-  fetchReleaseDefinitionHistory(releaseDefinitionId) {
-    this.azureRestClient
-      .getReleaseDefinitionHistory(releaseDefinitionId, this.teamProject)
-      .then((data) => {
-        this.setReleaseDefinitionHistory(data);
-      })
-      .catch((err) => {
-        logger.error(`Error occurred while fetching Release Definition History: ${err.message}`);
-        logger.error('Error stack:');
-        logger.error(err.stack);
-      });
+  async fetchReleaseDefinitionHistory(releaseDefinitionId) {
+    try {
+      const data = await this.azureRestClient.getReleaseDefinitionHistory(
+        releaseDefinitionId,
+        this.teamProject
+      );
+      return data.value || [];
+    } catch (err) {
+      logger.error(`Error occurred while fetching Release Definition History: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+    }
   }
-  //for setting release history
-  setReleaseDefinitionHistory(data) {
-    this.releaseDefinitionHistory = data.value || [];
-  }
+
   //for fetching test plans
   fetchTestPlans() {
     this.azureRestClient
@@ -430,24 +443,26 @@ class DocGenDataStore {
     this.testPlansList = data.value || [];
   }
 
-  fetchTestSuitesList(testPlanId) {
-    this.azureRestClient
-      .getTestSuiteByPlanList(this.teamProject, testPlanId)
-      .then((data) => {
-        data.sort(function (a, b) {
-          return a.parent - b.parent;
-        });
-        this.setTestSuitesList(data);
-      })
-      .catch((err) => {
-        logger.error(`Error occurred while fetching test suites list: ${err.message}`);
-        logger.error('Error stack:');
-        logger.error(err.stack);
+  async fetchTestSuitesList(testPlanId) {
+    try {
+      const data = await this.azureRestClient.getTestSuiteByPlanList(this.teamProject, testPlanId);
+
+      data.sort(function (a, b) {
+        return a.parent - b.parent;
       });
+      this.setTestSuitesList(data);
+    } catch (err) {
+      logger.error(`Error occurred while fetching test suites list: ${err.message}`);
+      logger.error('Error stack:', err.stack);
+    }
   }
 
   setTestSuitesList(data) {
     this.testSuiteList = data || [];
+  }
+
+  get getTestSuiteList() {
+    return this.testSuiteList;
   }
 
   //for fetching documents
@@ -510,11 +525,50 @@ class DocGenDataStore {
     } else {
       this.contentControls.push(contentControlObject);
     }
+
+    this.clearLoadedFavorite();
   };
   async sendRequestToDocGen() {
     await createIfBucketDoesentExsist(this.ProjectBucketName);
     let docReq = this.requestJson;
     return sendDocumentTogenerator(docReq);
+  }
+
+  async fetchFavoritesList() {
+    this.favoriteList =
+      this.userDetails?.userId && this.docType && this.teamProject
+        ? await getFavoriteList(this.userDetails.userId, this.docType, this.teamProject)
+        : [];
+    return this.favoriteList;
+  }
+
+  async deleteFavorite(favoriteId) {
+    await deleteFavoriteFromDb(favoriteId);
+  }
+
+  async saveFavorite(favName, isShared) {
+    if (this.docType !== '' && this.userDetails && this.contentControls?.length > 0) {
+      const item = this.contentControls[0];
+      const { data: dataToSave } = item;
+      await createFavorite(
+        this.userDetails.userId,
+        favName,
+        this.docType,
+        dataToSave,
+        this.teamProject,
+        isShared
+      );
+    } else {
+      logger.debug('Missing required data for saving favorite');
+    }
+  }
+
+  clearLoadedFavorite() {
+    this.selectedFavorite = null;
+  }
+
+  loadFavorite(favoriteId) {
+    this.selectedFavorite = this.favoriteList.find((fav) => fav.id === favoriteId);
   }
 
   async uploadTemplateFile(file) {

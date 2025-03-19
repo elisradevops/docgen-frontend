@@ -28,6 +28,7 @@ export const TemplateFileSelectDialog = ({
   const [loadingTemplateFiles, setLoadingTemplateFiles] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
 
+  //TODO: select the first available template
   const fetchTemplates = async () => {
     if (docType === '') return;
 
@@ -72,7 +73,7 @@ export const TemplateFileSelectDialog = ({
         onClick={handleClickOpen}
         startIcon={<Subject />}
       >
-        Open Template Select Dialog
+        Templates
       </Button>
       <Dialog
         open={openDialog}

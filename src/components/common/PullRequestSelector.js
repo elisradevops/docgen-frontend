@@ -20,6 +20,7 @@ const PullRequestSelector = ({
   addToDocumentRequestObject,
   contentControlIndex,
   queriesRequest,
+  dataToRead,
 }) => {
   const [selectedRepo, setSelectedRepo] = useState({
     key: '',
@@ -31,7 +32,7 @@ const PullRequestSelector = ({
     if (editingMode === false) {
       UpdateDocumentRequestObject();
     }
-  });
+  }, [selectedRepo, selectedPullRequests]);
 
   function UpdateDocumentRequestObject() {
     let pullrequestIdList = undefined;

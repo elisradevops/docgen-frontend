@@ -2,17 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
-import { PrimaryButton } from '@fluentui/react';
 import CircularProgress from '@mui/material/CircularProgress';
+import SendIcon from '@mui/icons-material/Send';
+import LoadingButton from '@mui/lab/LoadingButton';
 import TestContentSelector from '../../common/TestContentSelector';
 import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
-import { Box, Collapse } from '@mui/material';
+import { Box, Collapse, Typography } from '@mui/material';
 import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 import { toast } from 'react-toastify';
 import logger from '../../../utils/logger';
+import FavoriteDialog from '../../dialogs/FavoriteDialog';
 
 const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
     if (docType !== '') {
       logger.debug(`Fetching doc forms templates for docType: ${docType}`);
       store.setDocType(docType);
+      store.clearLoadedFavorite();
       setLoadingForm(true);
       store
         .fetchDocFormsTemplates(docType)
@@ -77,7 +80,6 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             skin={formControl.skin}
             testPlansList={store.testPlansList}
             testSuiteList={store.testSuiteList}
-            fetchTestSuitesList={store.fetchTestSuitesList}
             sharedQueries={store.sharedQueries}
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
@@ -171,16 +173,21 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   };
 
   return (
-    <Box sx={{ minHeight: '400px' }}>
+    <Box sx={{ minHeight: '400px', width: '100%', overflow: 'hidden' }}>
       {loadingForm ? (
         <CircularProgress />
       ) : (
         selectedDocForm && (
-          <Grid container>
+          <Grid
+            container
+            spacing={2}
+            sx={{ width: '100%' }}
+            alignItems='flex-start'
+            justifyContent='flex-start'
+          >
             <Grid
               item
-              xs={12}
-              sx={{ justifyContent: 'center' }}
+              xs='auto'
             >
               <TemplateFileSelectDialog
                 store={store}
@@ -190,60 +197,85 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                 setSelectedTemplate={setSelectedTemplate}
               />
             </Grid>
-            <Collapse
-              in={selectedTemplate !== null}
-              timeout='auto'
-              unmountOnExit
+
+            <Grid
+              item
+              xs='auto'
             >
-              <TextField
-                label='Selected Template'
-                defaultValue=''
-                value={selectedTemplate?.text?.split('/')?.pop()}
-                InputProps={{
-                  readOnly: true,
-                }}
-                variant='standard'
-                sx={{ my: 2, width: 300 }}
+              <FavoriteDialog
+                store={store}
+                docType={docType}
+                selectedTeamProject={selectedTeamProject}
               />
-              <Grid
-                sx={{ pt: 1 }}
-                container
-                item
-                spacing={3}
+            </Grid>
+
+            {/* Collapse with proper width handling */}
+            <Grid
+              item
+              xs={12}
+            >
+              <Collapse
+                in={selectedTemplate !== null}
+                timeout='auto'
+                unmountOnExit
+                sx={{ width: '100%' }}
               >
-                {docForm && docForm.contentControls
-                  ? docForm.contentControls.map((contentControl, key) => {
-                      return (
-                        <Grid item>
-                          <typography
-                            fontWeight='fontWeightBold'
-                            fontSize={20}
-                            m={1}
+                <Box sx={{ width: '100%', px: 1 }}>
+                  <TextField
+                    label='Selected Template'
+                    defaultValue=''
+                    value={selectedTemplate?.text?.split('/')?.pop()}
+                    InputProps={{
+                      readOnly: true,
+                    }}
+                    variant='standard'
+                    sx={{ my: 2, width: 300 }}
+                  />
+
+                  {/* Content controls grid with proper containment */}
+                  <Grid
+                    container
+                    spacing={3}
+                    sx={{ width: '100%' }}
+                  >
+                    {docForm && docForm.contentControls
+                      ? docForm.contentControls.map((contentControl, key) => (
+                          <Grid
+                            item
+                            xs={12}
+                            key={key}
                           >
-                            {contentControl.title}:
-                          </typography>
-                          {generateFormControls(contentControl, key)}
-                        </Grid>
-                      );
-                    })
-                  : null}
-              </Grid>
-              <Grid
-                item
-                xs={12}
-              >
-                <PrimaryButton
-                  text='Send Request'
-                  onClick={handleSendRequest}
-                  disabled={loading}
-                />
-                {loading && <CircularProgress />}
-              </Grid>
-            </Collapse>
+                            <Typography
+                              variant='caption'
+                              sx={{ m: 1 }}
+                            >
+                              {contentControl.title}:
+                            </Typography>
+                            <Box sx={{ maxWidth: '100%', overflowX: 'auto' }}>
+                              {generateFormControls(contentControl, key)}
+                            </Box>
+                          </Grid>
+                        ))
+                      : null}
+                  </Grid>
+
+                  <Box sx={{ mt: 2 }}>
+                    <LoadingButton
+                      endIcon={<SendIcon />}
+                      loading={loading}
+                      loadingPosition='end'
+                      variant='contained'
+                      onClick={handleSendRequest}
+                    >
+                      Send Request
+                    </LoadingButton>
+                  </Box>
+                </Box>
+              </Collapse>
+            </Grid>
           </Grid>
         )
       )}
-      {/* </Grid> */}
     </Box>
   );
 });
