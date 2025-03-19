@@ -21,7 +21,7 @@ const TraceTableSelector = ({
   editingMode,
   addToDocumentRequestObject,
 }) => {
-  const [selectedType, setselectedType] = useState('query');
+  const [selectedType, setSelectedType] = useState('query');
 
   return (
     <div>
@@ -31,7 +31,7 @@ const TraceTableSelector = ({
         options={baseDataType}
         styles={dropdownStyles}
         onChange={(event, newValue) => {
-          setselectedType(newValue.type);
+          setSelectedType(newValue.type);
         }}
       />
       <LinkTypeSelector
@@ -47,7 +47,6 @@ const TraceTableSelector = ({
           skin='trace-table'
           testPlansList={store.testPlansList}
           testSuiteList={store.testSuiteList}
-          fetchTestSuitesList={store.fetchTestSuitesList}
           contentControlArrayCell={null}
           editingMode={editingMode}
           addToDocumentRequestObject={addToDocumentRequestObject}

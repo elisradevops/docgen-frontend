@@ -94,7 +94,6 @@ const DeveloperForm = observer(({ store }) => {
                   skin={contentControlSkin}
                   testPlansList={store.testPlansList}
                   testSuiteList={store.testSuiteList}
-                  fetchTestSuitesList={store.fetchTestSuitesList}
                   editingMode={true}
                   addToDocumentRequestObject={addToDocumentRequestObject}
                 />

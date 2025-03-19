@@ -107,4 +107,9 @@ export default class AzuredevopsRestapi {
       return [];
     }
   }
+
+  async getUserDetails() {
+    let managementDataProvider = await this.azureRestApi.getMangementDataProvider();
+    return managementDataProvider.GetUserProfile();
+  }
 }

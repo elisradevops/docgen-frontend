@@ -119,7 +119,7 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
           );
         return <a href={record.url}>{content}</a>;
       },
-      sorter: (a, b) => a.name.localeCompare(b.name),
+      sorter: (a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
     },
     {
       title: 'Changed Date',

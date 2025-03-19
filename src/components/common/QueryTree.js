@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { TreeSelect } from 'antd';
 import { Alert } from '@mui/material';
+import { toast } from 'react-toastify';
+import { validateQuery } from '../../utils/queryValidation';
 
 const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoading }) => {
   const [selectedQuery, setSelectedQuery] = useState(prevSelectedQuery);
@@ -11,6 +13,32 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
   useEffect(() => {
     setIsDisabled(data?.length === 0);
   }, [data]);
+
+  //Reading the loaded selected favorite data
+  useEffect(() => {
+    // Only attempt to validate if we have both a previous query and data
+    if (data?.length > 0 && prevSelectedQuery) {
+      const validQuery = validateQuery(data, prevSelectedQuery);
+
+      if (validQuery) {
+        // Query exists and is valid, so set it
+        setSelectedQuery(prevSelectedQuery);
+        setShowQueryNotSelectedAlert(false);
+      } else {
+        // Query doesn't exist or is invalid in the current context
+        toast.warn(
+          `Previously selected query ${prevSelectedQuery.title} with ID ${prevSelectedQuery.id} not found in available queries`
+        );
+        setSelectedQuery(undefined);
+        onSelectedQuery(null);
+
+        if (prevSelectedQuery.id) {
+          // Show an alert that the previously selected query is no longer available
+          setShowQueryNotSelectedAlert(true);
+        }
+      }
+    }
+  }, [data, prevSelectedQuery, onSelectedQuery]);
 
   const getTitle = () => {
     switch (queryType) {

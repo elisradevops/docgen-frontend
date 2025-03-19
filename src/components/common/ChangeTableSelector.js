@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { toJS } from 'mobx';
+import React, { useCallback, useEffect, useState } from 'react';
 import GitObjectRangeSelector from './GitObjectRangeSelector';
 import CommitDateSelector from './CommitDateSelector';
 import PipelineSelector from './PipelineSelector';
@@ -8,8 +7,9 @@ import { observer } from 'mobx-react';
 import { Autocomplete, Box, Checkbox, Collapse, FormControlLabel, TextField } from '@mui/material';
 import PullRequestSelector from './PullRequestSelector';
 import QueryTree from './QueryTree';
+import { toast } from 'react-toastify';
 
-const baseDataType = [
+const baseChangeTableDataType = [
   { key: 0, text: 'git-object-range', type: 'range' },
   { key: 1, text: 'commit-date', type: 'date' },
   { key: 2, text: 'pipeline-range', type: 'pipeline' },
@@ -17,7 +17,7 @@ const baseDataType = [
   // { key: 4, text: "pullrequest-range", type: "pullrequest" },
 ];
 
-const defaultSelectedQueries = {
+const defaultSelectedQueriesForChangeTableSelector = {
   sysOverviewQuery: null,
   knownBugsQuery: null,
 };
@@ -33,16 +33,17 @@ const ChangeTableSelector = observer(
     contentControlIndex,
     sharedQueries,
   }) => {
-    const [selectedType, setSelectedType] = useState('');
+    const [selectedType, setSelectedType] = useState(null);
     const [queryTrees, setQueryTrees] = useState({
       systemOverviewQueryTree: [],
       knownBugsQueryTree: [],
     });
-    const [queriesRequest, setQueriesRequest] = useState(defaultSelectedQueries);
+    const [queriesRequest, setQueriesRequest] = useState(defaultSelectedQueriesForChangeTableSelector);
+    const [loadedData, setLoadedData] = useState(undefined);
     const [includeSystemOverview, setIncludeSystemOverview] = useState(false);
     const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
     useEffect(() => {
-      const { acquiredTrees } = toJS(sharedQueries);
+      const acquiredTrees = sharedQueries.acquiredTrees;
       acquiredTrees !== null
         ? setQueryTrees(() => ({
             systemOverviewQueryTree: acquiredTrees.systemOverviewQueryTree
@@ -50,8 +51,60 @@ const ChangeTableSelector = observer(
               : [],
             knownBugsQueryTree: acquiredTrees.knownBugsQueryTree ? [acquiredTrees.knownBugsQueryTree] : [],
           }))
-        : setQueryTrees(defaultSelectedQueries);
+        : setQueryTrees(defaultSelectedQueriesForChangeTableSelector);
     }, [sharedQueries.acquiredTrees]);
+
+    //Reading the loaded selected favorite data
+    useEffect(() => {
+      // Early return if no favorite selected
+      const selectedFavorite = store.selectedFavorite;
+      if (!selectedFavorite?.dataToSave) return;
+
+      const { dataToSave } = selectedFavorite;
+
+      try {
+        // Extract and process system overview query data
+        processSystemOverviewData(dataToSave.systemOverviewQuery);
+
+        // Process range type selection
+        processRangeTypeSelection(dataToSave);
+
+        // Set the loaded data
+        setLoadedData(dataToSave);
+      } catch (error) {
+        toast.error('Error processing favorite data:', error);
+        setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
+      }
+    }, [store.selectedFavorite]); // Only depend on the selected favorite
+
+    // Helper functions outside the effect (but inside the component)
+    const processSystemOverviewData = useCallback(
+      (systemOverviewQuery) => {
+        if (!systemOverviewQuery) {
+          setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
+          return;
+        }
+
+        setIncludeSystemOverview(systemOverviewQuery.sysOverviewQuery);
+        setIncludeKnownBugs(systemOverviewQuery.knownBugsQuery);
+        onSelectedSystemOverviewQuery(systemOverviewQuery.sysOverviewQuery);
+        onSelectedKnownBugsQuery(systemOverviewQuery.knownBugsQuery);
+      },
+      [onSelectedSystemOverviewQuery, onSelectedKnownBugsQuery]
+    );
+
+    const processRangeTypeSelection = useCallback(
+      ({ rangeType }) => {
+        const selectedTypeObject = baseChangeTableDataType.find((item) => item.type === rangeType);
+
+        if (!selectedTypeObject) {
+          throw new Error('Range type not supported');
+        }
+
+        setSelectedType(selectedTypeObject);
+      },
+      [baseChangeTableDataType]
+    );
 
     const onSelectedSystemOverviewQuery = (query) => {
       setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: query }));
@@ -87,7 +140,7 @@ const ChangeTableSelector = observer(
             {queryTrees.systemOverviewQueryTree?.length > 0 && (
               <QueryTree
                 data={queryTrees.systemOverviewQueryTree}
-                prevSelectedQuery={queriesRequest.sysOverviewQuery}
+                prevSelectedQuery={queriesRequest?.sysOverviewQuery}
                 onSelectedQuery={onSelectedSystemOverviewQuery}
                 queryType={'system-overview'}
                 isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
@@ -119,7 +172,7 @@ const ChangeTableSelector = observer(
             {queryTrees.knownBugsQueryTree?.length > 0 && (
               <QueryTree
                 data={queryTrees.knownBugsQueryTree}
-                prevSelectedQuery={queriesRequest.knownBugsQuery}
+                prevSelectedQuery={queriesRequest?.knownBugsQuery}
                 onSelectedQuery={onSelectedKnownBugsQuery}
                 queryType={'known-bugs'}
                 isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
@@ -135,7 +188,8 @@ const ChangeTableSelector = observer(
               style={{ marginBlock: 8, width: 300 }}
               autoHighlight
               openOnFocus
-              options={baseDataType}
+              options={baseChangeTableDataType}
+              value={selectedType}
               getOptionLabel={(option) => `${option.text}`}
               renderInput={(params) => (
                 <TextField
@@ -145,63 +199,62 @@ const ChangeTableSelector = observer(
                 />
               )}
               onChange={(event, newValue) => {
-                setSelectedType(newValue.type);
+                setSelectedType(newValue);
               }}
             />
           </div>
           <div>
-            {selectedType === 'range' ? (
+            {selectedType?.type === 'range' ? (
               <GitObjectRangeSelector
                 store={store}
                 contentControlTitle={contentControlTitle}
                 skin='change-table'
-                repoList={store.repoList}
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
+                dataToRead={loadedData}
               />
             ) : null}
-            {selectedType === 'date' ? (
+            {selectedType?.type === 'date' ? (
               <CommitDateSelector
                 store={store}
                 contentControlTitle={contentControlTitle}
                 skin='change-table'
                 repoList={store.repoList}
-                branchesList={store.branchesList}
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
+                dataToRead={loadedData}
               />
             ) : null}
-            {selectedType === 'pipeline' ? (
+            {selectedType?.type === 'pipeline' ? (
               <PipelineSelector
                 store={store}
                 contentControlTitle={contentControlTitle}
                 skin='change-table'
-                pipelineList={store.pipelineList}
-                pipelineRunHistory={store.pipelineRunHistory}
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
+                dataToRead={loadedData}
               />
             ) : null}
-            {selectedType === 'release' ? (
+            {selectedType?.type === 'release' ? (
               <ReleaseSelector
                 store={store}
                 contentControlTitle={contentControlTitle}
                 skin='change-table'
-                releaseDefinitionList={store.releaseDefinitionList}
-                releaseDefinitionHistory={store.releaseDefinitionHistory}
                 editingMode={editingMode}
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
+                dataToRead={loadedData}
               />
             ) : null}
-            {selectedType === 'pullrequest' ? (
+            {selectedType?.type === 'pullrequest' ? (
+              //TODO: implement favorites here as well after implementing the changes
               <PullRequestSelector
                 store={store}
                 contentControlTitle={contentControlTitle}
@@ -212,6 +265,7 @@ const ChangeTableSelector = observer(
                 addToDocumentRequestObject={addToDocumentRequestObject}
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
+                dataToRead={loadedData}
               />
             ) : null}
           </div>
