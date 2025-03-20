@@ -21,7 +21,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import { toast } from 'react-toastify';
 
-const FavoriteDialog = ({ store, docType, selectedTeamProject }) => {
+const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => {
   const [favoriteList, setFavoriteList] = useState([]);
   const [selectedFavorite, setSelectedFavorite] = useState(null);
   const [loadingFavoriteList, setLoadingFavoriteList] = useState(false);
@@ -106,7 +106,8 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject }) => {
           variant='contained'
           onClick={handleClickOpen}
           endIcon={<BookmarkIcon />}
-          disabled={!selectedTeamProject}
+          color='secondary'
+          disabled={isDisabled || !selectedTeamProject}
         >
           Favorites
         </Button>
