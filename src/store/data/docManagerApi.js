@@ -82,7 +82,6 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
     headers: customHeaders,
     method: requestMethod,
     data: data,
-    timeout: DEFAULT_TIMEOUT,
   };
   let json;
   try {
