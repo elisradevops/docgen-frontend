@@ -92,8 +92,6 @@ const DeveloperForm = observer(({ store }) => {
                   contentControlTitle={contentControlTitle}
                   type={contentControlType}
                   skin={contentControlSkin}
-                  testPlansList={store.testPlansList}
-                  testSuiteList={store.testSuiteList}
                   editingMode={true}
                   addToDocumentRequestObject={addToDocumentRequestObject}
                 />
@@ -104,8 +102,6 @@ const DeveloperForm = observer(({ store }) => {
                   contentControlTitle={contentControlTitle}
                   type={contentControlType}
                   skin={contentControlSkin}
-                  testPlansList={store.testPlansList}
-                  testSuiteList={store.testSuiteList}
                   editingMode={false}
                   addToDocumentRequestObject={store.addContentControlToDocument}
                 />

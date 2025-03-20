@@ -29,10 +29,7 @@ const TestContentSelector = observer(
     contentControlTitle,
     type,
     skin,
-    testPlansList,
-    testSuiteList,
     editingMode,
-    sharedQueries,
     addToDocumentRequestObject,
     linkTypeFilterArray,
     contentControlIndex,
@@ -101,7 +98,7 @@ const TestContentSelector = observer(
     const processTestPlanSelection = useCallback(
       async (dataToSave) => {
         const { testPlanId } = dataToSave;
-        const testPlan = testPlansList.find((testplan) => testplan.id === testPlanId);
+        const testPlan = store.testPlansList.find((testplan) => testplan.id === testPlanId);
 
         if (!testPlan) {
           toast.warn(`Test plan with ID ${testPlanId} not found`);
@@ -110,7 +107,7 @@ const TestContentSelector = observer(
 
         await handleTestPlanChanged({ key: testPlanId, text: testPlan.name });
       },
-      [testPlansList, handleTestPlanChanged]
+      [store.testPlansList, handleTestPlanChanged]
     );
 
     // Process general settings
@@ -135,13 +132,13 @@ const TestContentSelector = observer(
     // Validate and process trace analysis request
     const processTraceAnalysisRequest = useCallback(
       (traceAnalysisRequest) => {
-        if (!traceAnalysisRequest) return;
+        if (!traceAnalysisRequest || !store.sharedQueries) return;
 
         const validatedRequest = { ...traceAnalysisRequest };
 
-        if (traceAnalysisRequest.reqTestQuery && sharedQueries?.acquiredTrees?.reqTestTree) {
+        if (traceAnalysisRequest.reqTestQuery && store.sharedQueries?.acquiredTrees?.reqTestTree) {
           const validReqTestQuery = validateQuery(
-            [sharedQueries.acquiredTrees.reqTestTree],
+            [store.sharedQueries.acquiredTrees.reqTestTree],
             traceAnalysisRequest.reqTestQuery
           );
 
@@ -153,9 +150,9 @@ const TestContentSelector = observer(
           validatedRequest.reqTestQuery = validReqTestQuery;
         }
 
-        if (traceAnalysisRequest.testReqQuery && sharedQueries?.acquiredTrees?.testReqTree) {
+        if (traceAnalysisRequest.testReqQuery && store.sharedQueries?.acquiredTrees?.testReqTree) {
           const validTestReqQuery = validateQuery(
-            [sharedQueries.acquiredTrees.testReqTree],
+            [store.sharedQueries.acquiredTrees.testReqTree],
             traceAnalysisRequest.testReqQuery
           );
 
@@ -169,7 +166,7 @@ const TestContentSelector = observer(
 
         setTraceAnalysisRequest(validatedRequest);
       },
-      [sharedQueries?.acquiredTrees]
+      [store.sharedQueries?.acquiredTrees]
     );
 
     // Process test suite selections
@@ -200,10 +197,10 @@ const TestContentSelector = observer(
         nonRecursiveTestSuiteIdList = [];
         // Function to recursively add children suites
         const addChildrenSuites = (suiteId) => {
-          const suite = testSuiteList.find((suite) => suite.id === suiteId);
+          const suite = store.testSuiteList?.find((suite) => suite.id === suiteId);
           if (suite && !testSuiteIdList.includes(suiteId)) {
             testSuiteIdList.push(suiteId);
-            const children = testSuiteList.filter((child) => child.parent === suiteId);
+            const children = store.testSuiteList?.filter((child) => child.parent === suiteId);
             children.forEach((child) => {
               addChildrenSuites(child.id);
             });
@@ -347,7 +344,7 @@ const TestContentSelector = observer(
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
-            options={testPlansList.map((testplan) => {
+            options={store.testPlansList?.map((testplan) => {
               return { key: testplan.id, text: testplan.name };
             })}
             getOptionLabel={(option) => `${option.text}`}
@@ -434,7 +431,7 @@ const TestContentSelector = observer(
             <Autocomplete
               style={{ marginBlock: 8, width: 300 }}
               multiple
-              options={testSuiteList}
+              options={store.testSuiteList}
               disableCloseOnSelect
               autoHighlight
               value={selectedTestSuites}
@@ -466,7 +463,7 @@ const TestContentSelector = observer(
         </div>
         <TraceAnalysisDialog
           store={store}
-          sharedQueries={sharedQueries}
+          sharedQueries={store.sharedQueries}
           prevTraceAnalysisRequest={traceAnalysisRequest}
           onTraceAnalysisChange={setTraceAnalysisRequest}
         />
