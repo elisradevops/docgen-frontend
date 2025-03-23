@@ -446,7 +446,7 @@ class DocGenDataStore {
 
   //setting the testplans array
   setTestPlansList(data) {
-    this.testPlansList = data.value || [];
+    this.testPlansList = data || [];
   }
 
   async fetchTestSuitesList(testPlanId) {
