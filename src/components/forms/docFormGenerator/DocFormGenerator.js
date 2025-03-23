@@ -34,10 +34,20 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         .fetchDocFormsTemplates(docType)
         .then((docFormsControls) => {
           setDocFormsControls(docFormsControls); // Set state after templates are fetched
-          setLoadingForm(false);
+          if (docFormsControls.length > 0) {
+            const temp = docFormsControls.find((docForm) =>
+              docForm.documentTitle.toLowerCase().includes(docType.toLowerCase())
+            );
+            setDocForm(temp);
+          }
         })
-        .catch(() => {
-          setLoadingForm(false); // Ensure loading state is reset if there's an error
+        .catch((error) => {
+          logger.error(
+            `Error occurred while fetching doc forms templates for docType: ${docType}: ${error.message}`
+          );
+        })
+        .finally(() => {
+          setLoadingForm(false);
         });
     }
   }, [store, docType, setDocFormsControls]);
@@ -51,16 +61,6 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       });
     }
   }, [docFormsControls]);
-
-  // Update docForm based on selected document
-  useEffect(() => {
-    if (selectedDocForm !== null && docFormsControls.length > 0) {
-      const temp = docFormsControls.find((docForm) =>
-        docForm.documentTitle.toLowerCase().includes(selectedDocForm.text.toLowerCase())
-      );
-      setDocForm(temp);
-    }
-  }, [selectedDocForm, docFormsControls]);
 
   useEffect(() => {
     if (selectedTeamProject) {

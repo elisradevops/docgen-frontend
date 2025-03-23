@@ -188,7 +188,8 @@ class DocGenDataStore {
       this.azureRestClient
         .getTeamProjects()
         .then((data) => {
-          this.teamProjectsList = data.value.sort((a, b) => (a.name > b.name ? 1 : -1)) || [];
+          this.teamProjectsList =
+            data.value.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())) || [];
         })
         .catch((err) => {
           logger.error(`Error occurred while fetching team projects: ${err.message}`);
@@ -429,7 +430,12 @@ class DocGenDataStore {
     this.azureRestClient
       .getTestPlansList(this.teamProject)
       .then((data) => {
-        this.setTestPlansList(data);
+        if (data.count > 0) {
+          const sortedTestPlans = data.value.sort((a, b) =>
+            a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+          );
+          this.setTestPlansList(sortedTestPlans);
+        }
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching test plans: ${err.message}`);
