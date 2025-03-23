@@ -44,12 +44,9 @@ const STRTableSelector = observer(
     contentControlTitle,
     type,
     skin,
-    testPlansList,
-    testSuiteList,
     addToDocumentRequestObject,
     editingMode,
     contentControlIndex,
-    sharedQueries,
   }) => {
     const [selectedTestPlan, setSelectedTestPlan] = useState({
       key: '',
@@ -90,13 +87,14 @@ const STRTableSelector = observer(
     // }, [editingMode]);
 
     useEffect(() => {
-      const { acquiredTrees } = toJS(sharedQueries);
+      if (!store.sharedQueries) return;
+      const { acquiredTrees } = toJS(store.sharedQueries);
       acquiredTrees !== null
         ? setQueryTrees(() => ({
             testReqTree: acquiredTrees.testReqTree ? [acquiredTrees.testReqTree] : [],
           }))
         : setQueryTrees(null);
-    }, [sharedQueries.acquiredTrees]);
+    }, [store.sharedQueries.acquiredTrees]);
 
     //For detailed steps execution
     useEffect(() => {
@@ -134,14 +132,14 @@ const STRTableSelector = observer(
 
     const processTestPlanSelection = useCallback(
       async (dataToSave) => {
-        const testPlan = testPlansList.find((testplan) => testplan.id === dataToSave.testPlanId);
+        const testPlan = store.testPlansList.find((testplan) => testplan.id === dataToSave.testPlanId);
         if (!testPlan) {
           toast.warn(`Test plan with ID ${dataToSave.testPlanId} not found`);
           return;
         }
         await handleTestPlanChanged({ key: dataToSave.testPlanId, text: testPlan.name });
       },
-      [testPlansList, handleTestPlanChanged]
+      [store.testPlansList, handleTestPlanChanged]
     );
 
     const processGeneralSettings = useCallback((dataToSave) => {
@@ -176,8 +174,11 @@ const STRTableSelector = observer(
     const processRequirementQueries = useCallback(
       (dataToSave) => {
         const testReqQuery = dataToSave.stepExecution?.generateRequirements?.testReqQuery;
-        if (testReqQuery && sharedQueries?.acquiredTrees?.testReqTree) {
-          const validTestReqQuery = validateQuery([sharedQueries.acquiredTrees.testReqTree], testReqQuery);
+        if (testReqQuery && store.sharedQueries?.acquiredTrees?.testReqTree) {
+          const validTestReqQuery = validateQuery(
+            [store.sharedQueries.acquiredTrees.testReqTree],
+            testReqQuery
+          );
 
           if (!validTestReqQuery) {
             toast.warn(
@@ -188,7 +189,7 @@ const STRTableSelector = observer(
           dataToSave.stepExecution.generateRequirements.testReqQuery = validTestReqQuery;
         }
       },
-      [sharedQueries?.acquiredTrees?.testReqTree]
+      [store.sharedQueries?.acquiredTrees?.testReqTree]
     );
     function UpdateDocumentRequestObject() {
       let testSuiteIdList = undefined;
@@ -198,10 +199,10 @@ const STRTableSelector = observer(
         nonRecursiveTestSuiteIdList = [];
         // Function to recursively add children suites
         const addChildrenSuites = (suiteId) => {
-          const suite = testSuiteList.find((suite) => suite.id === suiteId);
+          const suite = store.testSuiteList.find((suite) => suite.id === suiteId);
           if (suite && !testSuiteIdList.includes(suiteId)) {
             testSuiteIdList.push(suiteId);
-            const children = testSuiteList.filter((child) => child.parent === suiteId);
+            const children = store.testSuiteList.filter((child) => child.parent === suiteId);
             children.forEach((child) => {
               addChildrenSuites(child.id);
             });
@@ -433,7 +434,7 @@ const STRTableSelector = observer(
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
-            options={testPlansList.map((testplan) => {
+            options={store.testPlansList.map((testplan) => {
               return { key: testplan.id, text: testplan.name };
             })}
             getOptionLabel={(option) => `${option.text}`}
@@ -468,7 +469,7 @@ const STRTableSelector = observer(
             <Autocomplete
               style={{ marginBlock: 8, width: 300 }}
               multiple
-              options={testSuiteList}
+              options={store.testSuiteList}
               disableCloseOnSelect
               autoHighlight
               groupBy={(option) => option.parent}

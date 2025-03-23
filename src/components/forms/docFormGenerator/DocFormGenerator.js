@@ -78,9 +78,6 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             contentControlTitle={formControl.title}
             type={formControl.type}
             skin={formControl.skin}
-            testPlansList={store.testPlansList}
-            testSuiteList={store.testSuiteList}
-            sharedQueries={store.sharedQueries}
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}
@@ -94,9 +91,6 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             contentControlTitle={formControl.title}
             type={formControl.type}
             skin={formControl.skin}
-            testPlansList={store.testPlansList}
-            testSuiteList={store.testSuiteList}
-            sharedQueries={store.sharedQueries}
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}
@@ -203,6 +197,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
               xs='auto'
             >
               <FavoriteDialog
+                isDisabled={!selectedTemplate}
                 store={store}
                 docType={docType}
                 selectedTeamProject={selectedTeamProject}
@@ -221,16 +216,9 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                 sx={{ width: '100%' }}
               >
                 <Box sx={{ width: '100%', px: 1 }}>
-                  <TextField
-                    label='Selected Template'
-                    defaultValue=''
-                    value={selectedTemplate?.text?.split('/')?.pop()}
-                    InputProps={{
-                      readOnly: true,
-                    }}
-                    variant='standard'
-                    sx={{ my: 2, width: 300 }}
-                  />
+                  <Typography variant='subtitle2'>
+                    Template: {selectedTemplate?.text?.split('/')?.pop()}
+                  </Typography>
 
                   {/* Content controls grid with proper containment */}
                   <Grid
