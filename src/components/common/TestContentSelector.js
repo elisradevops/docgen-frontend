@@ -54,6 +54,7 @@ const TestContentSelector = observer(
         UpdateDocumentRequestObject();
       }
     }, [
+      selectedTestPlan,
       isSuiteSpecific,
       selectedTestSuites,
       includeHardCopyRun,
