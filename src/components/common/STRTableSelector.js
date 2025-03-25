@@ -74,6 +74,7 @@ const STRTableSelector = observer(
         UpdateDocumentRequestObject();
       }
     }, [
+      selectedTestPlan,
       selectedTestSuites,
       includeConfigurations,
       includeHierarchy,
