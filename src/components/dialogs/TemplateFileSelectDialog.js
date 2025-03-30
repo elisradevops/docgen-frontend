@@ -28,7 +28,6 @@ export const TemplateFileSelectDialog = ({
   const [loadingTemplateFiles, setLoadingTemplateFiles] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
 
-  //TODO: select the first available template
   const fetchTemplates = useCallback(
     async (docType, selectedTeamProject) => {
       if (docType === '') return;
