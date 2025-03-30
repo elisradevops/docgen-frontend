@@ -10,7 +10,7 @@ import {
   Grid,
   TextField,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import UploadFileButton from '../common/UploadFileButton';
 import Subject from '@mui/icons-material/Subject';
 import { toast, ToastContainer } from 'react-toastify';
@@ -29,25 +29,32 @@ export const TemplateFileSelectDialog = ({
   const [openDialog, setOpenDialog] = useState(false);
 
   //TODO: select the first available template
-  const fetchTemplates = async () => {
-    if (docType === '') return;
+  const fetchTemplates = useCallback(
+    async (docType, selectedTeamProject) => {
+      if (docType === '') return;
 
-    setLoadingTemplateFiles(true);
+      setLoadingTemplateFiles(true);
 
-    try {
-      // Ensure the MobX action is properly executed
-      const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
-      setTemplateFiles(templates); // Set templates once fetched
-    } catch (err) {
-      logger.error('Error fetching template files:', err.message);
-      toast.error(`Error while fetching template files: ${err.message}`, { autoClose: false });
-    } finally {
-      setLoadingTemplateFiles(false); // Ensure loading state is turned off
-    }
-  };
+      try {
+        // Ensure the MobX action is properly executed
+        const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
+        setTemplateFiles(templates); // Set templates once fetched
+        if (templates.length > 0) {
+          setSelectedTemplate({ url: templates[0].url, text: templates[0].name });
+        }
+      } catch (err) {
+        logger.error('Error fetching template files:', err.message);
+        toast.error(`Error while fetching template files: ${err.message}`, { autoClose: false });
+      } finally {
+        setLoadingTemplateFiles(false); // Ensure loading state is turned off
+      }
+    },
+    [setSelectedTemplate, store]
+  );
 
   useEffect(() => {
-    fetchTemplates(); // Automatically fetch templates when dependencies change
+    fetchTemplates(docType, selectedTeamProject); // Automatically fetch templates when dependencies change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, selectedTeamProject, docType]);
 
   const handleClickOpen = () => {
@@ -59,7 +66,7 @@ export const TemplateFileSelectDialog = ({
   };
 
   const handleNewFileUploaded = (fileObject) => {
-    fetchTemplates();
+    fetchTemplates(docType, selectedTeamProject);
     if (fileObject) {
       store.setSelectedTemplate(fileObject);
       setSelectedTemplate(fileObject);
