@@ -13,9 +13,11 @@ import {
 import React, { useCallback, useEffect, useState } from 'react';
 import UploadFileButton from '../common/UploadFileButton';
 import Subject from '@mui/icons-material/Subject';
-import { toast, ToastContainer } from 'react-toastify';
+import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import logger from '../../utils/logger';
+
+const validDefaultTemplates = ['STD', 'STR', 'Software Version Description'];
 
 export const TemplateFileSelectDialog = ({
   store,
@@ -38,8 +40,15 @@ export const TemplateFileSelectDialog = ({
         // Ensure the MobX action is properly executed
         const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
         setTemplateFiles(templates); // Set templates once fetched
+
         if (templates.length > 0) {
-          setSelectedTemplate({ url: templates[0].url, text: templates[0].name });
+          const firstMatch = templates.find((t) => {
+            const fileName = t.name.split('/').pop().replace('.dotx', '');
+            return validDefaultTemplates.includes(fileName);
+          });
+          const fileObject = { url: firstMatch.url, text: firstMatch.name };
+          setSelectedTemplate(fileObject);
+          store.setSelectedTemplate(fileObject);
         }
       } catch (err) {
         logger.error('Error fetching template files:', err.message);

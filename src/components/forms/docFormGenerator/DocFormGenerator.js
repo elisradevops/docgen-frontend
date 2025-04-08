@@ -15,6 +15,7 @@ import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 import { toast } from 'react-toastify';
 import logger from '../../../utils/logger';
 import FavoriteDialog from '../../dialogs/FavoriteDialog';
+import TestReporterSelector from '../../common/TestReporterSelector';
 
 const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
@@ -147,6 +148,17 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             sharedQueries={store.sharedQueries}
           />
         );
+      case 'test-reporter':
+        return (
+          <TestReporterSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
+            store={store}
+            selectedTeamProject={selectedTeamProject}
+            addToDocumentRequestObject={store.addContentControlToDocument}
+            contentControlIndex={contentControlIndex}
+          />
+        );
+
       default:
         return null;
     }
@@ -179,25 +191,27 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             alignItems='flex-start'
             justifyContent='flex-start'
           >
-            <Grid
-              item
-              xs='auto'
-            >
-              <TemplateFileSelectDialog
-                store={store}
-                docType={docType}
-                selectedTeamProject={selectedTeamProject}
-                selectedTemplate={selectedTemplate}
-                setSelectedTemplate={setSelectedTemplate}
-              />
-            </Grid>
+            {docType.toLowerCase() !== 'test-reporter' && (
+              <Grid
+                item
+                xs='auto'
+              >
+                <TemplateFileSelectDialog
+                  store={store}
+                  docType={docType}
+                  selectedTeamProject={selectedTeamProject}
+                  selectedTemplate={selectedTemplate}
+                  setSelectedTemplate={setSelectedTemplate}
+                />
+              </Grid>
+            )}
 
             <Grid
               item
               xs='auto'
             >
               <FavoriteDialog
-                isDisabled={!selectedTemplate}
+                isDisabled={!selectedTemplate && docType.toLowerCase() !== 'test-reporter'}
                 store={store}
                 docType={docType}
                 selectedTeamProject={selectedTeamProject}
@@ -210,15 +224,17 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
               xs={12}
             >
               <Collapse
-                in={selectedTemplate !== null}
+                in={selectedTemplate !== null || docType.toLowerCase() === 'test-reporter'}
                 timeout='auto'
                 unmountOnExit
                 sx={{ width: '100%' }}
               >
                 <Box sx={{ width: '100%', px: 1 }}>
-                  <Typography variant='subtitle2'>
-                    Template: {selectedTemplate?.text?.split('/')?.pop()}
-                  </Typography>
+                  {selectedTemplate && (
+                    <Typography variant='subtitle2'>
+                      Template: {selectedTemplate?.text?.split('/')?.pop()}
+                    </Typography>
+                  )}
 
                   {/* Content controls grid with proper containment */}
                   <Grid
