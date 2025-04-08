@@ -9,7 +9,6 @@ import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
 import { Box, Radio, RadioGroup, FormLabel, Typography } from '@mui/material';
 import TraceAnalysisDialog from '../dialogs/TraceAnalysisDialog';
-import logger from '../../utils/logger';
 import { observer } from 'mobx-react';
 import { validateQuery } from '../../utils/queryValidation';
 import { toast } from 'react-toastify';

@@ -17,7 +17,6 @@ import STDGuide from '../common/STDGuide';
 import SVDGuide from '../common/SVDGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import ClearIcon from '@mui/icons-material/Clear';
-import logger from '../../utils/logger';
 import { indigo } from '@mui/material/colors';
 
 const defaultItem = { key: '', text: '' };
@@ -213,11 +212,12 @@ const MainTabs = observer(({ store }) => {
         </Grid>
 
         {store.documentTypes.map((docType, key) => {
+          const hasGuide = generateGuide(docType) !== null;
           return selectedTab === key ? (
             <>
               <Grid
                 item
-                xs={3}
+                xs={hasGuide ? 3 : 12}
               >
                 <DocFormGenerator
                   docType={docType}
@@ -225,13 +225,14 @@ const MainTabs = observer(({ store }) => {
                   selectedTeamProject={selectedTeamProject.text}
                 />
               </Grid>
-
-              <Grid
-                item
-                xs={9}
-              >
-                {generateGuide(docType)}
-              </Grid>
+              {hasGuide && (
+                <Grid
+                  item
+                  xs={9}
+                >
+                  {generateGuide(docType)}
+                </Grid>
+              )}
             </>
           ) : null;
         })}
