@@ -581,7 +581,7 @@ class DocGenDataStore {
   }
 
   setAttachmentWiki(attachmentWikiUrl) {
-    const fixedUrl = attachmentWikiUrl.replaceAll(' ', '%20');
+    const fixedUrl = attachmentWikiUrl?.replaceAll(' ', '%20') || undefined;
     this.attachmentWikiUrl = fixedUrl;
   }
 

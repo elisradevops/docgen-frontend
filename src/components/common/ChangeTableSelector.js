@@ -123,6 +123,10 @@ const ChangeTableSelector = observer(
       }
     };
 
+    const handleClearAttachment = () => {
+      store.setAttachmentWiki(undefined);
+    };
+
     return (
       <>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -193,6 +197,7 @@ const ChangeTableSelector = observer(
           <UploadAttachmentFileButton
             store={store}
             onNewFileUpload={handleNewFileUploaded}
+            onClear={handleClearAttachment}
             bucketName={`wiki-attachments`}
             isDisabled={!selectedTeamProject}
           />

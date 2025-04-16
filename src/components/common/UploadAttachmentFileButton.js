@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 import logger from '../../utils/logger';
 
-const UploadAttachmentFileButton = ({ store, onNewFileUpload, bucketName, isDisabled }) => {
+const UploadAttachmentFileButton = ({ store, onNewFileUpload, onClear, bucketName, isDisabled }) => {
   const [fileList, setFileList] = useState([]);
   const [selectedUploadedFileResponse, setSelectedUploadedFileResponse] = useState(null);
 
@@ -80,12 +80,12 @@ const UploadAttachmentFileButton = ({ store, onNewFileUpload, bucketName, isDisa
           .deleteFileObject(selectedUploadedFileResponse, bucketName)
           .then(() => {
             toast.success('File deleted successfully');
+            onClear();
           })
           .catch((err) => {
             toast.error(`Error while deleting file: ${err.message}`, { autoClose: false });
           });
       }
-      // If you need to delete the file from server, add that logic here
     },
   };
 
