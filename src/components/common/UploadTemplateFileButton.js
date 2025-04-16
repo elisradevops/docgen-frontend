@@ -23,18 +23,18 @@ const StyledButton = styled(Button)(({ theme }) => ({
   padding: theme.spacing(1.5),
 }));
 
-const UploadFileButton = ({ store, onNewFileUpload }) => {
+const UploadTemplateFileButton = ({ store, onNewFileUpload, bucketName }) => {
   const handleUpload = async (event) => {
     if (event.target.files?.length > 0) {
       const file = event.target.files[0];
       if (file) {
         try {
-          const response = await store.uploadTemplateFile(file);
+          const response = await store.uploadFile(file, bucketName);
           const { fileItem } = response.data;
           onNewFileUpload(fileItem);
-          toast.success('Template file uploaded successfully');
+          toast.success('File uploaded successfully');
         } catch (err) {
-          toast.error(`Error while uploading template ${err.message}`, { autoClose: false });
+          toast.error(`Error while uploading file ${err.message}`, { autoClose: false });
           logger.error('Error uploading file:', err.message);
           //Refresh the template list
           onNewFileUpload(null);
@@ -59,4 +59,4 @@ const UploadFileButton = ({ store, onNewFileUpload }) => {
   );
 };
 
-export default UploadFileButton;
+export default UploadTemplateFileButton;

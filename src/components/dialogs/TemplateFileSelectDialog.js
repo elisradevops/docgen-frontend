@@ -11,7 +11,7 @@ import {
   TextField,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
-import UploadFileButton from '../common/UploadFileButton';
+import UploadTemplateFileButton from '../common/UploadTemplateFileButton';
 import Subject from '@mui/icons-material/Subject';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -140,9 +140,10 @@ export const TemplateFileSelectDialog = ({
                 xs={4}
               >
                 {selectedTeamProject ? (
-                  <UploadFileButton
+                  <UploadTemplateFileButton
                     store={store}
                     onNewFileUpload={handleNewFileUploaded}
+                    bucketName={'templates'}
                   />
                 ) : (
                   <Alert severity='info'>For upload a new template please select a project</Alert>

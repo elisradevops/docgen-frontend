@@ -227,10 +227,10 @@ export const deleteFavoriteFromDb = async (id) => {
   }
 };
 
-export const uploadTemplateToStorage = async (formData) => {
+export const uploadFileToStorage = async (formData) => {
   try {
     // Iterate through formData to check if the file was appended correctly
-    return await axios.post(`${C.jsonDocument_url}/minio/templates/uploadTemplate`, formData, {
+    return await axios.post(`${C.jsonDocument_url}/minio/files/uploadFile`, formData, {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Content-Type': 'multipart/form-data',
@@ -251,10 +251,10 @@ export const uploadTemplateToStorage = async (formData) => {
   }
 };
 
-export const deleteTemplateFile = async (template, projectName) => {
+export const deleteFile = async (file, projectName, bucketName) => {
   try {
     return await axios.delete(
-      `${C.jsonDocument_url}/minio/templates/deleteTemplate/${projectName}/${template.etag}`,
+      `${C.jsonDocument_url}/minio/files/deleteFile/${bucketName}/${projectName}/${file.etag}`,
       headers
     );
   } catch (err) {
@@ -265,7 +265,7 @@ export const deleteTemplateFile = async (template, projectName) => {
       throw new Error(errorMessage);
     } else {
       // Something else happened during the request setup
-      logger.error(`Error while deleting template file: ${err.message}`);
+      logger.error(`Error while deleting file: ${err.message}`);
       throw new Error(err.message);
     }
   }

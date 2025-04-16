@@ -181,6 +181,7 @@ const PipelineSelector = observer(
             rangeType: 'pipeline',
             linkTypeFilterArray: null,
             systemOverviewQuery: queriesRequest,
+            attachmentWikiUrl: store.attachmentWikiUrl,
           },
         },
         contentControlIndex
