@@ -6,12 +6,7 @@ import logger from '../../utils/logger';
 
 const UploadAttachmentFileButton = ({ store, onNewFileUpload, bucketName, isDisabled }) => {
   const [fileList, setFileList] = useState([]);
-  const [isDisabledState, setIsDisabledState] = useState(isDisabled); // Use prop to set initial state
   const [selectedUploadedFileResponse, setSelectedUploadedFileResponse] = useState(null);
-
-  useEffect(() => {
-    setIsDisabledState(isDisabled); // Update state when prop changes
-  }, [isDisabled]);
 
   // Define allowed file types
   const allowedTypes = [
@@ -97,7 +92,7 @@ const UploadAttachmentFileButton = ({ store, onNewFileUpload, bucketName, isDisa
   return (
     <Upload {...uploadProps}>
       <Button
-        disabled={isDisabledState}
+        disabled={isDisabled}
         icon={<UploadOutlined />}
       >
         Upload Installation Wiki File
