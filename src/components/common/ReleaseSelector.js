@@ -26,74 +26,68 @@ const ReleaseSelector = observer(
     const [endPointReleaseHistory, setEndPointRunHistory] = useState([]);
     const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 
-    const handleStartPointReleaseSelect = (value, releaseDefinitionHistoryData = null) => {
-      if (value.key === '') {
-        setSelectedReleaseHistoryStart(defaultSelectedItem);
-        return;
-      }
-      const currentReleaseDefinitionHistory = releaseDefinitionHistoryData || releaseDefinitionHistory;
+    const handleStartPointReleaseSelect = useCallback(
+      (value, releaseDefinitionHistoryData = null) => {
+        if (value.key === '') {
+          setSelectedReleaseHistoryStart(defaultSelectedItem);
+          return;
+        }
+        const currentReleaseDefinitionHistory = releaseDefinitionHistoryData || releaseDefinitionHistory;
 
-      const releaseExists = currentReleaseDefinitionHistory.some((release) => release.id === value?.key);
+        const releaseExists = currentReleaseDefinitionHistory.some((release) => release.id === value?.key);
 
-      if (!releaseExists) {
-        toast.warn(`Release with ID ${value?.key} not found in available releases`);
-        setSelectedReleaseHistoryStart(defaultSelectedItem);
-        return;
-      }
+        if (!releaseExists) {
+          toast.warn(`Release with ID ${value?.key} not found in available releases`);
+          setSelectedReleaseHistoryStart(defaultSelectedItem);
+          return;
+        }
 
-      setSelectedReleaseHistoryStart(value);
+        setSelectedReleaseHistoryStart(value);
 
-      const filteredHistory = currentReleaseDefinitionHistory.filter((run) => run.id > value.key);
-      const sortedHistory = [...filteredHistory].sort((a, b) => b.name.localeCompare(a.name));
-      setEndPointRunHistory(sortedHistory);
-    };
+        const filteredHistory = currentReleaseDefinitionHistory.filter((run) => run.id > value.key);
+        const sortedHistory = [...filteredHistory].sort((a, b) => b.name.localeCompare(a.name));
+        setEndPointRunHistory(sortedHistory);
+      },
+      [releaseDefinitionHistory]
+    );
 
-    const handleOnReleaseSelect = async (value) => {
-      // First validate the release definition exists in the release list
-      const releaseExists = store.releaseDefinitionList.some((release) => release.id === value?.key);
-
-      if (!releaseExists) {
-        console.warn(`Release definition with ID ${value?.key} not found in available releases`);
-        return [];
-      }
-
-      const historyData = await store.fetchReleaseDefinitionHistory(value.key);
-      setReleaseDefinitionHistory(historyData || []);
-      if (value.text) {
-        let convertedRelease = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
-        store.setContextName(`release-${convertedRelease}`);
-      }
-      setSelectedReleaseDefinition(value);
-      return historyData || [];
-    };
-
-    //Reading the loaded selected favorite data
-    useEffect(() => {
-      if (!dataToRead) return;
-      loadSavedData(dataToRead);
-    }, [dataToRead, store.releaseDefinitionList]);
-
-    const loadSavedData = useCallback(
-      async (data) => {
-        try {
-          if (!validateReleaseExists(data.selectedRelease)) {
-            return;
-          }
-
-          const releaseHistoryData = await handleOnReleaseSelect(data.selectedRelease);
-
-          if (!releaseHistoryData || releaseHistoryData.length === 0) {
-            toast.warn(`No release history data found for release ${data.selectedRelease.key}`);
-            return;
-          }
-
-          processReleaseSelections(data, releaseHistoryData);
-        } catch (error) {
-          console.error('Error loading saved data:', error.message);
-          toast.error(`Error loading saved data: ${error.message}`, { autoClose: false });
+    const processEndReleaseSelection = useCallback(
+      (endReleaseId, startReleaseId, endReleaseExists, releaseHistoryData) => {
+        if (endReleaseExists && endReleaseId > startReleaseId) {
+          const selectedEndRelease = releaseHistoryData.find((release) => release.id === endReleaseId);
+          setSelectedReleaseHistoryEnd({
+            key: selectedEndRelease.id,
+            text: selectedEndRelease.name,
+          });
+        } else if (endReleaseExists) {
+          toast.warn(`End release with ID ${endReleaseId} is not after start release ID ${startReleaseId}`);
+        } else {
+          toast.warn(`End release with ID ${endReleaseId} not found in release history data`);
         }
       },
-      [handleOnReleaseSelect, store.releaseDefinitionList]
+      []
+    );
+
+    const handleOnReleaseSelect = useCallback(
+      async (value) => {
+        // First validate the release definition exists in the release list
+        const releaseExists = store.releaseDefinitionList.some((release) => release.id === value?.key);
+
+        if (!releaseExists) {
+          console.warn(`Release definition with ID ${value?.key} not found in available releases`);
+          return [];
+        }
+
+        const historyData = await store.fetchReleaseDefinitionHistory(value.key);
+        setReleaseDefinitionHistory(historyData || []);
+        if (value.text) {
+          let convertedRelease = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
+          store.setContextName(`release-${convertedRelease}`);
+        }
+        setSelectedReleaseDefinition(value);
+        return historyData || [];
+      },
+      [store]
     );
 
     const validateReleaseExists = useCallback(
@@ -132,33 +126,39 @@ const ReleaseSelector = observer(
           setSelectedReleaseHistoryEnd(defaultSelectedItem);
         }
       },
-      [handleStartPointReleaseSelect]
+      [handleStartPointReleaseSelect, processEndReleaseSelection]
     );
 
-    const processEndReleaseSelection = useCallback(
-      (endReleaseId, startReleaseId, endReleaseExists, releaseHistoryData) => {
-        if (endReleaseExists && endReleaseId > startReleaseId) {
-          const selectedEndRelease = releaseHistoryData.find((release) => release.id === endReleaseId);
-          setSelectedReleaseHistoryEnd({
-            key: selectedEndRelease.id,
-            text: selectedEndRelease.name,
-          });
-        } else if (endReleaseExists) {
-          toast.warn(`End release with ID ${endReleaseId} is not after start release ID ${startReleaseId}`);
-        } else {
-          toast.warn(`End release with ID ${endReleaseId} not found in release history data`);
+    const loadSavedData = useCallback(
+      async (data) => {
+        try {
+          if (!validateReleaseExists(data.selectedRelease)) {
+            return;
+          }
+
+          const releaseHistoryData = await handleOnReleaseSelect(data.selectedRelease);
+
+          if (!releaseHistoryData || releaseHistoryData.length === 0) {
+            toast.warn(`No release history data found for release ${data.selectedRelease.key}`);
+            return;
+          }
+
+          processReleaseSelections(data, releaseHistoryData);
+        } catch (error) {
+          console.error('Error loading saved data:', error.message);
+          toast.error(`Error loading saved data: ${error.message}`, { autoClose: false });
         }
       },
-      []
+      [handleOnReleaseSelect, processReleaseSelections, validateReleaseExists]
     );
 
+    //Reading the loaded selected favorite data
     useEffect(() => {
-      if (editingMode === false) {
-        UpdateDocumentRequestObject();
-      }
-    }, [selectedReleaseDefinition, selectedReleaseHistoryStart, selectedReleaseHistoryEnd]);
+      if (!dataToRead) return;
+      loadSavedData(dataToRead);
+    }, [dataToRead, loadSavedData, store.releaseDefinitionList]);
 
-    function UpdateDocumentRequestObject() {
+    const UpdateDocumentRequestObject = useCallback(() => {
       addToDocumentRequestObject(
         {
           type: 'change-description-table',
@@ -177,7 +177,31 @@ const ReleaseSelector = observer(
         },
         contentControlIndex
       );
-    }
+    }, [
+      addToDocumentRequestObject,
+      contentControlTitle,
+      skin,
+      contentHeadingLevel,
+      selectedReleaseDefinition,
+      selectedReleaseHistoryStart.key,
+      selectedReleaseHistoryEnd.key,
+      queriesRequest,
+      store.attachmentWikiUrl,
+      contentControlIndex,
+    ]);
+
+    useEffect(() => {
+      if (editingMode === false) {
+        UpdateDocumentRequestObject();
+      }
+    }, [
+      selectedReleaseDefinition,
+      selectedReleaseHistoryStart,
+      selectedReleaseHistoryEnd,
+      store.attachmentWikiUrl,
+      editingMode,
+      UpdateDocumentRequestObject,
+    ]);
 
     return (
       <div>

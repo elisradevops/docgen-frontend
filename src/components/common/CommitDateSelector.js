@@ -101,6 +101,7 @@ const CommitDateSelector = observer(
       includeChangeDescription,
       includeCommittedBy,
       editingMode,
+      store.attachmentWikiUrl,
       UpdateDocumentRequestObject,
     ]);
 
