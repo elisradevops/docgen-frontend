@@ -104,7 +104,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   const handleTemplateDelete = (template) => {
     setDeletingTemplateEtag(template.etag);
     store
-      .deleteTemplate(template)
+      .deleteFileObject(template, 'templates')
       .then((res) => {
         toast.success('Template deleted successfully');
       })

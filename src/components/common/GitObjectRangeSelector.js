@@ -191,6 +191,7 @@ const GitObjectRangeSelector = observer(
             rangeType: 'range',
             linkTypeFilterArray: null,
             systemOverviewQuery: queriesRequest,
+            attachmentWikiUrl: store.attachmentWikiUrl,
           },
         },
         contentControlIndex

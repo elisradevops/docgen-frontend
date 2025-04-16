@@ -8,6 +8,8 @@ import { Autocomplete, Box, Checkbox, Collapse, FormControlLabel, TextField } fr
 import PullRequestSelector from './PullRequestSelector';
 import QueryTree from './QueryTree';
 import { toast } from 'react-toastify';
+import UploadAttachmentFileButton from './UploadAttachmentFileButton';
+import logger from '../../utils/logger';
 
 const baseChangeTableDataType = [
   { key: 0, text: 'git-object-range', type: 'range' },
@@ -27,6 +29,7 @@ const ChangeTableSelector = observer(
     store,
     contentControlType,
     contentControlSkin,
+    selectedTeamProject,
     contentControlTitle,
     editingMode,
     addToDocumentRequestObject,
@@ -114,6 +117,12 @@ const ChangeTableSelector = observer(
       setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: query }));
     };
 
+    const handleNewFileUploaded = (fileObject) => {
+      if (fileObject) {
+        store.setAttachmentWiki(fileObject?.url);
+      }
+    };
+
     return (
       <>
         <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -179,6 +188,14 @@ const ChangeTableSelector = observer(
               />
             )}
           </Collapse>
+        </Box>
+        <Box sx={{ my: 1, display: 'flex', flexDirection: 'column' }}>
+          <UploadAttachmentFileButton
+            store={store}
+            onNewFileUpload={handleNewFileUploaded}
+            bucketName={`wiki-attachments`}
+            isDisabled={!selectedTeamProject}
+          />
         </Box>
         <br />
         <div>

@@ -138,6 +138,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         return (
           <ChangeTableSelector
             key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
+            selectedTeamProject={selectedTeamProject}
             store={store}
             type={formControl.type}
             skin={formControl.skin}

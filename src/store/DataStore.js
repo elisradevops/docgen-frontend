@@ -7,8 +7,8 @@ import {
   getJSONContentFromFile,
   sendDocumentTogenerator,
   createIfBucketDoesentExsist,
-  uploadTemplateToStorage,
-  deleteTemplateFile,
+  uploadFileToStorage,
+  deleteFile,
   getFavoriteList,
   deleteFavoriteFromDb,
   createFavorite,
@@ -49,6 +49,7 @@ class DocGenDataStore {
       loadingState: observable,
       favoriteList: observable,
       selectedFavorite: observable,
+      attachmentWikiUrl: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -80,12 +81,13 @@ class DocGenDataStore {
       setDocType: action,
       setContextName: action,
       fetchLoadingState: action,
-      uploadTemplateFile: action,
+      uploadFile: action,
       fetchUserDetails: action,
       fetchFavoritesList: action,
       deleteFavorite: action,
       saveFavorite: action,
       loadFavorite: action,
+      setAttachmentWiki: action,
     });
     makeLoggable(this);
     this.fetchDocFolders();
@@ -123,6 +125,7 @@ class DocGenDataStore {
   loadingState = { sharedQueriesLoadingState: false };
   favoriteList = [];
   selectedFavorite = null;
+  attachmentWikiUrl = ''; //for setting the wiki url for attachments
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -504,8 +507,8 @@ class DocGenDataStore {
   }
 
   //Delete template file
-  async deleteTemplate(template) {
-    return await deleteTemplateFile(template, this.teamProjectName);
+  async deleteFileObject(file, bucketName) {
+    return await deleteFile(file, this.teamProjectName, bucketName);
   }
 
   async fetchGitObjectRefsByType(selectedRepo, gitObjectType) {
@@ -577,13 +580,20 @@ class DocGenDataStore {
     this.selectedFavorite = this.favoriteList.find((fav) => fav.id === favoriteId);
   }
 
-  async uploadTemplateFile(file) {
+  setAttachmentWiki(attachmentWikiUrl) {
+    const fixedUrl = attachmentWikiUrl.replaceAll(' ', '%20');
+    this.attachmentWikiUrl = fixedUrl;
+  }
+
+  async uploadFile(file, bucketName) {
     const formData = new FormData();
+    await createIfBucketDoesentExsist(bucketName);
     formData.append('file', file);
     formData.append('docType', this.docType);
     formData.append('teamProjectName', this.teamProjectName);
     formData.append('isExternal', false);
-    return await uploadTemplateToStorage(formData);
+    formData.append('bucketName', bucketName);
+    return await uploadFileToStorage(formData);
   }
 
   setDocType(docType) {

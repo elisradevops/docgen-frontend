@@ -43,44 +43,7 @@ const CommitDateSelector = observer(
 
     const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 
-    useEffect(() => {
-      if (editingMode === false) {
-        UpdateDocumentRequestObject();
-      }
-    }, [
-      selectedRepo,
-      selectedBranch,
-      selectedStartDate,
-      selectedEndDate,
-      includePullRequests,
-      includeChangeDescription,
-      includeCommittedBy,
-    ]);
-
-    //Reading the loaded selected favorite data
-    useEffect(async () => {
-      if (dataToRead) {
-        setSelectedRepo({
-          key: dataToRead.repoId,
-          text: repoList.find((repo) => repo.id === dataToRead.repoId).name,
-        });
-
-        await store.fetchGitRepoBrances(dataToRead.repoId);
-        let splitName = dataToRead.branchName.split('/');
-        let indexAfterHeads = splitName.indexOf('heads') + 1;
-        let elementsAfterHeads = splitName.slice(indexAfterHeads).join('/');
-        setSelectedBranch({ key: elementsAfterHeads, text: elementsAfterHeads });
-
-        setSelectedStartDate(new Date(dataToRead.from));
-        setSelectedEndDate(new Date(dataToRead.to));
-
-        setIncludePullRequests(dataToRead.includePullRequests);
-        setIncludeChangeDescription(dataToRead.includeChangeDescription);
-        setIncludeCommittedBy(dataToRead.includeCommittedBy);
-      }
-    }, [dataToRead, store]);
-
-    function UpdateDocumentRequestObject() {
+    const UpdateDocumentRequestObject = React.useCallback(() => {
       if (selectedRepo.text) {
         let convertedText = selectedRepo.text.trim().replace(/\./g, '-').replace(/\s/g, '_');
         store.setContextName(`commit-date-${convertedText}-${selectedBranch.text}`);
@@ -103,11 +66,69 @@ const CommitDateSelector = observer(
             includeChangeDescription: includeChangeDescription,
             includeCommittedBy: includeCommittedBy,
             systemOverviewQuery: queriesRequest,
+            attachmentWikiUrl: store.attachmentWikiUrl,
           },
         },
         contentControlIndex
       );
-    }
+    }, [
+      selectedRepo,
+      selectedBranch,
+      selectedStartDate,
+      selectedEndDate,
+      includePullRequests,
+      includeChangeDescription,
+      includeCommittedBy,
+      contentControlTitle,
+      skin,
+      contentHeadingLevel,
+      queriesRequest,
+      store,
+      addToDocumentRequestObject,
+      contentControlIndex,
+    ]);
+
+    useEffect(() => {
+      if (editingMode === false) {
+        UpdateDocumentRequestObject();
+      }
+    }, [
+      selectedRepo,
+      selectedBranch,
+      selectedStartDate,
+      selectedEndDate,
+      includePullRequests,
+      includeChangeDescription,
+      includeCommittedBy,
+      editingMode,
+      UpdateDocumentRequestObject,
+    ]);
+
+    //Reading the loaded selected favorite data
+    useEffect(() => {
+      async function fetchData() {
+        if (dataToRead) {
+          setSelectedRepo({
+            key: dataToRead.repoId,
+            text: repoList.find((repo) => repo.id === dataToRead.repoId).name,
+          });
+
+          await store.fetchGitRepoBrances(dataToRead.repoId);
+          let splitName = dataToRead.branchName.split('/');
+          let indexAfterHeads = splitName.indexOf('heads') + 1;
+          let elementsAfterHeads = splitName.slice(indexAfterHeads).join('/');
+          setSelectedBranch({ key: elementsAfterHeads, text: elementsAfterHeads });
+
+          setSelectedStartDate(new Date(dataToRead.from));
+          setSelectedEndDate(new Date(dataToRead.to));
+
+          setIncludePullRequests(dataToRead.includePullRequests);
+          setIncludeChangeDescription(dataToRead.includeChangeDescription);
+          setIncludeCommittedBy(dataToRead.includeCommittedBy);
+        }
+      }
+      fetchData();
+    }, [dataToRead, store, repoList]);
 
     return (
       <div>

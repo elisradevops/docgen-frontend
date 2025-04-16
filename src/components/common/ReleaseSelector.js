@@ -172,6 +172,7 @@ const ReleaseSelector = observer(
             rangeType: 'release',
             linkTypeFilterArray: null,
             systemOverviewQuery: queriesRequest,
+            attachmentWikiUrl: store.attachmentWikiUrl,
           },
         },
         contentControlIndex
