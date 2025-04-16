@@ -38,90 +38,61 @@ const GitObjectRangeSelector = observer(
     const [sourceGitRefOptions, setSourceGitRefOptions] = useState([]);
     const [targetGitRefOptions, setTargetGitRefOptions] = useState([]);
 
-    useEffect(() => {
-      if (editingMode === false) {
-        UpdateDocumentRequestObject();
+    const UpdateDocumentRequestObject = useCallback(() => {
+      if (selectedRepo.text) {
+        let convertedText = selectedRepo.text.replace(/\./g, '-').replace(/\s/g, '_');
+        store.setContextName(`git-object-range-${convertedText}`);
       }
-    }, [selectedRepo, gitRefState]);
+      addToDocumentRequestObject(
+        {
+          type: 'change-description-table',
+          title: contentControlTitle,
+          skin: skin,
+          headingLevel: 1,
+          data: {
+            repoId: selectedRepo.key,
+            from: {
+              type: gitRefState.source.gitObjType.key,
+              ref: gitRefState.source.gitObjRef.key,
+            },
+            fromText: gitRefState.source.gitObjRef.text,
+            to: {
+              type: gitRefState.target.gitObjType.key,
+              ref: gitRefState.target.gitObjRef.key,
+            },
+            toText: gitRefState.target.gitObjRef.text,
+            rangeType: 'range',
+            linkTypeFilterArray: null,
+            systemOverviewQuery: queriesRequest,
+            attachmentWikiUrl: store.attachmentWikiUrl,
+          },
+        },
+        contentControlIndex
+      );
+    }, [
+      selectedRepo.text,
+      selectedRepo.key,
+      addToDocumentRequestObject,
+      contentControlTitle,
+      skin,
+      gitRefState.source.gitObjType.key,
+      gitRefState.source.gitObjRef.key,
+      gitRefState.source.gitObjRef.text,
+      gitRefState.target.gitObjType.key,
+      gitRefState.target.gitObjRef.key,
+      gitRefState.target.gitObjRef.text,
+      queriesRequest,
+      store,
+      contentControlIndex,
+    ]);
 
-    //Reading the loaded selected favorite data
-    useEffect(() => {
-      if (!dataToRead) return;
-
-      processGitData(dataToRead);
-    }, [dataToRead, store.repoList]);
-
-    // Helper functions with useCallback
-    const processGitData = useCallback(
-      async (data) => {
-        try {
-          const repoList = store.repoList;
-
-          // Set the selected repo
-          const repoObj = findRepoById(repoList, data.repoId);
-          setSelectedRepo(repoObj ? { key: repoObj.id, text: repoObj.name } : undefined);
-
-          // Find the corresponding objects for gitObjTypes
-          const fromTypeObj = findGitObjectType(data.from?.type);
-          const toTypeObj = findGitObjectType(data.to?.type);
-
-          // Load reference options and set state
-          await loadReferenceOptions(repoObj, fromTypeObj, toTypeObj, data);
-        } catch (error) {
-          console.error('Error processing git data:', error);
-          toast.error('Failed to load git configuration');
-        }
-      },
-      [store]
-    );
+    const findGitObjectType = useCallback((typeKey) => {
+      return gitObjType.find((type) => type.key === typeKey) || { key: typeKey || '', text: '' };
+    }, []);
 
     const findRepoById = useCallback((repoList, repoId) => {
       const repo = repoList.find((repo) => repo.id === repoId);
       return repo || { id: repoId, name: '' };
-    }, []);
-
-    const findGitObjectType = useCallback(
-      (typeKey) => {
-        return gitObjType.find((type) => type.key === typeKey) || { key: typeKey || '', text: '' };
-      },
-      [gitObjType]
-    );
-
-    const loadReferenceOptions = useCallback(async (repoObj, fromTypeObj, toTypeObj, data) => {
-      try {
-        // Load source references
-        const sourceOptions = await loadReferencesForType(repoObj.name, fromTypeObj.key);
-        setSourceGitRefOptions(sourceOptions);
-
-        // Load target references
-        const targetOptions = await loadReferencesForType(repoObj.name, toTypeObj.key);
-        setTargetGitRefOptions(targetOptions);
-
-        // Process source reference
-        const fromRefObj = processReference(
-          sourceOptions,
-          data.from?.ref,
-          `Source ${data.from?.type}`,
-          defaultItem
-        );
-
-        // Process target reference
-        const toRefObj = processReference(
-          targetOptions,
-          data.to?.ref,
-          `Target ${data.to?.type}`,
-          defaultItem
-        );
-
-        // Set complete state structure
-        setGitRefState({
-          source: { gitObjType: fromTypeObj, gitObjRef: fromRefObj },
-          target: { gitObjType: toTypeObj, gitObjRef: toRefObj },
-        });
-      } catch (error) {
-        console.error('Error loading references:', error);
-        toast.error('Failed to load git references');
-      }
     }, []);
 
     const loadReferencesForType = useCallback(
@@ -158,45 +129,89 @@ const GitObjectRangeSelector = observer(
       };
     }, []);
 
+    const loadReferenceOptions = useCallback(
+      async (repoObj, fromTypeObj, toTypeObj, data) => {
+        try {
+          // Load source references
+          const sourceOptions = await loadReferencesForType(repoObj.name, fromTypeObj.key);
+          setSourceGitRefOptions(sourceOptions);
+
+          // Load target references
+          const targetOptions = await loadReferencesForType(repoObj.name, toTypeObj.key);
+          setTargetGitRefOptions(targetOptions);
+
+          // Process source reference
+          const fromRefObj = processReference(
+            sourceOptions,
+            data.from?.ref,
+            `Source ${data.from?.type}`,
+            defaultItem
+          );
+
+          // Process target reference
+          const toRefObj = processReference(
+            targetOptions,
+            data.to?.ref,
+            `Target ${data.to?.type}`,
+            defaultItem
+          );
+
+          // Set complete state structure
+          setGitRefState({
+            source: { gitObjType: fromTypeObj, gitObjRef: fromRefObj },
+            target: { gitObjType: toTypeObj, gitObjRef: toRefObj },
+          });
+        } catch (error) {
+          console.error('Error loading references:', error);
+          toast.error('Failed to load git references');
+        }
+      },
+      [loadReferencesForType, processReference]
+    );
+
+    // Helper functions with useCallback
+    const processGitData = useCallback(
+      async (data) => {
+        try {
+          const repoList = store.repoList;
+
+          // Set the selected repo
+          const repoObj = findRepoById(repoList, data.repoId);
+          setSelectedRepo(repoObj ? { key: repoObj.id, text: repoObj.name } : undefined);
+
+          // Find the corresponding objects for gitObjTypes
+          const fromTypeObj = findGitObjectType(data.from?.type);
+          const toTypeObj = findGitObjectType(data.to?.type);
+
+          // Load reference options and set state
+          await loadReferenceOptions(repoObj, fromTypeObj, toTypeObj, data);
+        } catch (error) {
+          console.error('Error processing git data:', error);
+          toast.error('Failed to load git configuration');
+        }
+      },
+      [findGitObjectType, findRepoById, loadReferenceOptions, store.repoList]
+    );
+
+    useEffect(() => {
+      if (editingMode === false) {
+        UpdateDocumentRequestObject();
+      }
+    }, [selectedRepo, gitRefState, editingMode, UpdateDocumentRequestObject, store?.attachmentWikiUrl]);
+
+    //Reading the loaded selected favorite data
+    useEffect(() => {
+      if (!dataToRead) return;
+
+      processGitData(dataToRead);
+    }, [dataToRead, processGitData, store.repoList]);
+
     useEffect(() => {
       // Reset the git ref state when a new repo is selected
       if (!dataToRead && selectedRepo.key !== '') {
         setGitRefState(defaultGitRefState);
       }
     }, [dataToRead, selectedRepo]);
-
-    function UpdateDocumentRequestObject() {
-      if (selectedRepo.text) {
-        let convertedText = selectedRepo.text.replace(/\./g, '-').replace(/\s/g, '_');
-        store.setContextName(`git-object-range-${convertedText}`);
-      }
-      addToDocumentRequestObject(
-        {
-          type: 'change-description-table',
-          title: contentControlTitle,
-          skin: skin,
-          headingLevel: 1,
-          data: {
-            repoId: selectedRepo.key,
-            from: {
-              type: gitRefState.source.gitObjType.key,
-              ref: gitRefState.source.gitObjRef.key,
-            },
-            fromText: gitRefState.source.gitObjRef.text,
-            to: {
-              type: gitRefState.target.gitObjType.key,
-              ref: gitRefState.target.gitObjRef.key,
-            },
-            toText: gitRefState.target.gitObjRef.text,
-            rangeType: 'range',
-            linkTypeFilterArray: null,
-            systemOverviewQuery: queriesRequest,
-            attachmentWikiUrl: store.attachmentWikiUrl,
-          },
-        },
-        contentControlIndex
-      );
-    }
 
     return (
       <div>

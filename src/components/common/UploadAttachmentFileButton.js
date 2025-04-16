@@ -1,6 +1,6 @@
 import { Upload, Button } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'react-toastify';
 import logger from '../../utils/logger';
 

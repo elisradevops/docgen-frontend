@@ -38,6 +38,12 @@ export default function SVDGuide() {
             secondary='Select a predefined known possible bugs query from TFS'
           />
         </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Upload Installation Instructions File'
+            secondary='Upload a file containing installation instructions (*.doc, *.docx, *.pdf, *.txt file extensions are allowed)'
+          />
+        </ListItem>
         <ListItemButton onClick={handleBaseDataTypes}>
           <ListItemIcon>{openBaseDataTypes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText

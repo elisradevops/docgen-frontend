@@ -32,7 +32,15 @@ const PipelineSelector = observer(
       if (editingMode === false) {
         UpdateDocumentRequestObject();
       }
-    }, [pipelineRunHistory, selectedPipeline, selectedPipelineRunStart, selectedPipelineRunEnd]);
+    }, [
+      pipelineRunHistory,
+      selectedPipeline,
+      selectedPipelineRunStart,
+      selectedPipelineRunEnd,
+      store.attachmentWikiUrl,
+      editingMode,
+      UpdateDocumentRequestObject,
+    ]);
 
     const handleOnPipelineSelect = async (value) => {
       // First validate the pipeline exists in the pipeline list
