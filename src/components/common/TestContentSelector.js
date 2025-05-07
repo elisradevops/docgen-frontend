@@ -45,8 +45,74 @@ const TestContentSelector = observer(
     const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
     const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
     const [includeRequirements, setIncludeRequirements] = useState(false);
+    const [includeLinkedMom, setIncludeLinkedMom] = useState(false);
     const [includeCustomerId, setIncludeCustomerId] = useState(false);
     const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
+    const UpdateDocumentRequestObject = useCallback(() => {
+      let testSuiteIdList = undefined;
+      let nonRecursiveTestSuiteIdList = undefined;
+      if (isSuiteSpecific) {
+        testSuiteIdList = []; // Initialize only if the checkbox is checked
+        nonRecursiveTestSuiteIdList = [];
+        // Function to recursively add children suites
+        const addChildrenSuites = (suiteId) => {
+          const suite = store.testSuiteList?.find((suite) => suite.id === suiteId);
+          if (suite && !testSuiteIdList.includes(suiteId)) {
+            testSuiteIdList.push(suiteId);
+            const children = store.testSuiteList?.filter((child) => child.parent === suiteId);
+            children.forEach((child) => {
+              addChildrenSuites(child.id);
+            });
+          }
+        };
+
+        // Add suites selected and their children
+        selectedTestSuites.forEach((suite) => {
+          nonRecursiveTestSuiteIdList.push(suite.id);
+          addChildrenSuites(suite.id);
+        });
+      }
+      addToDocumentRequestObject(
+        {
+          type: type,
+          title: contentControlTitle,
+          skin: skin,
+          headingLevel: contentHeadingLevel,
+          data: {
+            testPlanId: selectedTestPlan.key,
+            testSuiteArray: testSuiteIdList,
+            nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
+            includeAttachments: includeAttachments,
+            attachmentType: attachmentType,
+            includeHardCopyRun: includeHardCopyRun,
+            includeAttachmentContent: includeAttachmentContent,
+            includeRequirements: includeRequirements,
+            includeLinkedMom: includeLinkedMom,
+            includeCustomerId: includeCustomerId,
+            traceAnalysisRequest: traceAnalysisRequest,
+          },
+        },
+        contentControlIndex
+      );
+    }, [
+      isSuiteSpecific,
+      selectedTestSuites,
+      store.testSuiteList,
+      addToDocumentRequestObject,
+      type,
+      contentControlTitle,
+      skin,
+      contentHeadingLevel,
+      selectedTestPlan,
+      includeAttachments,
+      attachmentType,
+      includeHardCopyRun,
+      includeAttachmentContent,
+      includeRequirements,
+      includeCustomerId,
+      traceAnalysisRequest,
+      contentControlIndex,
+    ]);
 
     useEffect(() => {
       if (editingMode === false) {
@@ -63,36 +129,21 @@ const TestContentSelector = observer(
       includeRequirements,
       includeCustomerId,
       traceAnalysisRequest,
+      editingMode,
+      UpdateDocumentRequestObject,
     ]);
 
-    async function handleTestPlanChanged(value) {
-      await store.fetchTestSuitesList(value.key);
-      if (value.text) {
-        let testPlanNameForFile = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
-        store.setContextName(testPlanNameForFile);
-      }
-      setSelectedTestPlan(value);
-    }
-
-    //Reading the loaded selected favorite data
-    useEffect(() => {
-      if (store.selectedFavorite?.dataToSave) {
-        loadSavedData(store.selectedFavorite.dataToSave);
-      }
-    }, [store.selectedFavorite]);
-
-    // Move async logic outside the effect
-    const loadSavedData = useCallback(async (dataToSave) => {
-      try {
-        await processTestPlanSelection(dataToSave);
-        processGeneralSettings(dataToSave);
-        processTraceAnalysisRequest(dataToSave.traceAnalysisRequest);
-        processTestSuiteSelections(dataToSave);
-      } catch (error) {
-        console.error('Error loading saved data:', error);
-        toast.error(`Error loading favorite data: ${error.message}`);
-      }
-    }, []);
+    const handleTestPlanChanged = useCallback(
+      async (value) => {
+        await store.fetchTestSuitesList(value.key);
+        if (value.text) {
+          let testPlanNameForFile = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
+          store.setContextName(testPlanNameForFile);
+        }
+        setSelectedTestPlan(value);
+      },
+      [store]
+    );
 
     // Process test plan selection
     const processTestPlanSelection = useCallback(
@@ -166,7 +217,7 @@ const TestContentSelector = observer(
 
         setTraceAnalysisRequest(validatedRequest);
       },
-      [store.sharedQueries?.acquiredTrees]
+      [store.sharedQueries]
     );
 
     // Process test suite selections
@@ -189,52 +240,33 @@ const TestContentSelector = observer(
       [store.getTestSuiteList]
     );
 
-    function UpdateDocumentRequestObject() {
-      let testSuiteIdList = undefined;
-      let nonRecursiveTestSuiteIdList = undefined;
-      if (isSuiteSpecific) {
-        testSuiteIdList = []; // Initialize only if the checkbox is checked
-        nonRecursiveTestSuiteIdList = [];
-        // Function to recursively add children suites
-        const addChildrenSuites = (suiteId) => {
-          const suite = store.testSuiteList?.find((suite) => suite.id === suiteId);
-          if (suite && !testSuiteIdList.includes(suiteId)) {
-            testSuiteIdList.push(suiteId);
-            const children = store.testSuiteList?.filter((child) => child.parent === suiteId);
-            children.forEach((child) => {
-              addChildrenSuites(child.id);
-            });
-          }
-        };
+    // Move async logic outside the effect
+    const loadSavedData = useCallback(
+      async (dataToSave) => {
+        try {
+          await processTestPlanSelection(dataToSave);
+          processGeneralSettings(dataToSave);
+          processTraceAnalysisRequest(dataToSave.traceAnalysisRequest);
+          processTestSuiteSelections(dataToSave);
+        } catch (error) {
+          console.error('Error loading saved data:', error);
+          toast.error(`Error loading favorite data: ${error.message}`);
+        }
+      },
+      [
+        processGeneralSettings,
+        processTestPlanSelection,
+        processTestSuiteSelections,
+        processTraceAnalysisRequest,
+      ]
+    );
 
-        // Add suites selected and their children
-        selectedTestSuites.forEach((suite) => {
-          nonRecursiveTestSuiteIdList.push(suite.id);
-          addChildrenSuites(suite.id);
-        });
+    //Reading the loaded selected favorite data
+    useEffect(() => {
+      if (store.selectedFavorite?.dataToSave) {
+        loadSavedData(store.selectedFavorite.dataToSave);
       }
-      addToDocumentRequestObject(
-        {
-          type: type,
-          title: contentControlTitle,
-          skin: skin,
-          headingLevel: contentHeadingLevel,
-          data: {
-            testPlanId: selectedTestPlan.key,
-            testSuiteArray: testSuiteIdList,
-            nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
-            includeAttachments: includeAttachments,
-            attachmentType: attachmentType,
-            includeHardCopyRun: includeHardCopyRun,
-            includeAttachmentContent: includeAttachmentContent,
-            includeRequirements: includeRequirements,
-            includeCustomerId: includeCustomerId,
-            traceAnalysisRequest: traceAnalysisRequest,
-          },
-        },
-        contentControlIndex
-      );
-    }
+    }, [loadSavedData, store.selectedFavorite]);
 
     const generateIncludedTraceAnalysisSettings = () => {
       const settings = [];
@@ -412,6 +444,19 @@ const TestContentSelector = observer(
               />
             </Box>
           )}
+        </div>
+        <div>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={includeLinkedMom}
+                onChange={(event, checked) => {
+                  setIncludeLinkedMom(checked);
+                }}
+              />
+            }
+            label='Include Linked Mom'
+          />
         </div>
         <div>
           <FormControlLabel

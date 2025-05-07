@@ -126,7 +126,12 @@ export default function STDGuide() {
             </ListItem>
           </List>
         </Collapse>
-
+        <ListItem>
+          <ListItemText
+            primary='Include Linked Mom'
+            secondary='Include linked Work Item (Task/Bug) in the STD document.'
+          />
+        </ListItem>
         <ListItem>
           <ListItemText
             primary='Enable Suite Specific Selection - Optional'
