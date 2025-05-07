@@ -45,6 +45,11 @@ const ChangeTableSelector = observer(
     const [loadedData, setLoadedData] = useState(undefined);
     const [includeSystemOverview, setIncludeSystemOverview] = useState(false);
     const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
+
+    useEffect(() => {
+      handleClearAttachment();
+    }, []); // Empty dependency array ensures this runs only on mount
+
     useEffect(() => {
       const acquiredTrees = sharedQueries.acquiredTrees;
       acquiredTrees !== null
