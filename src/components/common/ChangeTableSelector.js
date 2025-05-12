@@ -4,12 +4,20 @@ import CommitDateSelector from './CommitDateSelector';
 import PipelineSelector from './PipelineSelector';
 import ReleaseSelector from './ReleaseSelector';
 import { observer } from 'mobx-react';
-import { Autocomplete, Box, Checkbox, Collapse, FormControlLabel, TextField } from '@mui/material';
+import {
+  Autocomplete,
+  Box,
+  Checkbox,
+  Collapse,
+  FormControlLabel,
+  TextField,
+  Typography,
+} from '@mui/material';
 import PullRequestSelector from './PullRequestSelector';
 import QueryTree from './QueryTree';
 import { toast } from 'react-toastify';
 import UploadAttachmentFileButton from './UploadAttachmentFileButton';
-import logger from '../../utils/logger';
+import LinkedWiSelectionDialog from '../dialogs/LinkedWiSelectionDialog';
 
 const baseChangeTableDataType = [
   { key: 0, text: 'git-object-range', type: 'range' },
@@ -23,6 +31,8 @@ const defaultSelectedQueriesForChangeTableSelector = {
   sysOverviewQuery: null,
   knownBugsQuery: null,
 };
+
+const defaultLinkedWiOptions = { isEnabled: false, linkedWiTypes: 'both', linkedWiRelationship: 'both' };
 
 const ChangeTableSelector = observer(
   ({
@@ -45,10 +55,50 @@ const ChangeTableSelector = observer(
     const [loadedData, setLoadedData] = useState(undefined);
     const [includeSystemOverview, setIncludeSystemOverview] = useState(false);
     const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
+    const [linkedWiOptions, setLinkedWiOptions] = useState(defaultLinkedWiOptions);
+    const handleClearAttachment = useCallback(() => {
+      store.setAttachmentWiki(undefined);
+    }, [store]);
 
     useEffect(() => {
       handleClearAttachment();
-    }, []); // Empty dependency array ensures this runs only on mount
+    }, [handleClearAttachment]); // Empty dependency array ensures this runs only on mount
+    const onSelectedSystemOverviewQuery = useCallback((query) => {
+      setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: query }));
+    }, []);
+
+    const onSelectedKnownBugsQuery = useCallback((query) => {
+      setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: query }));
+    }, []);
+    // Helper functions outside the effect (but inside the component)
+    const processSystemOverviewData = useCallback(
+      (systemOverviewQuery) => {
+        if (!systemOverviewQuery) {
+          setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
+          return;
+        }
+
+        setIncludeSystemOverview(systemOverviewQuery.sysOverviewQuery);
+        setIncludeKnownBugs(systemOverviewQuery.knownBugsQuery);
+        onSelectedSystemOverviewQuery(systemOverviewQuery.sysOverviewQuery);
+        onSelectedKnownBugsQuery(systemOverviewQuery.knownBugsQuery);
+      },
+      [onSelectedSystemOverviewQuery, onSelectedKnownBugsQuery]
+    );
+
+    const processLinkedWiOptions = useCallback((linkedWiOptions) => {
+      setLinkedWiOptions(linkedWiOptions);
+    }, []);
+
+    const processRangeTypeSelection = useCallback(({ rangeType }) => {
+      const selectedTypeObject = baseChangeTableDataType.find((item) => item.type === rangeType);
+
+      if (!selectedTypeObject) {
+        throw new Error('Range type not supported');
+      }
+
+      setSelectedType(selectedTypeObject);
+    }, []);
 
     useEffect(() => {
       const acquiredTrees = sharedQueries.acquiredTrees;
@@ -74,6 +124,8 @@ const ChangeTableSelector = observer(
         // Extract and process system overview query data
         processSystemOverviewData(dataToSave.systemOverviewQuery);
 
+        processLinkedWiOptions(dataToSave.linkedWiOptions);
+
         // Process range type selection
         processRangeTypeSelection(dataToSave);
 
@@ -83,44 +135,12 @@ const ChangeTableSelector = observer(
         toast.error('Error processing favorite data:', error);
         setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
       }
-    }, [store.selectedFavorite]); // Only depend on the selected favorite
-
-    // Helper functions outside the effect (but inside the component)
-    const processSystemOverviewData = useCallback(
-      (systemOverviewQuery) => {
-        if (!systemOverviewQuery) {
-          setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
-          return;
-        }
-
-        setIncludeSystemOverview(systemOverviewQuery.sysOverviewQuery);
-        setIncludeKnownBugs(systemOverviewQuery.knownBugsQuery);
-        onSelectedSystemOverviewQuery(systemOverviewQuery.sysOverviewQuery);
-        onSelectedKnownBugsQuery(systemOverviewQuery.knownBugsQuery);
-      },
-      [onSelectedSystemOverviewQuery, onSelectedKnownBugsQuery]
-    );
-
-    const processRangeTypeSelection = useCallback(
-      ({ rangeType }) => {
-        const selectedTypeObject = baseChangeTableDataType.find((item) => item.type === rangeType);
-
-        if (!selectedTypeObject) {
-          throw new Error('Range type not supported');
-        }
-
-        setSelectedType(selectedTypeObject);
-      },
-      [baseChangeTableDataType]
-    );
-
-    const onSelectedSystemOverviewQuery = (query) => {
-      setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: query }));
-    };
-
-    const onSelectedKnownBugsQuery = (query) => {
-      setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: query }));
-    };
+    }, [
+      processLinkedWiOptions,
+      processRangeTypeSelection,
+      processSystemOverviewData,
+      store.selectedFavorite,
+    ]); // Only depend on the selected favorite
 
     const handleNewFileUploaded = (fileObject) => {
       if (fileObject) {
@@ -128,8 +148,43 @@ const ChangeTableSelector = observer(
       }
     };
 
-    const handleClearAttachment = () => {
-      store.setAttachmentWiki(undefined);
+    const generateIncludedLinkedWorkItemSelection = () => {
+      const settings = [];
+      if (linkedWiOptions.isEnabled) {
+        if (linkedWiOptions.linkedWiTypes !== 'both') {
+          settings.push(
+            `Include ${
+              linkedWiOptions.linkedWiTypes !== 'reqOnly' ? 'Feature Only' : 'Requirement Only'
+            } linked items`
+          );
+        } else {
+          settings.push('Include both Feature and Requirement linked items');
+        }
+
+        if (linkedWiOptions.linkedWiRelationship !== 'both') {
+          settings.push(
+            `Include ${
+              linkedWiOptions.linkedWiRelationship !== 'affectsOnly' ? 'Affects Only' : 'Covers Only'
+            } Related items`
+          );
+        } else {
+          settings.push('Include both Affects and Covers related items');
+        }
+      }
+
+      return (
+        <Box>
+          <Typography
+            variant='subtitle2'
+            color='textSecondary'
+            sx={{ whiteSpace: 'pre-line' }}
+          >
+            {linkedWiOptions.isEnabled && settings.length > 0
+              ? `Included:\n${settings.join('\n')}`
+              : 'Linked work items are not included'}
+          </Typography>
+        </Box>
+      );
     };
 
     return (
@@ -207,6 +262,13 @@ const ChangeTableSelector = observer(
             isDisabled={!selectedTeamProject}
           />
         </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', width: 300 }}>
+          <LinkedWiSelectionDialog
+            prevOptions={linkedWiOptions}
+            setOptions={setLinkedWiOptions}
+          />
+          <div>{generateIncludedLinkedWorkItemSelection()}</div>
+        </Box>
         <br />
         <div>
           <div>
@@ -241,6 +303,7 @@ const ChangeTableSelector = observer(
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
+                linkedWiOptions={linkedWiOptions}
               />
             ) : null}
             {selectedType?.type === 'date' ? (
@@ -254,6 +317,7 @@ const ChangeTableSelector = observer(
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
+                linkedWiOptions={linkedWiOptions}
               />
             ) : null}
             {selectedType?.type === 'pipeline' ? (
@@ -266,6 +330,7 @@ const ChangeTableSelector = observer(
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
+                linkedWiOptions={linkedWiOptions}
               />
             ) : null}
             {selectedType?.type === 'release' ? (
@@ -278,6 +343,7 @@ const ChangeTableSelector = observer(
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
+                linkedWiOptions={linkedWiOptions}
               />
             ) : null}
             {selectedType?.type === 'pullrequest' ? (
@@ -293,6 +359,7 @@ const ChangeTableSelector = observer(
                 contentControlIndex={contentControlIndex}
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
+                linkedWiOptions={linkedWiOptions}
               />
             ) : null}
           </div>

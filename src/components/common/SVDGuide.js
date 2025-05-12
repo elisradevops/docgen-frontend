@@ -44,6 +44,12 @@ export default function SVDGuide() {
             secondary='Upload a file containing installation instructions (*.doc, *.docx, *.pdf, *.txt file extensions are allowed)'
           />
         </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Linked Work Item Selection'
+            secondary='Include linked work items in the SVD. Select the linked work item types (Feature, Requirement) and relationship types (Affects, Covered) to include.'
+          />
+        </ListItem>
         <ListItemButton onClick={handleBaseDataTypes}>
           <ListItemIcon>{openBaseDataTypes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
