@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PrimaryButton } from '@fluentui/react';
-import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import { observer } from 'mobx-react';
@@ -21,12 +20,46 @@ const PipelineSelector = observer(
     contentControlIndex,
     queriesRequest,
     dataToRead,
+    linkedWiOptions,
   }) => {
     const [pipelineRunHistory, setPipelineRunHistory] = useState([]);
     const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
     const [endPointRunHistory, setEndPointRunHistory] = useState([]);
     const [selectedPipelineRunStart, setSelectedPipelineRunStart] = useState(defaultSelectedItem);
     const [selectedPipelineRunEnd, setSelectedPipelineRunEnd] = useState(defaultSelectedItem);
+
+    const UpdateDocumentRequestObject = useCallback(() => {
+      addToDocumentRequestObject(
+        {
+          type: 'change-description-table',
+          title: contentControlTitle,
+          skin: skin,
+          headingLevel: 1,
+          data: {
+            selectedPipeline: selectedPipeline,
+            from: selectedPipelineRunStart.key,
+            to: selectedPipelineRunEnd.key,
+            rangeType: 'pipeline',
+            linkTypeFilterArray: null,
+            systemOverviewQuery: queriesRequest,
+            attachmentWikiUrl: store.attachmentWikiUrl,
+            linkedWiOptions: linkedWiOptions,
+          },
+        },
+        contentControlIndex
+      );
+    }, [
+      addToDocumentRequestObject,
+      contentControlTitle,
+      skin,
+      selectedPipeline,
+      selectedPipelineRunStart.key,
+      selectedPipelineRunEnd.key,
+      queriesRequest,
+      store.attachmentWikiUrl,
+      linkedWiOptions,
+      contentControlIndex,
+    ]);
 
     useEffect(() => {
       if (editingMode === false) {
@@ -42,86 +75,6 @@ const PipelineSelector = observer(
       UpdateDocumentRequestObject,
     ]);
 
-    const handleOnPipelineSelect = async (value) => {
-      // First validate the pipeline exists in the pipeline list
-      const pipelineExists = store.pipelineList.some((pipeline) => pipeline.id === value?.key);
-
-      if (!pipelineExists) {
-        toast.warn(`Pipeline with ID ${value?.key} not found in available pipelines`);
-        return [];
-      }
-
-      // Proceed with fetching pipeline data
-      const pipelineData = await store.fetchPipelineRunHistory(value.key);
-      setPipelineRunHistory(pipelineData || []);
-
-      if (value.text) {
-        let convertedPipeline = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
-        store.setContextName(`pipeline-${convertedPipeline}`);
-      }
-
-      setSelectedPipeline(value);
-      return pipelineData || []; // Return the pipeline data or empty array
-    };
-
-    const handleStartPointPipelineSelect = (newValue, runHistoryData = null) => {
-      // Validate newValue exists in the run history
-      const currentRunHistoryList = runHistoryData || pipelineRunHistory;
-      const runExists = currentRunHistoryList.some((run) => run.id === newValue?.key);
-
-      if (!runExists) {
-        toast.warn(`Pipeline run with ID ${newValue?.key} not found in pipeline history`);
-        // Optionally set to first available run or do nothing
-        if (currentRunHistoryList.length > 0) {
-          const firstRun = currentRunHistoryList[0];
-          newValue = {
-            key: firstRun.id,
-            text: firstRun.name,
-          };
-        } else {
-          return; // No valid runs available
-        }
-      }
-
-      setSelectedPipelineRunStart(newValue);
-
-      // Filter runs for end point selection (only runs after selected start point)
-      const filteredHistory = [...currentRunHistoryList].filter((run) => run.id > newValue.key);
-
-      // Create a new array for sorting to avoid MobX errors
-      const sortedHistory = [...filteredHistory].sort((a, b) => b.name.localeCompare(a.name));
-
-      setEndPointRunHistory(sortedHistory);
-    };
-
-    //Reading the loaded selected favorite data
-    useEffect(() => {
-      if (!dataToRead) return;
-      loadSavedData(dataToRead);
-    }, [dataToRead, store.pipelineList]);
-
-    const loadSavedData = useCallback(
-      async (data) => {
-        try {
-          if (!validatePipelineExists(data.selectedPipeline)) {
-            return;
-          }
-
-          const pipelineData = await handleOnPipelineSelect(data.selectedPipeline);
-
-          if (!pipelineData || pipelineData.length === 0) {
-            toast.warn(`No pipeline run data found for pipeline ${data.selectedPipeline.key}`);
-            return;
-          }
-
-          await processRunSelections(data, pipelineData);
-        } catch (error) {
-          toast.error(`Error loading pipeline data: ${error.message}`);
-        }
-      },
-      [handleOnPipelineSelect]
-    );
-
     const validatePipelineExists = useCallback(
       (selectedPipeline) => {
         if (
@@ -135,7 +88,52 @@ const PipelineSelector = observer(
       },
       [store.pipelineList]
     );
+    const processEndRunSelection = useCallback((endRunId, startRunId, endRunExists, pipelineData) => {
+      if (endRunExists && endRunId > startRunId) {
+        const selectedEndPipeline = pipelineData.find((run) => run.id === endRunId);
+        setSelectedPipelineRunEnd({
+          key: selectedEndPipeline.id,
+          text: selectedEndPipeline.name,
+        });
+      } else if (endRunExists) {
+        toast.warn(`End run with ID ${endRunId} is not after start run ID ${startRunId}`);
+      } else {
+        toast.warn(`End run with ID ${endRunId} not found in pipeline data`);
+      }
+    }, []);
 
+    const handleStartPointPipelineSelect = useCallback(
+      (newValue, runHistoryData = null) => {
+        // Validate newValue exists in the run history
+        const currentRunHistoryList = runHistoryData || pipelineRunHistory;
+        const runExists = currentRunHistoryList.some((run) => run.id === newValue?.key);
+
+        if (!runExists) {
+          toast.warn(`Pipeline run with ID ${newValue?.key} not found in pipeline history`);
+          // Optionally set to first available run or do nothing
+          if (currentRunHistoryList.length > 0) {
+            const firstRun = currentRunHistoryList[0];
+            newValue = {
+              key: firstRun.id,
+              text: firstRun.name,
+            };
+          } else {
+            return; // No valid runs available
+          }
+        }
+
+        setSelectedPipelineRunStart(newValue);
+
+        // Filter runs for end point selection (only runs after selected start point)
+        const filteredHistory = [...currentRunHistoryList].filter((run) => run.id > newValue.key);
+
+        // Create a new array for sorting to avoid MobX errors
+        const sortedHistory = [...filteredHistory].sort((a, b) => b.name.localeCompare(a.name));
+
+        setEndPointRunHistory(sortedHistory);
+      },
+      [pipelineRunHistory]
+    );
     const processRunSelections = useCallback(
       async (data, pipelineData) => {
         const startRunExists = pipelineData.some((run) => run.id === data.from);
@@ -158,43 +156,61 @@ const PipelineSelector = observer(
           setSelectedPipelineRunEnd(defaultSelectedItem);
         }
       },
-      [handleStartPointPipelineSelect]
+      [handleStartPointPipelineSelect, processEndRunSelection]
     );
 
-    const processEndRunSelection = useCallback((endRunId, startRunId, endRunExists, pipelineData) => {
-      if (endRunExists && endRunId > startRunId) {
-        const selectedEndPipeline = pipelineData.find((run) => run.id === endRunId);
-        setSelectedPipelineRunEnd({
-          key: selectedEndPipeline.id,
-          text: selectedEndPipeline.name,
-        });
-      } else if (endRunExists) {
-        toast.warn(`End run with ID ${endRunId} is not after start run ID ${startRunId}`);
-      } else {
-        toast.warn(`End run with ID ${endRunId} not found in pipeline data`);
-      }
-    }, []);
+    const handleOnPipelineSelect = useCallback(
+      async (value) => {
+        // First validate the pipeline exists in the pipeline list
+        const pipelineExists = store.pipelineList.some((pipeline) => pipeline.id === value?.key);
 
-    function UpdateDocumentRequestObject() {
-      addToDocumentRequestObject(
-        {
-          type: 'change-description-table',
-          title: contentControlTitle,
-          skin: skin,
-          headingLevel: 1,
-          data: {
-            selectedPipeline: selectedPipeline,
-            from: selectedPipelineRunStart.key,
-            to: selectedPipelineRunEnd.key,
-            rangeType: 'pipeline',
-            linkTypeFilterArray: null,
-            systemOverviewQuery: queriesRequest,
-            attachmentWikiUrl: store.attachmentWikiUrl,
-          },
-        },
-        contentControlIndex
-      );
-    }
+        if (!pipelineExists) {
+          toast.warn(`Pipeline with ID ${value?.key} not found in available pipelines`);
+          return [];
+        }
+
+        // Proceed with fetching pipeline data
+        const pipelineData = await store.fetchPipelineRunHistory(value.key);
+        setPipelineRunHistory(pipelineData || []);
+
+        if (value.text) {
+          let convertedPipeline = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
+          store.setContextName(`pipeline-${convertedPipeline}`);
+        }
+
+        setSelectedPipeline(value);
+        return pipelineData || []; // Return the pipeline data or empty array
+      },
+      [store]
+    ); // Add 'store' as a dependency
+
+    const loadSavedData = useCallback(
+      async (data) => {
+        try {
+          if (!validatePipelineExists(data.selectedPipeline)) {
+            return;
+          }
+
+          const pipelineData = await handleOnPipelineSelect(data.selectedPipeline);
+
+          if (!pipelineData || pipelineData.length === 0) {
+            toast.warn(`No pipeline run data found for pipeline ${data.selectedPipeline.key}`);
+            return;
+          }
+
+          await processRunSelections(data, pipelineData);
+        } catch (error) {
+          toast.error(`Error loading pipeline data: ${error.message}`);
+        }
+      },
+      [handleOnPipelineSelect, processRunSelections, validatePipelineExists]
+    );
+
+    //Reading the loaded selected favorite data
+    useEffect(() => {
+      if (!dataToRead) return;
+      loadSavedData(dataToRead);
+    }, [dataToRead, store.pipelineList, loadSavedData]);
 
     return (
       <div>
