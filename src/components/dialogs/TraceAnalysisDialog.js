@@ -16,6 +16,7 @@ import {
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import React, { useEffect, useState } from 'react';
 import QueryTree from '../common/QueryTree';
+import logger from '../../utils/logger';
 import { observer } from 'mobx-react';
 
 const defaultSelectedQueries = {

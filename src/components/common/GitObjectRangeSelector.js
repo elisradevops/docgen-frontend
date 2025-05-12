@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PrimaryButton } from '@fluentui/react';
 import { Grid, Divider, TextField, Autocomplete, Typography, Tooltip } from '@mui/material';
+import logger from '../../utils/logger';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
 const gitObjType = [
@@ -29,7 +30,6 @@ const GitObjectRangeSelector = observer(
     contentControlIndex,
     queriesRequest,
     dataToRead = undefined,
-    linkedWiOptions,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState(defaultItem);
 
@@ -65,7 +65,6 @@ const GitObjectRangeSelector = observer(
             linkTypeFilterArray: null,
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
-            linkedWiOptions: linkedWiOptions,
           },
         },
         contentControlIndex
@@ -84,7 +83,6 @@ const GitObjectRangeSelector = observer(
       gitRefState.target.gitObjRef.text,
       queriesRequest,
       store,
-      linkedWiOptions,
       contentControlIndex,
     ]);
 

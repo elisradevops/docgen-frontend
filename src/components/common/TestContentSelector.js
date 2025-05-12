@@ -96,23 +96,22 @@ const TestContentSelector = observer(
       );
     }, [
       isSuiteSpecific,
+      selectedTestSuites,
+      store.testSuiteList,
       addToDocumentRequestObject,
       type,
       contentControlTitle,
       skin,
       contentHeadingLevel,
-      selectedTestPlan.key,
+      selectedTestPlan,
       includeAttachments,
       attachmentType,
       includeHardCopyRun,
       includeAttachmentContent,
       includeRequirements,
-      includeLinkedMom,
       includeCustomerId,
       traceAnalysisRequest,
       contentControlIndex,
-      selectedTestSuites,
-      store.testSuiteList,
     ]);
 
     useEffect(() => {

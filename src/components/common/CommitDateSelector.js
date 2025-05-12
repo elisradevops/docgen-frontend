@@ -22,7 +22,6 @@ const CommitDateSelector = observer(
     contentControlIndex,
     queriesRequest,
     dataToRead,
-    linkedWiOptions,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
       key: '',
@@ -68,28 +67,24 @@ const CommitDateSelector = observer(
             includeCommittedBy: includeCommittedBy,
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
-            linkedWiOptions: linkedWiOptions,
           },
         },
         contentControlIndex
       );
     }, [
-      selectedRepo.text,
-      selectedRepo.key,
-      addToDocumentRequestObject,
-      contentControlTitle,
-      skin,
-      contentHeadingLevel,
+      selectedRepo,
+      selectedBranch,
       selectedStartDate,
       selectedEndDate,
-      selectedBranch.key,
-      selectedBranch.text,
       includePullRequests,
       includeChangeDescription,
       includeCommittedBy,
+      contentControlTitle,
+      skin,
+      contentHeadingLevel,
       queriesRequest,
       store,
-      linkedWiOptions,
+      addToDocumentRequestObject,
       contentControlIndex,
     ]);
 
