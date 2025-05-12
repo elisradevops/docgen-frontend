@@ -18,6 +18,7 @@ const ReleaseSelector = observer(
     contentControlIndex,
     queriesRequest,
     dataToRead,
+    linkedWiOptions,
   }) => {
     const [releaseDefinitionHistory, setReleaseDefinitionHistory] = useState([]);
     const [selectedReleaseDefinition, setSelectedReleaseDefinition] = useState(defaultSelectedItem);
@@ -173,6 +174,7 @@ const ReleaseSelector = observer(
             linkTypeFilterArray: null,
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
+            linkedWiOptions: linkedWiOptions,
           },
         },
         contentControlIndex
@@ -187,6 +189,7 @@ const ReleaseSelector = observer(
       selectedReleaseHistoryEnd.key,
       queriesRequest,
       store.attachmentWikiUrl,
+      linkedWiOptions,
       contentControlIndex,
     ]);
 
