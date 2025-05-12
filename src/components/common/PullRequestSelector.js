@@ -23,7 +23,6 @@ const PullRequestSelector = observer(
     contentControlIndex,
     queriesRequest,
     dataToRead,
-    linkedWiOptions,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
       key: '',
@@ -54,7 +53,6 @@ const PullRequestSelector = observer(
             linkTypeFilterArray: null,
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
-            linkedWiOptions: linkedWiOptions,
           },
         },
         contentControlIndex
