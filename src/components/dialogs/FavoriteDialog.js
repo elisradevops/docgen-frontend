@@ -13,7 +13,7 @@ import {
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import logger from '../../utils/logger';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CachedIcon from '@mui/icons-material/Cached';
@@ -27,10 +27,10 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
   const [loadingFavoriteList, setLoadingFavoriteList] = useState(false);
   const [newFavoriteLoading, setNewFavoriteLoading] = useState(false);
   const [newFavoriteName, setNewFavoriteName] = useState('');
-  const [isShared, setIsShared] = useState(false);
+  const [isShared, setIsShared] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
 
-  const fetchFavorites = async () => {
+  const fetchFavorites = useCallback(async () => {
     setLoadingFavoriteList(true);
 
     try {
@@ -43,20 +43,20 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
     } finally {
       setLoadingFavoriteList(false);
     }
-  };
+  }, [store]);
 
   // Refactor the useEffect to not be directly async
   useEffect(() => {
     if (docType) {
       fetchFavorites();
     }
-  }, [store, selectedTeamProject, docType]);
+  }, [store, selectedTeamProject, docType, fetchFavorites]);
 
   useEffect(() => {
     if (openDialog) {
       setSelectedFavorite(null);
       setNewFavoriteName('');
-      setIsShared(false);
+      setIsShared(true);
     }
   }, [openDialog]);
 
