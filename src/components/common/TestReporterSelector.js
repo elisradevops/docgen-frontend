@@ -32,6 +32,7 @@ const TestReporterSelector = observer(
   ({ store, selectedTeamProject, addToDocumentRequestObject, contentControlIndex }) => {
     const [selectedTestPlan, setSelectedTestPlan] = useState(defaultItem);
     const [selectedTestSuites, setSelectedTestSuites] = useState([]);
+    const [enableRunTestCaseFilter, setEnableRunTestCaseFilter] = useState(false);
     const [enableRunStepStatusFilter, setEnableRunStepStatusFilter] = useState(false);
     const [selectedFields, setSelectedFields] = useState([]);
 
@@ -88,8 +89,12 @@ const TestReporterSelector = observer(
 
     const processFilters = useCallback((dataToSave) => {
       const runStepStatusFilter = dataToSave?.enableRunStepStatusFilter;
+      const runTestCaseFilter = dataToSave?.enableRunTestCaseFilter;
       if (runStepStatusFilter !== undefined) {
         setEnableRunStepStatusFilter(runStepStatusFilter);
+      }
+      if (runTestCaseFilter !== undefined) {
+        setEnableRunTestCaseFilter(runTestCaseFilter);
       }
     }, []);
 
@@ -142,6 +147,7 @@ const TestReporterSelector = observer(
               testPlanId: selectedTestPlan.key,
               testSuiteArray: testSuiteIdList,
               nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
+              enableRunTestCaseFilter: enableRunTestCaseFilter,
               enableRunStepStatusFilter: enableRunStepStatusFilter,
               selectedFields: selectedFields,
             },
@@ -159,6 +165,7 @@ const TestReporterSelector = observer(
       addToDocumentRequestObject,
       enableRunStepStatusFilter,
       contentControlIndex,
+      enableRunTestCaseFilter,
     ]);
 
     return (
@@ -238,6 +245,19 @@ const TestReporterSelector = observer(
             xs={4}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <div>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={enableRunTestCaseFilter}
+                      onChange={(event, checked) => {
+                        setEnableRunTestCaseFilter(checked);
+                      }}
+                    />
+                  }
+                  label='Filter Out Not Run Test Cases'
+                />
+              </div>
               <div>
                 <FormControlLabel
                   control={
