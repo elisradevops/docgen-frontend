@@ -23,9 +23,12 @@ const fieldsToSelect = [
   { text: 'Run By', key: 'runBy@runResultField' },
   { text: 'Configuration', key: 'configurationName@runResultField' },
   { text: 'Automation Status', key: 'Microsoft.VSTS.TCM.AutomationStatus@testCaseWorkItemField' },
+  { text: 'Assigned To', key: 'System.AssignedTo@testCaseWorkItemField' },
+  { text: 'SubSystem', key: 'Custom.SubSystem@testCaseWorkItemField' },
   { text: 'Priority', key: 'priority@runResultField' },
   { text: 'Associated Requirement', key: 'associatedRequirement@linked' },
   { text: 'Associated Bug', key: 'associatedBug@linked' },
+  { text: 'Associated CR', key: 'associatedCR@linked' },
 ];
 
 const TestReporterSelector = observer(
