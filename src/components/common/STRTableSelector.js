@@ -13,6 +13,7 @@ import DetailedStepsSettingsDialog from '../dialogs/DetailedStepsSettingsDialog'
 import { observer } from 'mobx-react';
 import { validateQuery } from '../../utils/queryValidation';
 import { toast } from 'react-toastify';
+import OpenPcrDialog from '../dialogs/OpenPcrDialog';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
@@ -38,6 +39,13 @@ const initialStepsAnalysisState = {
   isGenerateLinkPcrsEnabled: false,
 };
 
+const defaultSelectedQueries = {
+  openPcrMode: 'none',
+  testToOpenPcrQuery: null,
+  OpenPcrToTestQuery: null,
+  includeCommonColumnsMode: 'both',
+};
+
 const STRTableSelector = observer(
   ({
     store,
@@ -61,138 +69,16 @@ const STRTableSelector = observer(
     const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
     const [includeConfigurations, setIncludeConfigurations] = useState(false);
     const [includeHierarchy, setIncludeHierarchy] = useState(false);
-    const [includeOpenPCRs, setIncludeOpenPCRs] = useState(false);
-    const [openPCRsSelection, setOpenPCRsSelection] = useState('linked');
+    // const [includeOpenPCRs, setIncludeOpenPCRs] = useState(false);
+    const [openPCRsSelectionRequest, setOpenPCRsSelectionRequest] = useState(defaultSelectedQueries);
+    // const [openPCRsSelection, setOpenPCRsSelection] = useState('linked');
     const [includeTestLog, setIncludeTestLog] = useState(false);
     const [includeHardCopyRun, setIncludeHardCopyRun] = useState(false);
 
     const [stepExecutionState, setStepExecutionState] = useState(initialStepsExecutionState);
     const [stepAnalysisState, setStepAnalysisState] = useState(initialStepsAnalysisState);
 
-    useEffect(() => {
-      if (editingMode === false) {
-        UpdateDocumentRequestObject();
-      }
-    }, [
-      selectedTestPlan,
-      selectedTestSuites,
-      includeConfigurations,
-      includeHierarchy,
-      includeOpenPCRs,
-      openPCRsSelection,
-      includeTestLog,
-      includeHardCopyRun,
-      stepExecutionState,
-      stepAnalysisState,
-    ]);
-    // }, [editingMode]);
-
-    useEffect(() => {
-      if (!store.sharedQueries) return;
-      const { acquiredTrees } = toJS(store.sharedQueries);
-      acquiredTrees !== null
-        ? setQueryTrees(() => ({
-            testReqTree: acquiredTrees.testReqTree ? [acquiredTrees.testReqTree] : [],
-          }))
-        : setQueryTrees(null);
-    }, [store.sharedQueries.acquiredTrees]);
-
-    //For detailed steps execution
-    useEffect(() => {
-      if (!stepExecutionState?.isEnabled) {
-        setStepExecutionState(initialStepsExecutionState);
-      }
-    }, [stepExecutionState.isEnabled]);
-
-    //For detailed steps analysis
-    useEffect(() => {
-      if (!stepAnalysisState.isEnabled) {
-        setStepAnalysisState(initialStepsAnalysisState);
-      }
-    }, [stepAnalysisState.isEnabled]);
-
-    //Reading the loaded selected favorite data
-    useEffect(() => {
-      if (!store.selectedFavorite?.dataToSave) return;
-      loadSavedData(store.selectedFavorite.dataToSave);
-    }, [store.selectedFavorite]);
-
-    const loadSavedData = useCallback(async (dataToSave) => {
-      try {
-        await processTestPlanSelection(dataToSave);
-        processGeneralSettings(dataToSave);
-        await processTestSuiteSelections(dataToSave);
-        processRequirementQueries(dataToSave);
-        setStepExecutionState(dataToSave.stepExecution);
-        setStepAnalysisState(dataToSave.stepAnalysis);
-      } catch (error) {
-        console.error('Error loading saved data:', error);
-        toast.error(`Error loading saved data: ${error.message}`);
-      }
-    }, []);
-
-    const processTestPlanSelection = useCallback(
-      async (dataToSave) => {
-        const testPlan = store.testPlansList.find((testplan) => testplan.id === dataToSave.testPlanId);
-        if (!testPlan) {
-          toast.warn(`Test plan with ID ${dataToSave.testPlanId} not found`);
-          return;
-        }
-        await handleTestPlanChanged({ key: dataToSave.testPlanId, text: testPlan.name });
-      },
-      [store.testPlansList, handleTestPlanChanged]
-    );
-
-    const processGeneralSettings = useCallback((dataToSave) => {
-      setIncludeConfigurations(dataToSave.includeConfigurations);
-      setIncludeHierarchy(dataToSave.includeHierarchy);
-      setIncludeOpenPCRs(dataToSave.includeOpenPCRs);
-      setOpenPCRsSelection(dataToSave.openPCRsSelection);
-      setIncludeTestLog(dataToSave.includeTestLog);
-      setIncludeHardCopyRun(dataToSave.includeHardCopyRun);
-    }, []);
-
-    const processTestSuiteSelections = useCallback(
-      (dataToSave) => {
-        const testSuiteList = store.getTestSuiteList;
-        if (dataToSave?.nonRecursiveTestSuiteIdList?.length > 0) {
-          const validTestSuites = dataToSave.nonRecursiveTestSuiteIdList
-            .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
-            .filter(Boolean);
-
-          if (validTestSuites.length > 0) {
-            setIsSuiteSpecific(true);
-            setSelectedTestSuites(validTestSuites);
-          }
-        } else {
-          setIsSuiteSpecific(false);
-          setSelectedTestSuites([]);
-        }
-      },
-      [store.getTestSuiteList]
-    );
-
-    const processRequirementQueries = useCallback(
-      (dataToSave) => {
-        const testReqQuery = dataToSave.stepExecution?.generateRequirements?.testReqQuery;
-        if (testReqQuery && store.sharedQueries?.acquiredTrees?.testReqTree) {
-          const validTestReqQuery = validateQuery(
-            [store.sharedQueries.acquiredTrees.testReqTree],
-            testReqQuery
-          );
-
-          if (!validTestReqQuery) {
-            toast.warn(
-              `Previously selected Test-Requirement query "${testReqQuery.title}" not found or invalid`
-            );
-          }
-
-          dataToSave.stepExecution.generateRequirements.testReqQuery = validTestReqQuery;
-        }
-      },
-      [store.sharedQueries?.acquiredTrees?.testReqTree]
-    );
-    function UpdateDocumentRequestObject() {
+    const UpdateDocumentRequestObject = useCallback(() => {
       let testSuiteIdList = undefined;
       let nonRecursiveTestSuiteIdList = undefined;
       if (isSuiteSpecific) {
@@ -228,8 +114,9 @@ const STRTableSelector = observer(
             nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
             includeConfigurations: includeConfigurations,
             includeHierarchy: includeHierarchy,
-            includeOpenPCRs: includeOpenPCRs,
-            openPCRsSelection: openPCRsSelection,
+            openPCRsSelectionRequest: openPCRsSelectionRequest,
+            // includeOpenPCRs: includeOpenPCRs,
+            // openPCRsSelection: openPCRsSelection,
             includeTestLog: includeTestLog,
             stepExecution: stepExecutionState,
             stepAnalysis: stepAnalysisState,
@@ -238,33 +125,243 @@ const STRTableSelector = observer(
         },
         contentControlIndex
       );
-    }
+    }, [
+      isSuiteSpecific,
+      store.testSuiteList,
+      selectedTestSuites,
+      addToDocumentRequestObject,
+      type,
+      contentControlTitle,
+      skin,
+      contentHeadingLevel,
+      selectedTestPlan.key,
+      includeConfigurations,
+      includeHierarchy,
+      openPCRsSelectionRequest,
+      includeTestLog,
+      stepExecutionState,
+      stepAnalysisState,
+      includeHardCopyRun,
+      contentControlIndex,
+    ]);
 
-    const openPcrsElements = (
-      <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
-        <RadioGroup
-          defaultValue='query'
-          name='open-pcr-buttons-group'
-          value={openPCRsSelection}
-          onChange={(event) => {
-            setOpenPCRsSelection(event.target.value);
-          }}
-        >
-          <FormControlLabel
-            value='query'
-            label='From Query'
-            control={<Radio />}
-            //TODO: remove this after query open pcr implementation
-            disabled={true}
-          />
-          <FormControlLabel
-            value='linked'
-            label='From Linked CR / Bugs'
-            control={<Radio />}
-          />
-        </RadioGroup>
-      </Box>
+    useEffect(() => {
+      if (editingMode === false) {
+        UpdateDocumentRequestObject();
+      }
+    }, [
+      selectedTestPlan,
+      selectedTestSuites,
+      includeConfigurations,
+      includeHierarchy,
+      includeTestLog,
+      includeHardCopyRun,
+      stepExecutionState,
+      stepAnalysisState,
+      openPCRsSelectionRequest,
+      editingMode,
+      UpdateDocumentRequestObject,
+    ]);
+    // }, [editingMode]);
+
+    useEffect(() => {
+      if (!store.sharedQueries) return;
+      const { acquiredTrees } = toJS(store.sharedQueries);
+      acquiredTrees !== null
+        ? setQueryTrees(() => ({
+            testReqTree: acquiredTrees.reqTestTrees?.testReqTree
+              ? [acquiredTrees.reqTestTrees?.testReqTree]
+              : [],
+          }))
+        : setQueryTrees(null);
+    }, [store.sharedQueries, store.sharedQueries.acquiredTrees]);
+
+    //For detailed steps execution
+    useEffect(() => {
+      if (!stepExecutionState?.isEnabled) {
+        setStepExecutionState(initialStepsExecutionState);
+      }
+    }, [stepExecutionState.isEnabled]);
+
+    //For detailed steps analysis
+    useEffect(() => {
+      if (!stepAnalysisState.isEnabled) {
+        setStepAnalysisState(initialStepsAnalysisState);
+      }
+    }, [stepAnalysisState.isEnabled]);
+
+    const processGeneralSettings = useCallback((dataToSave) => {
+      setIncludeConfigurations(dataToSave.includeConfigurations);
+      setIncludeHierarchy(dataToSave.includeHierarchy);
+      setIncludeTestLog(dataToSave.includeTestLog);
+      setIncludeHardCopyRun(dataToSave.includeHardCopyRun);
+    }, []);
+
+    const processTestSuiteSelections = useCallback(
+      (dataToSave) => {
+        const testSuiteList = store.getTestSuiteList;
+        if (dataToSave?.nonRecursiveTestSuiteIdList?.length > 0) {
+          const validTestSuites = dataToSave.nonRecursiveTestSuiteIdList
+            .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
+            .filter(Boolean);
+
+          if (validTestSuites.length > 0) {
+            setIsSuiteSpecific(true);
+            setSelectedTestSuites(validTestSuites);
+          }
+        } else {
+          setIsSuiteSpecific(false);
+          setSelectedTestSuites([]);
+        }
+      },
+      [store.getTestSuiteList]
     );
+
+    // Validate and process trace analysis request
+    const processOpenPcrRequest = useCallback(
+      (openPCRsSelectionRequest) => {
+        if (!openPCRsSelectionRequest || !store.sharedQueries) return;
+
+        const validatedRequest = { ...openPCRsSelectionRequest };
+        if (
+          openPCRsSelectionRequest.testToOpenPcrQuery &&
+          store.sharedQueries?.acquiredTrees?.TestToOpenPcrTree
+        ) {
+          const validTestOpenPcrQuery = validateQuery(
+            [store.sharedQueries.acquiredTrees.TestToOpenPcrTree],
+            openPCRsSelectionRequest.testToOpenPcrQuery
+          );
+
+          if (!validTestOpenPcrQuery && openPCRsSelectionRequest.testToOpenPcrQuery) {
+            toast.warn(
+              `Previously selected Test - Open PCR query "${openPCRsSelectionRequest.testToOpenPcrQuery.title}" not found or invalid`
+            );
+          }
+          validatedRequest.testToOpenPcrQuery = validTestOpenPcrQuery;
+        }
+
+        if (
+          openPCRsSelectionRequest.OpenPcrToTestQuery &&
+          store.sharedQueries?.acquiredTrees?.OpenPcrToTestTree
+        ) {
+          const validOpenPCRTestQuery = validateQuery(
+            [store.sharedQueries.acquiredTrees.OpenPcrToTestTree],
+            openPCRsSelectionRequest.OpenPcrToTestQuery
+          );
+
+          if (!validOpenPCRTestQuery && openPCRsSelectionRequest.OpenPcrToTestQuery) {
+            toast.warn(
+              `Previously selected Open PCR - Test query "${openPCRsSelectionRequest.OpenPcrToTestQuery.title}" not found or invalid`
+            );
+          }
+          validatedRequest.OpenPcrToTestQuery = validOpenPCRTestQuery;
+        }
+
+        setOpenPCRsSelectionRequest(validatedRequest);
+      },
+      [store.sharedQueries]
+    );
+
+    const processRequirementQueries = useCallback(
+      (dataToSave) => {
+        const testReqQuery = dataToSave.stepExecution?.generateRequirements?.testReqQuery;
+        if (testReqQuery && store.sharedQueries?.acquiredTrees?.reqTestTrees?.testReqTree) {
+          const validTestReqQuery = validateQuery(
+            [store.sharedQueries.acquiredTrees.reqTestTrees.testReqTree],
+            testReqQuery
+          );
+
+          if (!validTestReqQuery) {
+            toast.warn(
+              `Previously selected Test-Requirement query "${testReqQuery.title}" not found or invalid`
+            );
+          }
+
+          dataToSave.stepExecution.generateRequirements.testReqQuery = validTestReqQuery;
+        }
+      },
+      [store.sharedQueries?.acquiredTrees?.reqTestTrees?.testReqTree]
+    );
+    const processTestPlanSelection = useCallback(
+      async (dataToSave) => {
+        const testPlan = store.testPlansList.find((testplan) => testplan.id === dataToSave.testPlanId);
+        if (!testPlan) {
+          toast.warn(`Test plan with ID ${dataToSave.testPlanId} not found`);
+          return;
+        }
+        await handleTestPlanChanged({ key: dataToSave.testPlanId, text: testPlan.name });
+      },
+      [store.testPlansList, handleTestPlanChanged]
+    );
+
+    const loadSavedData = useCallback(
+      async (dataToSave) => {
+        try {
+          await processTestPlanSelection(dataToSave);
+          processGeneralSettings(dataToSave);
+          processOpenPcrRequest(dataToSave.openPCRsSelectionRequest);
+          await processTestSuiteSelections(dataToSave);
+          processRequirementQueries(dataToSave);
+          setStepExecutionState(dataToSave.stepExecution);
+          setStepAnalysisState(dataToSave.stepAnalysis);
+        } catch (error) {
+          console.error('Error loading saved data:', error);
+          toast.error(`Error loading saved data: ${error.message}`);
+        }
+      },
+      [
+        processGeneralSettings,
+        processOpenPcrRequest,
+        processRequirementQueries,
+        processTestPlanSelection,
+        processTestSuiteSelections,
+      ]
+    );
+
+    //Reading the loaded selected favorite data
+    useEffect(() => {
+      if (!store.selectedFavorite?.dataToSave) return;
+      loadSavedData(store.selectedFavorite.dataToSave);
+    }, [loadSavedData, store.selectedFavorite]);
+
+    const generateIncludedOpenPcrSettings = () => {
+      const settings = [];
+      if (openPCRsSelectionRequest.includeCommonColumnsMode !== 'both') {
+        settings.push(
+          `Include Common Columns for ${
+            openPCRsSelectionRequest.includeCommonColumnsMode !== 'openPcrOnly'
+              ? 'Test Case Only'
+              : 'Open PCR Only'
+          }`
+        );
+      }
+      if (openPCRsSelectionRequest.openPcrMode !== 'none') {
+        const traceMode =
+          openPCRsSelectionRequest.openPcrMode === 'query' ? 'from Query' : 'from Linked Requirements';
+        settings.push(`Requirements ${traceMode}`);
+
+        if (openPCRsSelectionRequest.openPcrMode === 'query') {
+          if (openPCRsSelectionRequest.testToOpenPcrQuery?.value) {
+            settings.push(`Test to Open PCR Query: ${openPCRsSelectionRequest.testToOpenPcrQuery.value}`);
+          }
+          if (openPCRsSelectionRequest.OpenPcrToTestQuery?.value) {
+            settings.push(`Open PCR To Test Query: ${openPCRsSelectionRequest.OpenPcrToTestQuery.value}`);
+          }
+        }
+      }
+
+      return (
+        <Box>
+          <Typography
+            variant='subtitle2'
+            color='textSecondary'
+            sx={{ whiteSpace: 'pre-line' }}
+          >
+            {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No trace analysis settings enabled'}
+          </Typography>
+        </Box>
+      );
+    };
 
     const attachmentTypeElements = (attachmentProp) => {
       const getRadioGroup = (name, value, onChange) => (
@@ -349,20 +446,6 @@ const STRTableSelector = observer(
           />
           {stepAnalysisState.generateRunAttachments.isEnabled && attachmentTypeElements('analysis')}
         </div>
-
-        {/*TBD: <div>
-        <FormControlLabel
-          label='Generate Linked PCRs'
-          control={
-            <Checkbox
-              checked={stepAnalysisState.isGenerateLinkPcrsEnabled}
-              onChange={(event, checked) => {
-                setStepAnalysisState((prev) => ({ ...prev, isGenerateLinkPcrsEnabled: checked }));
-              }}
-            />
-          }
-        />
-      </div> */}
       </Box>
     );
 
@@ -529,19 +612,13 @@ const STRTableSelector = observer(
         </div>
 
         <div>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeOpenPCRs}
-                onChange={(event, checked) => {
-                  setIncludeOpenPCRs(checked);
-                }}
-              />
-            }
-            label='Open PCRs'
+          <OpenPcrDialog
+            store={store}
+            sharedQueries={store.sharedQueries}
+            prevOpenPcrRequest={openPCRsSelectionRequest}
+            onOpenPcrChange={setOpenPCRsSelectionRequest}
           />
-
-          {includeOpenPCRs && openPcrsElements}
+          {generateIncludedOpenPcrSettings()}
         </div>
 
         <div>

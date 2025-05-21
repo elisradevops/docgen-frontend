@@ -50,6 +50,10 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
         return 'System Overview';
       case 'known-bugs':
         return 'Possible Known Bugs Queries';
+      case 'openPcr-test':
+        return 'Open PCR to Test Case';
+      case 'test-OpenPcr':
+        return 'Test Case to Open PCR';
       default:
         return 'Default';
     }
