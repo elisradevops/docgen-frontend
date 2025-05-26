@@ -35,6 +35,7 @@ const TestReporterSelector = observer(
   ({ store, selectedTeamProject, addToDocumentRequestObject, contentControlIndex }) => {
     const [selectedTestPlan, setSelectedTestPlan] = useState(defaultItem);
     const [selectedTestSuites, setSelectedTestSuites] = useState([]);
+    const [allowCrossTestPlan, setAllowCrossTestPlan] = useState(false);
     const [enableRunTestCaseFilter, setEnableRunTestCaseFilter] = useState(false);
     const [enableRunStepStatusFilter, setEnableRunStepStatusFilter] = useState(false);
     const [selectedFields, setSelectedFields] = useState([]);
@@ -91,8 +92,12 @@ const TestReporterSelector = observer(
     }, []);
 
     const processFilters = useCallback((dataToSave) => {
+      const allowCrossTestPlan = dataToSave?.allowCrossTestPlan;
       const runStepStatusFilter = dataToSave?.enableRunStepStatusFilter;
       const runTestCaseFilter = dataToSave?.enableRunTestCaseFilter;
+      if (allowCrossTestPlan) {
+        setAllowCrossTestPlan(allowCrossTestPlan);
+      }
       if (runStepStatusFilter !== undefined) {
         setEnableRunStepStatusFilter(runStepStatusFilter);
       }
@@ -150,6 +155,7 @@ const TestReporterSelector = observer(
               testPlanId: selectedTestPlan.key,
               testSuiteArray: testSuiteIdList,
               nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
+              allowCrossTestPlan: allowCrossTestPlan,
               enableRunTestCaseFilter: enableRunTestCaseFilter,
               enableRunStepStatusFilter: enableRunStepStatusFilter,
               selectedFields: selectedFields,
@@ -169,6 +175,7 @@ const TestReporterSelector = observer(
       enableRunStepStatusFilter,
       contentControlIndex,
       enableRunTestCaseFilter,
+      allowCrossTestPlan,
     ]);
 
     return (
@@ -248,6 +255,19 @@ const TestReporterSelector = observer(
             xs={4}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <div>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={allowCrossTestPlan}
+                      onChange={(event, checked) => {
+                        setAllowCrossTestPlan(checked);
+                      }}
+                    />
+                  }
+                  label='Allow Results From Cross Test Plans'
+                />
+              </div>
               <div>
                 <FormControlLabel
                   control={
