@@ -36,6 +36,7 @@ const TestReporterSelector = observer(
     const [selectedTestPlan, setSelectedTestPlan] = useState(defaultItem);
     const [selectedTestSuites, setSelectedTestSuites] = useState([]);
     const [allowCrossTestPlan, setAllowCrossTestPlan] = useState(false);
+    const [allowGrouping, setAllowGrouping] = useState(false);
     const [enableRunTestCaseFilter, setEnableRunTestCaseFilter] = useState(false);
     const [enableRunStepStatusFilter, setEnableRunStepStatusFilter] = useState(false);
     const [selectedFields, setSelectedFields] = useState([]);
@@ -95,8 +96,12 @@ const TestReporterSelector = observer(
       const allowCrossTestPlan = dataToSave?.allowCrossTestPlan;
       const runStepStatusFilter = dataToSave?.enableRunStepStatusFilter;
       const runTestCaseFilter = dataToSave?.enableRunTestCaseFilter;
+      const allowGrouping = dataToSave?.allowGrouping;
       if (allowCrossTestPlan) {
         setAllowCrossTestPlan(allowCrossTestPlan);
+      }
+      if (allowGrouping !== undefined) {
+        setAllowGrouping(allowGrouping);
       }
       if (runStepStatusFilter !== undefined) {
         setEnableRunStepStatusFilter(runStepStatusFilter);
@@ -158,6 +163,7 @@ const TestReporterSelector = observer(
               allowCrossTestPlan: allowCrossTestPlan,
               enableRunTestCaseFilter: enableRunTestCaseFilter,
               enableRunStepStatusFilter: enableRunStepStatusFilter,
+              allowGrouping: allowGrouping,
               selectedFields: selectedFields,
             },
             isExcelSpreadsheet: true,
@@ -176,6 +182,7 @@ const TestReporterSelector = observer(
       contentControlIndex,
       enableRunTestCaseFilter,
       allowCrossTestPlan,
+      allowGrouping,
     ]);
 
     return (
@@ -255,6 +262,19 @@ const TestReporterSelector = observer(
             xs={4}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <div>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={allowGrouping}
+                      onChange={(event, checked) => {
+                        setAllowGrouping(checked);
+                      }}
+                    />
+                  }
+                  label='Allow Grouping by Test Suite'
+                />
+              </div>
               <div>
                 <FormControlLabel
                   control={
