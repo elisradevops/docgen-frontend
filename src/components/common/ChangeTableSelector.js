@@ -87,10 +87,18 @@ const ChangeTableSelector = observer(
     );
 
     const processLinkedWiOptions = useCallback((linkedWiOptions) => {
+      if (!linkedWiOptions) {
+        setLinkedWiOptions(defaultLinkedWiOptions);
+        return;
+      }
       setLinkedWiOptions(linkedWiOptions);
     }, []);
 
     const processRangeTypeSelection = useCallback(({ rangeType }) => {
+      if (!rangeType) {
+        setSelectedType(null);
+        return;
+      }
       const selectedTypeObject = baseChangeTableDataType.find((item) => item.type === rangeType);
 
       if (!selectedTypeObject) {
@@ -150,7 +158,7 @@ const ChangeTableSelector = observer(
 
     const generateIncludedLinkedWorkItemSelection = () => {
       const settings = [];
-      if (linkedWiOptions.isEnabled) {
+      if (linkedWiOptions?.isEnabled) {
         if (linkedWiOptions.linkedWiTypes !== 'both') {
           settings.push(
             `Include ${
@@ -161,7 +169,7 @@ const ChangeTableSelector = observer(
           settings.push('Include both Feature and Requirement linked items');
         }
 
-        if (linkedWiOptions.linkedWiRelationship !== 'both') {
+        if (linkedWiOptions?.linkedWiRelationship !== 'both') {
           settings.push(
             `Include ${
               linkedWiOptions.linkedWiRelationship !== 'affectsOnly' ? 'Affects Only' : 'Covers Only'
@@ -179,7 +187,7 @@ const ChangeTableSelector = observer(
             color='textSecondary'
             sx={{ whiteSpace: 'pre-line' }}
           >
-            {linkedWiOptions.isEnabled && settings.length > 0
+            {linkedWiOptions?.isEnabled && settings.length > 0
               ? `Included:\n${settings.join('\n')}`
               : 'Linked work items are not included'}
           </Typography>
