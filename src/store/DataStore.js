@@ -499,10 +499,19 @@ class DocGenDataStore {
   fetchTemplatesListForDownload() {
     getBucketFileList('templates', null, true, this.teamProjectName, true)
       .then((data) => {
-        data.sort(function (a, b) {
-          return new Date(b.lastModified) - new Date(a.lastModified);
-        });
-        this.templateForDownload = data;
+        // Process the data to fix the URLs
+        const processedData = data
+          .map((item) => {
+            if (item.url && this.teamProjectName) {
+              // Split the URL by the project name and remove the first occurrence
+              const parts = item.url.split(`/${this.teamProjectName}/`);
+              item.url = parts.join(`/`);
+            }
+            return item;
+          })
+          .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+
+        this.templateForDownload = processedData;
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching templates: ${err.message}`);
