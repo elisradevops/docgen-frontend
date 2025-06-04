@@ -570,19 +570,25 @@ class DocGenDataStore {
   }
 
   async saveFavorite(favName, isShared) {
-    if (this.docType !== '' && this.userDetails && this.contentControls?.length > 0) {
-      const item = this.contentControls[0];
-      const { data: dataToSave } = item;
-      await createFavorite(
-        this.userDetails.userId,
-        favName,
-        this.docType,
-        dataToSave,
-        this.teamProject,
-        isShared
-      );
-    } else {
-      logger.debug('Missing required data for saving favorite');
+    try {
+      if (this.docType !== '' && this.userDetails && this.contentControls?.length > 0) {
+        const item = this.contentControls[0];
+        const { data: dataToSave } = item;
+        await createFavorite(
+          this.userDetails.userId,
+          favName,
+          this.docType,
+          dataToSave,
+          this.teamProject,
+          isShared
+        );
+      } else {
+        logger.debug('Missing required data for saving favorite');
+      }
+    } catch (e) {
+      toast.error(`Error while saving favorite: ${e.message}`, {
+        autoClose: false,
+      });
     }
   }
 
