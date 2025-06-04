@@ -122,7 +122,7 @@ class DocGenDataStore {
   releaseDefinitionHistory = []; //release history of a specific Definition
   docType = '';
   contextName = '';
-  loadingState = { sharedQueriesLoadingState: false };
+  loadingState = { sharedQueriesLoadingState: false, testSuiteListLoading: false };
   favoriteList = [];
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
@@ -452,18 +452,23 @@ class DocGenDataStore {
     this.testPlansList = data || [];
   }
 
-  async fetchTestSuitesList(testPlanId) {
-    try {
-      const data = await this.azureRestClient.getTestSuiteByPlanList(this.teamProject, testPlanId);
-
-      data.sort(function (a, b) {
-        return a.parent - b.parent;
+  fetchTestSuitesList(testPlanId) {
+    this.loadingState.testSuitesLoadingState = true;
+    this.azureRestClient
+      .getTestSuiteByPlanList(this.teamProject, testPlanId)
+      .then((data) => {
+        data.sort(function (a, b) {
+          return a.parent - b.parent;
+        });
+        this.setTestSuitesList(data);
+      })
+      .catch((err) => {
+        logger.error(`Error occurred while fetching test suites list: ${err.message}`);
+        logger.error('Error stack:', err.stack);
+      })
+      .finally(() => {
+        this.loadingState.testSuitesLoadingState = false;
       });
-      this.setTestSuitesList(data);
-    } catch (err) {
-      logger.error(`Error occurred while fetching test suites list: ${err.message}`);
-      logger.error('Error stack:', err.stack);
-    }
   }
 
   setTestSuitesList(data) {
@@ -494,10 +499,19 @@ class DocGenDataStore {
   fetchTemplatesListForDownload() {
     getBucketFileList('templates', null, true, this.teamProjectName, true)
       .then((data) => {
-        data.sort(function (a, b) {
-          return new Date(b.lastModified) - new Date(a.lastModified);
-        });
-        this.templateForDownload = data;
+        // Process the data to fix the URLs
+        const processedData = data
+          .map((item) => {
+            if (item.url && this.teamProjectName) {
+              // Split the URL by the project name and remove the first occurrence
+              const parts = item.url.split(`/${this.teamProjectName}/`);
+              item.url = parts.join(`/`);
+            }
+            return item;
+          })
+          .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+
+        this.templateForDownload = processedData;
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching templates: ${err.message}`);

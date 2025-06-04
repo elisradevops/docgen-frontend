@@ -137,6 +137,7 @@ const TestContentSelector = observer(
     const handleTestPlanChanged = useCallback(
       async (value) => {
         await store.fetchTestSuitesList(value.key);
+        setSelectedTestSuites([]);
         if (value.text) {
           let testPlanNameForFile = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
           store.setContextName(testPlanNameForFile);
@@ -480,6 +481,7 @@ const TestContentSelector = observer(
               options={store.testSuiteList}
               disableCloseOnSelect
               autoHighlight
+              loading={store.loadingState.testSuitesLoadingState}
               value={selectedTestSuites}
               groupBy={(option) => option.parent}
               getOptionLabel={(option) => `${option.name} - (${option.id})`}

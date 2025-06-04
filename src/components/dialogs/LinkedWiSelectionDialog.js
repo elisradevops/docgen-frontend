@@ -37,7 +37,7 @@ const LinkedWiSelectionDialog = observer(({ prevOptions, setOptions }) => {
       <RadioGroup
         defaultValue={'none'}
         name='linked-item-type'
-        value={prevOptions.linkedWiTypes}
+        value={prevOptions?.linkedWiTypes}
         onChange={(event) => {
           setOptions((prev) => ({ ...prev, linkedWiTypes: event.target.value }));
         }}

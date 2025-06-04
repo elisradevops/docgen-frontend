@@ -503,6 +503,7 @@ const STRTableSelector = observer(
 
     async function handleTestPlanChanged(value) {
       await store.fetchTestSuitesList(value.key);
+      setSelectedTestSuites([]);
       if (value.text) {
         let testPlanNameForFile = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
         store.setContextName(testPlanNameForFile);
@@ -556,6 +557,7 @@ const STRTableSelector = observer(
               options={store.testSuiteList}
               disableCloseOnSelect
               autoHighlight
+              loading={store.loadingState.testSuitesLoadingState}
               groupBy={(option) => option.parent}
               getOptionLabel={(option) => `${option.name} - (${option.id})`}
               renderOption={(props, option, { selected }) => (
