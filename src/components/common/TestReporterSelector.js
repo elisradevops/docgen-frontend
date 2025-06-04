@@ -44,6 +44,7 @@ const TestReporterSelector = observer(
     const handleTestPlanChanged = useCallback(
       async (newValue) => {
         await store.fetchTestSuitesList(newValue.key);
+        setSelectedTestSuites([]);
         if (newValue.text) {
           let testPlanNameForFile = newValue.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
           store.setContextName(testPlanNameForFile);
@@ -229,6 +230,7 @@ const TestReporterSelector = observer(
             <Autocomplete
               multiple
               options={store.testSuiteList}
+              loading={store.loadingState.testSuitesLoadingState}
               disableCloseOnSelect
               autoHighlight
               groupBy={(option) => option.parent}

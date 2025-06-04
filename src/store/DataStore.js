@@ -122,7 +122,7 @@ class DocGenDataStore {
   releaseDefinitionHistory = []; //release history of a specific Definition
   docType = '';
   contextName = '';
-  loadingState = { sharedQueriesLoadingState: false };
+  loadingState = { sharedQueriesLoadingState: false, testSuiteListLoading: false };
   favoriteList = [];
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
@@ -452,18 +452,23 @@ class DocGenDataStore {
     this.testPlansList = data || [];
   }
 
-  async fetchTestSuitesList(testPlanId) {
-    try {
-      const data = await this.azureRestClient.getTestSuiteByPlanList(this.teamProject, testPlanId);
-
-      data.sort(function (a, b) {
-        return a.parent - b.parent;
+  fetchTestSuitesList(testPlanId) {
+    this.loadingState.testSuitesLoadingState = true;
+    this.azureRestClient
+      .getTestSuiteByPlanList(this.teamProject, testPlanId)
+      .then((data) => {
+        data.sort(function (a, b) {
+          return a.parent - b.parent;
+        });
+        this.setTestSuitesList(data);
+      })
+      .catch((err) => {
+        logger.error(`Error occurred while fetching test suites list: ${err.message}`);
+        logger.error('Error stack:', err.stack);
+      })
+      .finally(() => {
+        this.loadingState.testSuitesLoadingState = false;
       });
-      this.setTestSuitesList(data);
-    } catch (err) {
-      logger.error(`Error occurred while fetching test suites list: ${err.message}`);
-      logger.error('Error stack:', err.stack);
-    }
   }
 
   setTestSuitesList(data) {
