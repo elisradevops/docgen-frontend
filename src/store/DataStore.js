@@ -655,6 +655,7 @@ class DocGenDataStore {
       uploadProperties: {
         bucketName: this.ProjectBucketName,
         fileName: tempFileName,
+        createdBy: this.userDetails.name,
       },
       contentControls: this.contentControls,
     };
