@@ -348,6 +348,7 @@ const TestReporterSelector = observer(
                 setSelectedFields(nextTargetKeys);
               }}
               titles={['Available Fields', 'Selected Fields']}
+              filterOption={(input, option) => option.text.toLowerCase().includes(input.toLowerCase())}
             />
           </Grid>
         </Grid>
