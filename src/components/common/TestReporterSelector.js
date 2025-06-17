@@ -1,35 +1,37 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Transfer } from 'antd';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import { Autocomplete, Box, Checkbox, Collapse, FormControlLabel, Grid, TextField } from '@mui/material';
+import {
+  Autocomplete,
+  Box,
+  Checkbox,
+  Collapse,
+  FormControlLabel,
+  FormLabel,
+  Grid,
+  Radio,
+  RadioGroup,
+  Stack,
+  TextField,
+} from '@mui/material';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
+import QueryTree from './QueryTree';
+import { validateQuery } from '../../utils/queryValidation';
+import { toJS } from 'mobx';
 const defaultItem = {
   key: '',
   text: '',
 };
+const defaultSelectedQueries = {
+  linkedQueryMode: 'none',
+  testAssociatedQuery: null,
+  includeCommonColumnsMode: 'both',
+};
+
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
-
-const fieldsToSelect = [
-  { text: 'Execution Date', key: 'executionDate@runResultField' },
-  { text: 'Test Case Run Result', key: 'testCaseResult@runResultField' },
-  { text: 'Failure Type', key: 'failureType@runResultField' },
-  { text: 'Test Case Comment', key: 'testCaseComment@runResultField' },
-  { text: 'Include Test Steps (Action and Expected)', key: 'includeSteps@stepsRunProperties' },
-  { text: 'Step Actual Result (Step comment)', key: 'testStepComment@stepsRunProperties' },
-  { text: 'Step Run Result', key: 'stepRunStatus@stepsRunProperties' },
-  { text: 'Run By', key: 'runBy@runResultField' },
-  { text: 'Configuration', key: 'configurationName@runResultField' },
-  { text: 'Automation Status', key: 'Microsoft.VSTS.TCM.AutomationStatus@testCaseWorkItemField' },
-  { text: 'Assigned To', key: 'System.AssignedTo@testCaseWorkItemField' },
-  { text: 'SubSystem', key: 'Custom.SubSystem@testCaseWorkItemField' },
-  { text: 'Priority', key: 'priority@runResultField' },
-  { text: 'Associated Requirement', key: 'associatedRequirement@linked' },
-  { text: 'Associated Bug', key: 'associatedBug@linked' },
-  { text: 'Associated CR', key: 'associatedCR@linked' },
-];
 
 const TestReporterSelector = observer(
   ({ store, selectedTeamProject, addToDocumentRequestObject, contentControlIndex }) => {
@@ -40,6 +42,67 @@ const TestReporterSelector = observer(
     const [enableRunTestCaseFilter, setEnableRunTestCaseFilter] = useState(false);
     const [enableRunStepStatusFilter, setEnableRunStepStatusFilter] = useState(false);
     const [selectedFields, setSelectedFields] = useState([]);
+    const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
+
+    const fieldsToSelect = useMemo(() => {
+      const baseFields = [
+        { text: 'Execution Date', key: 'executionDate@runResultField' },
+        { text: 'Test Case Run Result', key: 'testCaseResult@runResultField' },
+        { text: 'Failure Type', key: 'failureType@runResultField' },
+        { text: 'Test Case Comment', key: 'testCaseComment@runResultField' },
+        { text: 'Include Test Steps (Action and Expected)', key: 'includeSteps@stepsRunProperties' },
+        { text: 'Step Actual Result (Step comment)', key: 'testStepComment@stepsRunProperties' },
+        { text: 'Step Run Result', key: 'stepRunStatus@stepsRunProperties' },
+        { text: 'Run By', key: 'runBy@runResultField' },
+        { text: 'Configuration', key: 'configurationName@runResultField' },
+        {
+          text: 'Automation Status',
+          key: 'Microsoft.VSTS.TCM.AutomationStatus@testCaseWorkItemField',
+        },
+        { text: 'Assigned To', key: 'System.AssignedTo@testCaseWorkItemField' },
+        { text: 'SubSystem', key: 'Custom.SubSystem@testCaseWorkItemField' },
+        { text: 'Priority', key: 'priority@runResultField' },
+      ];
+
+      if (linkedQueryRequest.linkedQueryMode === 'linked') {
+        return [
+          ...baseFields,
+          { text: 'Associated Requirement', key: 'associatedRequirement@linked' },
+          { text: 'Associated Bug', key: 'associatedBug@linked' },
+          { text: 'Associated CR', key: 'associatedCR@linked' },
+        ];
+      }
+      return baseFields;
+    }, [linkedQueryRequest.linkedQueryMode]);
+
+    useEffect(() => {
+      // If the mode is not 'linked' (i.e., it's 'none' or 'query')
+      if (linkedQueryRequest.linkedQueryMode !== 'linked') {
+        // Remove any selected fields that are specific to the 'linked' mode
+        // Also ensure field and field.key are valid before calling endsWith
+        setSelectedFields((currentFields) =>
+          currentFields.filter(
+            (field) => field && typeof field.key === 'string' && !field.key.endsWith('@linked')
+          )
+        );
+      }
+    }, [linkedQueryRequest.linkedQueryMode]);
+
+    const [queryTrees, setQueryTrees] = useState({
+      testAssociatedTree: [],
+    });
+
+    useEffect(() => {
+      if (!store.sharedQueries) return;
+      const { acquiredTrees } = toJS(store.sharedQueries);
+      acquiredTrees !== null
+        ? setQueryTrees(() => ({
+            testAssociatedTree: acquiredTrees.testAssociatedTree?.testAssociatedTree
+              ? [acquiredTrees.testAssociatedTree.testAssociatedTree]
+              : [],
+          }))
+        : setQueryTrees({ testAssociatedTree: [] });
+    }, [store.sharedQueries, store.sharedQueries.acquiredTrees]);
 
     const handleTestPlanChanged = useCallback(
       async (newValue) => {
@@ -112,14 +175,47 @@ const TestReporterSelector = observer(
       }
     }, []);
 
+    const processSavedQueries = useCallback(
+      (linkedQueryRequest) => {
+        if (!linkedQueryRequest || !store.sharedQueries) {
+          return;
+        }
+        const validatedRequest = { ...linkedQueryRequest };
+        if (
+          linkedQueryRequest.testAssociatedQuery &&
+          store.sharedQueries?.acquiredTrees?.testAssociatedTree
+        ) {
+          const validTestAssociatedQuery = validateQuery(
+            [store.sharedQueries.acquiredTrees?.testAssociatedTree?.testAssociatedTree],
+            linkedQueryRequest.testAssociatedQuery
+          );
+          if (!validTestAssociatedQuery && linkedQueryRequest.testAssociatedQuery) {
+            toast.warn(
+              `Previously selected Test-Associated query "${linkedQueryRequest.testAssociatedQuery.title}" not found or invalid`
+            );
+          }
+          validatedRequest.testAssociatedQuery = validTestAssociatedQuery;
+        }
+        setLinkedQueryRequest(validatedRequest);
+      },
+      [store.sharedQueries]
+    );
+
     const loadSavedData = useCallback(
       async (dataToSave) => {
         await processTestPlanSelection(dataToSave);
         processTestSuiteSelections(dataToSave);
         processSavedFields(dataToSave);
         processFilters(dataToSave);
+        processSavedQueries(dataToSave.linkedQueryRequest);
       },
-      [processFilters, processSavedFields, processTestPlanSelection, processTestSuiteSelections]
+      [
+        processFilters,
+        processSavedFields,
+        processTestPlanSelection,
+        processTestSuiteSelections,
+        processSavedQueries,
+      ]
     );
 
     useEffect(() => {
@@ -166,6 +262,7 @@ const TestReporterSelector = observer(
               enableRunStepStatusFilter: enableRunStepStatusFilter,
               allowGrouping: allowGrouping,
               selectedFields: selectedFields,
+              linkedQueryRequest: linkedQueryRequest,
             },
             isExcelSpreadsheet: true,
           },
@@ -184,7 +281,21 @@ const TestReporterSelector = observer(
       enableRunTestCaseFilter,
       allowCrossTestPlan,
       allowGrouping,
+      linkedQueryRequest,
     ]);
+
+    const onQuerySelected = useCallback((query) => {
+      setLinkedQueryRequest((prev) => ({ ...prev, testAssociatedQuery: query }));
+    }, []);
+
+    const handleLinkedQueryChange = (value) => {
+      if (value === 'query') {
+        setLinkedQueryRequest((prev) => ({ ...prev, linkedQueryMode: value }));
+      } //In case of None or Linked requirement
+      else {
+        setLinkedQueryRequest({ ...defaultSelectedQueries, linkedQueryMode: value });
+      }
+    };
 
     return (
       <Collapse
@@ -261,10 +372,13 @@ const TestReporterSelector = observer(
           </Grid>
           <Grid
             item
-            xs={4}
+            xs={12}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <div>
+            <Stack
+              direction='row'
+              spacing={2}
+            >
+              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -276,8 +390,6 @@ const TestReporterSelector = observer(
                   }
                   label='Allow Grouping by Test Suite'
                 />
-              </div>
-              <div>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -289,8 +401,6 @@ const TestReporterSelector = observer(
                   }
                   label='Allow Results From Cross Test Plans'
                 />
-              </div>
-              <div>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -302,8 +412,6 @@ const TestReporterSelector = observer(
                   }
                   label='Filter Out Not Run Test Cases'
                 />
-              </div>
-              <div>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -315,8 +423,58 @@ const TestReporterSelector = observer(
                   }
                   label='Filter Out Not Run Steps'
                 />
-              </div>
-            </Box>
+              </Box>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                <FormLabel
+                  id='linked-item-query-group'
+                  label='Linked Item Fetch Type'
+                >
+                  Linked Item Based on:
+                </FormLabel>
+                <RadioGroup
+                  defaultValue='none'
+                  row
+                  name='linked-item-query-group'
+                  value={linkedQueryRequest.linkedQueryMode}
+                  onChange={(event) => {
+                    handleLinkedQueryChange(event.target.value);
+                  }}
+                >
+                  <FormControlLabel
+                    value='none'
+                    label='None'
+                    control={<Radio />}
+                  />
+                  <FormControlLabel
+                    value='linked'
+                    label='Linked'
+                    control={<Radio />}
+                  />
+                  <FormControlLabel
+                    value='query'
+                    label='Query'
+                    control={<Radio />}
+                    disabled={
+                      queryTrees.testAssociatedTree === null || !queryTrees.testAssociatedTree.length > 0
+                    }
+                  />
+                </RadioGroup>
+                <Collapse
+                  in={linkedQueryRequest.linkedQueryMode === 'query'}
+                  timeout='auto'
+                  unmountOnExit
+                >
+                  <QueryTree
+                    data={queryTrees.testAssociatedTree}
+                    prevSelectedQuery={linkedQueryRequest.testAssociatedQuery}
+                    onSelectedQuery={onQuerySelected}
+                    queryType={'test-associated'}
+                    isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                  />
+                </Collapse>
+              </Box>
+            </Stack>
           </Grid>
           {/* Empty Space */}
           <Grid
