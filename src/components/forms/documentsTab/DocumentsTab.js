@@ -122,6 +122,30 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
       sorter: (a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
     },
     {
+      title: 'Created By',
+      dataIndex: 'createdBy',
+      key: 'createdBy',
+      ...getColumnSearchProps('createdBy'),
+      render: (text, record) => {
+        const content =
+          searchedColumn === 'createdBy' ? (
+            <Highlighter
+              highlightStyle={{
+                backgroundColor: '#ffc069',
+                padding: 0,
+              }}
+              searchWords={[searchText]}
+              autoEscape
+              textToHighlight={text ? text.toString() : ''}
+            />
+          ) : (
+            text
+          );
+        return content;
+      },
+      sorter: (a, b) => a.createdBy.toLowerCase().localeCompare(b.createdBy.toLowerCase()),
+    },
+    {
       title: 'Changed Date',
       dataIndex: 'lastModified',
       key: 'lastModified',
