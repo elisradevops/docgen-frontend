@@ -150,6 +150,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           />
         );
       case 'test-reporter':
+        store.fetchFieldsByType('Test Case');
         return (
           <TestReporterSelector
             key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
