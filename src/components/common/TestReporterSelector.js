@@ -56,6 +56,7 @@ const TestReporterSelector = observer(
     const [selectedTestPlan, setSelectedTestPlan] = useState(defaultItem);
     const [selectedTestSuites, setSelectedTestSuites] = useState([]);
     const [allowCrossTestPlan, setAllowCrossTestPlan] = useState(false);
+    const [errorFilterMode, setErrorFilterMode] = useState('none');
     const [allowGrouping, setAllowGrouping] = useState(false);
     const [enableRunTestCaseFilter, setEnableRunTestCaseFilter] = useState(false);
     const [enableRunStepStatusFilter, setEnableRunStepStatusFilter] = useState(false);
@@ -168,11 +169,15 @@ const TestReporterSelector = observer(
       const runStepStatusFilter = dataToSave?.enableRunStepStatusFilter;
       const runTestCaseFilter = dataToSave?.enableRunTestCaseFilter;
       const allowGrouping = dataToSave?.allowGrouping;
+      const errorFilterMode = dataToSave?.errorFilterMode;
       if (allowCrossTestPlan) {
         setAllowCrossTestPlan(allowCrossTestPlan);
       }
       if (allowGrouping !== undefined) {
         setAllowGrouping(allowGrouping);
+      }
+      if (errorFilterMode !== undefined) {
+        setErrorFilterMode(errorFilterMode);
       }
       if (runStepStatusFilter !== undefined) {
         setEnableRunStepStatusFilter(runStepStatusFilter);
@@ -267,6 +272,7 @@ const TestReporterSelector = observer(
               allowCrossTestPlan: allowCrossTestPlan,
               enableRunTestCaseFilter: enableRunTestCaseFilter,
               enableRunStepStatusFilter: enableRunStepStatusFilter,
+              errorFilterMode: errorFilterMode,
               allowGrouping: allowGrouping,
               selectedFields: selectedFields,
               linkedQueryRequest: linkedQueryRequest,
@@ -288,6 +294,7 @@ const TestReporterSelector = observer(
       enableRunTestCaseFilter,
       allowCrossTestPlan,
       allowGrouping,
+      errorFilterMode,
       linkedQueryRequest,
     ]);
 
@@ -408,6 +415,7 @@ const TestReporterSelector = observer(
                   }
                   label='Allow Results From Cross Test Plans'
                 />
+
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -433,6 +441,43 @@ const TestReporterSelector = observer(
               </Box>
 
               <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                <FormLabel
+                  id='error-filter-mode'
+                  label='Error Filter Mode'
+                >
+                  Show only Failed or With Comments via:
+                </FormLabel>
+                <RadioGroup
+                  defaultValue='none'
+                  row
+                  name='error-filter-mode'
+                  value={errorFilterMode}
+                  onChange={(event) => {
+                    setErrorFilterMode(event.target.value);
+                  }}
+                >
+                  <FormControlLabel
+                    value='none'
+                    label='None'
+                    control={<Radio />}
+                  />
+                  <FormControlLabel
+                    value='onlyTestCaseResult'
+                    label='By Test Case Level'
+                    control={<Radio />}
+                  />
+                  <FormControlLabel
+                    value='onlyTestStepsResult'
+                    label='By Test Steps Level'
+                    control={<Radio />}
+                  />
+                  <FormControlLabel
+                    value='both'
+                    label='By Test Case and Test Steps Level'
+                    control={<Radio />}
+                  />
+                </RadioGroup>
+
                 <FormLabel
                   id='linked-item-query-group'
                   label='Linked Item Fetch Type'
