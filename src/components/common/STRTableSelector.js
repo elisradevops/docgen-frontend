@@ -173,7 +173,7 @@ const STRTableSelector = observer(
               ? [acquiredTrees.reqTestTrees?.testReqTree]
               : [],
           }))
-        : setQueryTrees(null);
+        : setQueryTrees({ testReqTree: [] });
     }, [store.sharedQueries, store.sharedQueries.acquiredTrees]);
 
     //For detailed steps execution
