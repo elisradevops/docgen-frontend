@@ -33,6 +33,24 @@ const defaultSelectedQueries = {
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
+const BASE_FIELDS = [
+  { text: 'Execution Date', key: 'executionDate@runResultField' },
+  { text: 'Test Case Run Result', key: 'testCaseResult@runResultField' },
+  { text: 'Failure Type', key: 'failureType@runResultField' },
+  { text: 'Test Case Comment', key: 'testCaseComment@runResultField' },
+  { text: 'Include Test Steps (Action and Expected)', key: 'includeSteps@stepsRunProperties' },
+  { text: 'Step Actual Result (Step comment)', key: 'testStepComment@stepsRunProperties' },
+  { text: 'Step Run Result', key: 'stepRunStatus@stepsRunProperties' },
+  { text: 'Run By', key: 'runBy@runResultField' },
+  { text: 'Configuration', key: 'configurationName@runResultField' },
+];
+
+const LINKED_MODE_FIELDS = [
+  { text: 'Associated Requirement', key: 'associatedRequirement@linked' },
+  { text: 'Associated Bug', key: 'associatedBug@linked' },
+  { text: 'Associated CR', key: 'associatedCR@linked' },
+];
+
 const TestReporterSelector = observer(
   ({ store, selectedTeamProject, addToDocumentRequestObject, contentControlIndex }) => {
     const [selectedTestPlan, setSelectedTestPlan] = useState(defaultItem);
@@ -45,35 +63,24 @@ const TestReporterSelector = observer(
     const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
 
     const fieldsToSelect = useMemo(() => {
-      const baseFields = [
-        { text: 'Execution Date', key: 'executionDate@runResultField' },
-        { text: 'Test Case Run Result', key: 'testCaseResult@runResultField' },
-        { text: 'Failure Type', key: 'failureType@runResultField' },
-        { text: 'Test Case Comment', key: 'testCaseComment@runResultField' },
-        { text: 'Include Test Steps (Action and Expected)', key: 'includeSteps@stepsRunProperties' },
-        { text: 'Step Actual Result (Step comment)', key: 'testStepComment@stepsRunProperties' },
-        { text: 'Step Run Result', key: 'stepRunStatus@stepsRunProperties' },
-        { text: 'Run By', key: 'runBy@runResultField' },
-        { text: 'Configuration', key: 'configurationName@runResultField' },
-        {
-          text: 'Automation Status',
-          key: 'Microsoft.VSTS.TCM.AutomationStatus@testCaseWorkItemField',
-        },
-        { text: 'Assigned To', key: 'System.AssignedTo@testCaseWorkItemField' },
-        { text: 'SubSystem', key: 'Custom.SubSystem@testCaseWorkItemField' },
-        { text: 'Priority', key: 'priority@runResultField' },
-      ];
+      const customFields =
+        store.fieldsByType?.map((field) => ({
+          key: `${field.key}@testCaseWorkItemField`,
+          text: field.text,
+        })) || [];
 
-      if (linkedQueryRequest.linkedQueryMode === 'linked') {
-        return [
-          ...baseFields,
-          { text: 'Associated Requirement', key: 'associatedRequirement@linked' },
-          { text: 'Associated Bug', key: 'associatedBug@linked' },
-          { text: 'Associated CR', key: 'associatedCR@linked' },
-        ];
-      }
-      return baseFields;
-    }, [linkedQueryRequest.linkedQueryMode]);
+      let allFields = [...BASE_FIELDS, ...LINKED_MODE_FIELDS];
+      //sort the custom fields by name
+      customFields.sort((a, b) => a.text.localeCompare(b.text));
+      allFields.push(...customFields);
+
+      // Filter out fields ending with "@linked"
+      return linkedQueryRequest.linkedQueryMode !== 'linked'
+        ? allFields.filter(
+            (field) => field && typeof field.key === 'string' && !field.key.endsWith('@linked')
+          )
+        : allFields;
+    }, [linkedQueryRequest.linkedQueryMode, store.fieldsByType]);
 
     useEffect(() => {
       // If the mode is not 'linked' (i.e., it's 'none' or 'query')

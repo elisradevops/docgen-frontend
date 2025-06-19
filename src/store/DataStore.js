@@ -60,6 +60,8 @@ class DocGenDataStore {
       setSelectedTemplate: action,
       fetchSharedQueries: action,
       setSharedQueries: action,
+      fetchFieldsByType: action,
+      setFieldsByType: action,
       fetchGitRepoList: action,
       fetchGitRepoBrances: action,
       setGitRepoList: action,
@@ -107,6 +109,7 @@ class DocGenDataStore {
   contentControls = [];
   selectedTemplate = { key: '', name: '' };
   sharedQueries = { acquiredTrees: null }; // list of queries
+  fieldsByType = [];
   linkTypes = []; // list of link types
   userDetails = [];
   linkTypesFilter = []; // list of selected links to filter by
@@ -122,7 +125,11 @@ class DocGenDataStore {
   releaseDefinitionHistory = []; //release history of a specific Definition
   docType = '';
   contextName = '';
-  loadingState = { sharedQueriesLoadingState: false, testSuiteListLoading: false };
+  loadingState = {
+    sharedQueriesLoadingState: false,
+    testSuiteListLoading: false,
+    fieldsByTypeLoadingState: false,
+  };
   favoriteList = [];
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
@@ -304,6 +311,26 @@ class DocGenDataStore {
     }
   }
 
+  //for fetching fields by type
+  fetchFieldsByType(wiType) {
+    if (this.teamProject) {
+      this.loadingState.fieldsByTypeLoadingState = true;
+      this.azureRestClient
+        .getFieldsByType(this.teamProject, wiType)
+        .then((data) => {
+          this.setFieldsByType(data);
+        })
+        .catch((err) => {
+          logger.error(`Error occurred while fetching fields by type: ${err.message}`);
+          logger.error('Error stack:');
+          logger.error(err.stack);
+        })
+        .finally(() => {
+          this.loadingState.fieldsByTypeLoadingState = false;
+        });
+    }
+  }
+
   fetchLoadingState() {
     return this.loadingState;
   }
@@ -311,6 +338,12 @@ class DocGenDataStore {
   setSharedQueries(queryData) {
     this.sharedQueries.acquiredTrees = { ...queryData };
   }
+
+  //for setting fields by type
+  setFieldsByType(fieldsData) {
+    this.fieldsByType = [...fieldsData];
+  }
+
   //for fetching repo list
   fetchGitRepoList() {
     this.azureRestClient
