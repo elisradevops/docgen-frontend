@@ -24,6 +24,8 @@ const PullRequestSelector = observer(
     queriesRequest,
     dataToRead,
     linkedWiOptions,
+    includeCommittedBy,
+    includeUnlinkedCommits,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
       key: '',
@@ -55,6 +57,8 @@ const PullRequestSelector = observer(
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
             linkedWiOptions: linkedWiOptions,
+            includeCommittedBy: includeCommittedBy,
+            includeUnlinkedCommits: includeUnlinkedCommits,
           },
         },
         contentControlIndex

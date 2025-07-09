@@ -40,6 +40,12 @@ export default function SVDGuide() {
         </ListItem>
         <ListItem>
           <ListItemText
+            primary='Include Committer'
+            secondary='Include the committer name of the commit in the SVD (optional)'
+          />
+        </ListItem>
+        <ListItem>
+          <ListItemText
             primary='Upload Installation Instructions File'
             secondary='Upload a file containing installation instructions (*.doc, *.docx, *.pdf, *.txt file extensions are allowed)'
           />
@@ -48,6 +54,12 @@ export default function SVDGuide() {
           <ListItemText
             primary='Linked Work Item Selection'
             secondary='Include linked work items in the SVD. Select the linked work item types (Feature, Requirement) and relationship types (Affects, Covered) to include.'
+          />
+        </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Include Commits with Unrelated Work Items'
+            secondary='Append commits with unrelated work items as an optional Appendix section in the SVD document'
           />
         </ListItem>
         <ListItemButton onClick={handleBaseDataTypes}>
@@ -66,6 +78,12 @@ export default function SVDGuide() {
             component='div'
             disablePadding
           >
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
+                primary='Git-Object-Range'
+                secondary='Select the repository, branch, or commit range for required commits.'
+              />
+            </ListItem>
             <ListItem style={{ paddingLeft: 32 }}>
               <ListItemText
                 primary='Commit-Date'

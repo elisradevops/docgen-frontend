@@ -689,6 +689,7 @@ class DocGenDataStore {
         bucketName: this.ProjectBucketName,
         fileName: tempFileName,
         createdBy: this.userDetails.name,
+        enableDirectDownload: false,
       },
       contentControls: this.contentControls,
     };
