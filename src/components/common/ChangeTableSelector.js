@@ -55,6 +55,8 @@ const ChangeTableSelector = observer(
     const [loadedData, setLoadedData] = useState(undefined);
     const [includeSystemOverview, setIncludeSystemOverview] = useState(false);
     const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
+    const [includeCommittedBy, setIncludeCommittedBy] = useState(false);
+    const [includeUnlinkedCommits, setIncludeUnlinkedCommits] = useState(false);
     const [linkedWiOptions, setLinkedWiOptions] = useState(defaultLinkedWiOptions);
     const handleClearAttachment = useCallback(() => {
       store.setAttachmentWiki(undefined);
@@ -133,6 +135,8 @@ const ChangeTableSelector = observer(
         processSystemOverviewData(dataToSave.systemOverviewQuery);
 
         processLinkedWiOptions(dataToSave.linkedWiOptions);
+        setIncludeCommittedBy(dataToSave.includeCommittedBy || false);
+        setIncludeUnlinkedCommits(dataToSave.includeUnlinkedCommits || false);
 
         // Process range type selection
         processRangeTypeSelection(dataToSave);
@@ -261,6 +265,19 @@ const ChangeTableSelector = observer(
             )}
           </Collapse>
         </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', width: 300 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={includeCommittedBy}
+                onChange={(event, checked) => {
+                  setIncludeCommittedBy(checked);
+                }}
+              />
+            }
+            label='Include Committer'
+          />
+        </Box>
         <Box sx={{ my: 1, display: 'flex', flexDirection: 'column' }}>
           <UploadAttachmentFileButton
             store={store}
@@ -276,6 +293,19 @@ const ChangeTableSelector = observer(
             setOptions={setLinkedWiOptions}
           />
           <div>{generateIncludedLinkedWorkItemSelection()}</div>
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', width: 300 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={includeUnlinkedCommits}
+                onChange={(event, checked) => {
+                  setIncludeUnlinkedCommits(checked);
+                }}
+              />
+            }
+            label='Include Commits with Unrelated Work Items'
+          />
         </Box>
         <br />
         <div>
@@ -312,6 +342,8 @@ const ChangeTableSelector = observer(
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
                 linkedWiOptions={linkedWiOptions}
+                includeCommittedBy={includeCommittedBy}
+                includeUnlinkedCommits={includeUnlinkedCommits}
               />
             ) : null}
             {selectedType?.type === 'date' ? (
@@ -326,6 +358,8 @@ const ChangeTableSelector = observer(
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
                 linkedWiOptions={linkedWiOptions}
+                includeCommittedBy={includeCommittedBy}
+                includeUnlinkedCommits={includeUnlinkedCommits}
               />
             ) : null}
             {selectedType?.type === 'pipeline' ? (
@@ -339,6 +373,8 @@ const ChangeTableSelector = observer(
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
                 linkedWiOptions={linkedWiOptions}
+                includeCommittedBy={includeCommittedBy}
+                includeUnlinkedCommits={includeUnlinkedCommits}
               />
             ) : null}
             {selectedType?.type === 'release' ? (
@@ -352,6 +388,8 @@ const ChangeTableSelector = observer(
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
                 linkedWiOptions={linkedWiOptions}
+                includeCommittedBy={includeCommittedBy}
+                includeUnlinkedCommits={includeUnlinkedCommits}
               />
             ) : null}
             {selectedType?.type === 'pullrequest' ? (
@@ -368,6 +406,8 @@ const ChangeTableSelector = observer(
                 queriesRequest={queriesRequest}
                 dataToRead={loadedData}
                 linkedWiOptions={linkedWiOptions}
+                includeCommittedBy={includeCommittedBy}
+                includeUnlinkedCommits={includeUnlinkedCommits}
               />
             ) : null}
           </div>

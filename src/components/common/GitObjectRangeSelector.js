@@ -30,6 +30,8 @@ const GitObjectRangeSelector = observer(
     queriesRequest,
     dataToRead = undefined,
     linkedWiOptions,
+    includeCommittedBy,
+    includeUnlinkedCommits,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState(defaultItem);
 
@@ -66,6 +68,8 @@ const GitObjectRangeSelector = observer(
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
             linkedWiOptions: linkedWiOptions,
+            includeCommittedBy: includeCommittedBy,
+            includeUnlinkedCommits: includeUnlinkedCommits,
           },
         },
         contentControlIndex
@@ -86,6 +90,8 @@ const GitObjectRangeSelector = observer(
       store,
       linkedWiOptions,
       contentControlIndex,
+      includeCommittedBy,
+      includeUnlinkedCommits,
     ]);
 
     const findGitObjectType = useCallback((typeKey) => {

@@ -21,6 +21,8 @@ const PipelineSelector = observer(
     queriesRequest,
     dataToRead,
     linkedWiOptions,
+    includeCommittedBy,
+    includeUnlinkedCommits,
   }) => {
     const [pipelineRunHistory, setPipelineRunHistory] = useState([]);
     const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
@@ -44,6 +46,8 @@ const PipelineSelector = observer(
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
             linkedWiOptions: linkedWiOptions,
+            includeCommittedBy: includeCommittedBy,
+            includeUnlinkedCommits: includeUnlinkedCommits,
           },
         },
         contentControlIndex
@@ -59,6 +63,8 @@ const PipelineSelector = observer(
       store.attachmentWikiUrl,
       linkedWiOptions,
       contentControlIndex,
+      includeCommittedBy,
+      includeUnlinkedCommits,
     ]);
 
     useEffect(() => {

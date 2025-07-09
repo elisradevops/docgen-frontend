@@ -23,6 +23,8 @@ const CommitDateSelector = observer(
     queriesRequest,
     dataToRead,
     linkedWiOptions,
+    includeCommittedBy,
+    includeUnlinkedCommits,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
       key: '',
@@ -40,8 +42,6 @@ const CommitDateSelector = observer(
 
     const [includePullRequests, setIncludePullRequests] = useState(false);
     const [includeChangeDescription, setIncludeChangeDescription] = useState(false);
-    const [includeCommittedBy, setIncludeCommittedBy] = useState(false);
-
     const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 
     const UpdateDocumentRequestObject = React.useCallback(() => {
@@ -66,6 +66,7 @@ const CommitDateSelector = observer(
             includePullRequests: includePullRequests, // Added this line
             includeChangeDescription: includeChangeDescription,
             includeCommittedBy: includeCommittedBy,
+            includeUnlinkedCommits: includeUnlinkedCommits,
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
             linkedWiOptions: linkedWiOptions,
@@ -87,6 +88,7 @@ const CommitDateSelector = observer(
       includePullRequests,
       includeChangeDescription,
       includeCommittedBy,
+      includeUnlinkedCommits,
       queriesRequest,
       store,
       linkedWiOptions,
@@ -105,6 +107,7 @@ const CommitDateSelector = observer(
       includePullRequests,
       includeChangeDescription,
       includeCommittedBy,
+      includeUnlinkedCommits,
       editingMode,
       store.attachmentWikiUrl,
       UpdateDocumentRequestObject,
@@ -130,7 +133,6 @@ const CommitDateSelector = observer(
 
           setIncludePullRequests(dataToRead.includePullRequests);
           setIncludeChangeDescription(dataToRead.includeChangeDescription);
-          setIncludeCommittedBy(dataToRead.includeCommittedBy);
         }
       }
       fetchData();
@@ -262,20 +264,6 @@ const CommitDateSelector = observer(
               />
             }
             label='Include Description'
-          />
-        </div>
-
-        <div>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeCommittedBy}
-                onChange={(event, checked) => {
-                  setIncludeCommittedBy(checked);
-                }}
-              />
-            }
-            label='Include Committer'
           />
         </div>
 

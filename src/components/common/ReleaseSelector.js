@@ -19,6 +19,8 @@ const ReleaseSelector = observer(
     queriesRequest,
     dataToRead,
     linkedWiOptions,
+    includeCommittedBy,
+    includeUnlinkedCommits,
   }) => {
     const [releaseDefinitionHistory, setReleaseDefinitionHistory] = useState([]);
     const [selectedReleaseDefinition, setSelectedReleaseDefinition] = useState(defaultSelectedItem);
@@ -175,6 +177,8 @@ const ReleaseSelector = observer(
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
             linkedWiOptions: linkedWiOptions,
+            includeCommittedBy: includeCommittedBy,
+            includeUnlinkedCommits: includeUnlinkedCommits,
           },
         },
         contentControlIndex
@@ -190,6 +194,8 @@ const ReleaseSelector = observer(
       queriesRequest,
       store.attachmentWikiUrl,
       linkedWiOptions,
+      includeCommittedBy,
+      includeUnlinkedCommits,
       contentControlIndex,
     ]);
 
@@ -204,6 +210,7 @@ const ReleaseSelector = observer(
       store.attachmentWikiUrl,
       editingMode,
       UpdateDocumentRequestObject,
+      includeUnlinkedCommits,
     ]);
 
     return (
