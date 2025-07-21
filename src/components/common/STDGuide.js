@@ -128,8 +128,8 @@ export default function STDGuide() {
         </Collapse>
         <ListItem>
           <ListItemText
-            primary='Include Linked Mom'
-            secondary='Include linked Work Item (Task/Bug) in the STD document.'
+            primary='Include Linked MOM'
+            secondary='Include linked Work Items in the STD document. These can be added either by relationship or by using queries.'
           />
         </ListItem>
         <ListItem>

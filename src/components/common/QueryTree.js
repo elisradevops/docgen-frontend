@@ -56,6 +56,8 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
         return 'Test Case to Open PCR';
       case 'test-associated':
         return 'Linked Work Items';
+      case 'linked-mom':
+        return 'Linked MOM';
       default:
         return 'Default';
     }
