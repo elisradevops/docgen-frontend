@@ -39,11 +39,12 @@ const TraceAnalysisDialog = observer(
     }, [prevTraceAnalysisRequest]);
 
     useEffect(() => {
-      const acquiredTrees = sharedQueries.acquiredTrees;
-      acquiredTrees !== null
+      if (!sharedQueries.acquiredTrees) return;
+      const { reqTestQueries } = sharedQueries.acquiredTrees;
+      reqTestQueries !== null
         ? setQueryTrees(() => ({
-            reqTestTree: acquiredTrees.reqTestTree ? [acquiredTrees.reqTestTree] : [],
-            testReqTree: acquiredTrees.testReqTree ? [acquiredTrees.testReqTree] : [],
+            reqTestTree: reqTestQueries?.reqTestTree ? [reqTestQueries.reqTestTree] : [],
+            testReqTree: reqTestQueries?.testReqTree ? [reqTestQueries.testReqTree] : [],
           }))
         : setQueryTrees(defaultSelectedQueries);
     }, [sharedQueries.acquiredTrees]);

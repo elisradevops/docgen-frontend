@@ -12,6 +12,7 @@ import TraceAnalysisDialog from '../dialogs/TraceAnalysisDialog';
 import { observer } from 'mobx-react';
 import { validateQuery } from '../../utils/queryValidation';
 import { toast } from 'react-toastify';
+import LinkedMomDialog from '../dialogs/LinkedMomDialog';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
@@ -20,6 +21,11 @@ const defaultSelectedQueries = {
   reqTestQuery: null,
   testReqQuery: null,
   includeCommonColumnsMode: 'both',
+};
+
+const defaultLinkedMomRequest = {
+  linkedMomMode: 'none',
+  linkedMomQuery: null,
 };
 
 const TestContentSelector = observer(
@@ -45,7 +51,7 @@ const TestContentSelector = observer(
     const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
     const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
     const [includeRequirements, setIncludeRequirements] = useState(false);
-    const [includeLinkedMom, setIncludeLinkedMom] = useState(false);
+    const [linkedMomRequest, setLinkedMomRequest] = useState(defaultLinkedMomRequest);
     const [includeCustomerId, setIncludeCustomerId] = useState(false);
     const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
     const UpdateDocumentRequestObject = useCallback(() => {
@@ -87,9 +93,9 @@ const TestContentSelector = observer(
             includeHardCopyRun: includeHardCopyRun,
             includeAttachmentContent: includeAttachmentContent,
             includeRequirements: includeRequirements,
-            includeLinkedMom: includeLinkedMom,
             includeCustomerId: includeCustomerId,
             traceAnalysisRequest: traceAnalysisRequest,
+            linkedMomRequest: linkedMomRequest,
           },
         },
         contentControlIndex
@@ -107,7 +113,7 @@ const TestContentSelector = observer(
       includeHardCopyRun,
       includeAttachmentContent,
       includeRequirements,
-      includeLinkedMom,
+      linkedMomRequest,
       includeCustomerId,
       traceAnalysisRequest,
       contentControlIndex,
@@ -222,6 +228,31 @@ const TestContentSelector = observer(
       [store.sharedQueries]
     );
 
+    const processLinkedMomRequest = useCallback(
+      (linkedMomRequest) => {
+        if (!linkedMomRequest || !store.sharedQueries) return;
+
+        const validatedRequest = { ...linkedMomRequest };
+
+        if (linkedMomRequest.linkedMomQuery && store.sharedQueries?.acquiredTrees?.linkedMomTree) {
+          const validLinkedMomQuery = validateQuery(
+            [store.sharedQueries.acquiredTrees.linkedMomTree],
+            linkedMomRequest.linkedMomQuery
+          );
+
+          if (!validLinkedMomQuery && linkedMomRequest.linkedMomQuery) {
+            toast.warn(
+              `Previously selected Linked MOM query "${linkedMomRequest.linkedMomQuery.title}" not found or invalid`
+            );
+          }
+          validatedRequest.linkedMomQuery = validLinkedMomQuery;
+        }
+
+        setLinkedMomRequest(validatedRequest);
+      },
+      [store.sharedQueries]
+    );
+
     // Process test suite selections
     const processTestSuiteSelections = useCallback(
       (dataToSave) => {
@@ -249,6 +280,7 @@ const TestContentSelector = observer(
           await processTestPlanSelection(dataToSave);
           processGeneralSettings(dataToSave);
           processTraceAnalysisRequest(dataToSave.traceAnalysisRequest);
+          processLinkedMomRequest(dataToSave.linkedMomRequest);
           processTestSuiteSelections(dataToSave);
         } catch (error) {
           console.error('Error loading saved data:', error);
@@ -260,6 +292,7 @@ const TestContentSelector = observer(
         processTestPlanSelection,
         processTestSuiteSelections,
         processTraceAnalysisRequest,
+        processLinkedMomRequest,
       ]
     );
 
@@ -304,6 +337,28 @@ const TestContentSelector = observer(
             sx={{ whiteSpace: 'pre-line' }}
           >
             {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No trace analysis settings enabled'}
+          </Typography>
+        </Box>
+      );
+    };
+
+    const generateIncludedLinkedMomSettings = () => {
+      const settings = [];
+      if (linkedMomRequest.linkedMomMode !== 'none') {
+        settings.push(`Linked MOM Mode: ${linkedMomRequest.linkedMomMode}`);
+      }
+      if (linkedMomRequest.linkedMomQuery?.value) {
+        settings.push(`Linked MOM Query: ${linkedMomRequest.linkedMomQuery.value}`);
+      }
+
+      return (
+        <Box>
+          <Typography
+            variant='subtitle2'
+            color='textSecondary'
+            sx={{ whiteSpace: 'pre-line' }}
+          >
+            {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No linked mom settings enabled'}
           </Typography>
         </Box>
       );
@@ -448,17 +503,13 @@ const TestContentSelector = observer(
           )}
         </div>
         <div>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeLinkedMom}
-                onChange={(event, checked) => {
-                  setIncludeLinkedMom(checked);
-                }}
-              />
-            }
-            label='Include Linked Mom'
+          <LinkedMomDialog
+            store={store}
+            sharedQueries={store.sharedQueries}
+            prevLinkedMomRequest={linkedMomRequest}
+            onLinkedMomChange={setLinkedMomRequest}
           />
+          {generateIncludedLinkedMomSettings()}
         </div>
         <div>
           <FormControlLabel
