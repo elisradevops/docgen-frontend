@@ -11,6 +11,7 @@ import {
   Grid,
   Radio,
   RadioGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
@@ -75,7 +76,13 @@ const TraceAnalysisDialog = observer(
     };
 
     const handleClose = () => {
-      onTraceAnalysisChange(traceAnalysisRequest);
+      // If query mode is selected but no query is chosen, reset to default
+      if (traceAnalysisRequest.traceAnalysisMode === 'query' && !traceAnalysisRequest.reqTestQuery?.value) {
+        const resetRequest = { ...defaultSelectedQueries, traceAnalysisMode: 'none' };
+        onTraceAnalysisChange(resetRequest);
+      } else {
+        onTraceAnalysisChange(traceAnalysisRequest);
+      }
       setOpenDialog(false);
     };
 
@@ -148,14 +155,20 @@ const TraceAnalysisDialog = observer(
 
     return (
       <>
-        <Button
-          variant='contained'
-          color='primary'
-          onClick={handleClickOpen}
-          startIcon={<ManageSearchIcon />}
-        >
-          Open Trace Analysis Dialog
-        </Button>
+        <Tooltip title='Open Trace Analysis Dialog'>
+          <Button
+            variant='outlined'
+            color='secondary'
+            onClick={handleClickOpen}
+            endIcon={<ManageSearchIcon />}
+            sx={{
+              width: '100%',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Trace Analysis
+          </Button>
+        </Tooltip>
         <Dialog
           open={openDialog}
           onClose={handleClose}

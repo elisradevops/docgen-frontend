@@ -257,15 +257,32 @@ const DetailedStepsSettingsDialog = ({
   };
 
   const handleClose = () => {
-    onStepExecutionStateChange(stepExecutionState);
+    // If query mode is selected but no query is chosen, reset to default
+    if (
+      stepExecutionState.generateRequirements.isEnabled &&
+      stepExecutionState.generateRequirements.requirementInclusionMode === 'query' &&
+      !stepExecutionState.generateRequirements.testReqQuery?.value
+    ) {
+      const resetState = {
+        ...stepExecutionState,
+        generateRequirements: {
+          ...stepExecutionState.generateRequirements,
+          requirementInclusionMode: 'linkedRequirement',
+          testReqQuery: null,
+        },
+      };
+      onStepExecutionStateChange(resetState);
+    } else {
+      onStepExecutionStateChange(stepExecutionState);
+    }
     setOpenDialog(false);
   };
 
   return (
     <>
       <Button
-        variant='contained'
-        color='primary'
+        variant='outlined'
+        color='secondary'
         onClick={handleClickOpen}
         startIcon={<StairsIcon />}
       >

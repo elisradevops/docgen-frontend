@@ -7,12 +7,13 @@ import Autocomplete from '@mui/material/Autocomplete';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
-import { Box, Radio, RadioGroup, FormLabel, Typography } from '@mui/material';
+import { Box, Radio, RadioGroup, FormLabel, Typography, Stack, Grid } from '@mui/material';
 import TraceAnalysisDialog from '../dialogs/TraceAnalysisDialog';
 import { observer } from 'mobx-react';
 import { validateQuery } from '../../utils/queryValidation';
 import { toast } from 'react-toastify';
 import LinkedMomDialog from '../dialogs/LinkedMomDialog';
+import SettingsDisplay from './SettingsDisplay'; // Import the new SettingsDisplay component
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
@@ -303,10 +304,21 @@ const TestContentSelector = observer(
       }
     }, [loadSavedData, store.selectedFavorite]);
 
-    const generateIncludedTraceAnalysisSettings = () => {
-      const settings = [];
+    const generateIncludedSettings = () => {
+      const linkedMomSettings = [];
+      const traceAnalysisSettings = [];
+
+      // Linked MOM Settings
+      if (linkedMomRequest.linkedMomMode !== 'none') {
+        linkedMomSettings.push(`Linked MOM Mode: ${linkedMomRequest.linkedMomMode}`);
+      }
+      if (linkedMomRequest.linkedMomQuery?.value) {
+        linkedMomSettings.push(`Linked MOM Query: ${linkedMomRequest.linkedMomQuery.value}`);
+      }
+
+      // Trace Analysis Settings
       if (traceAnalysisRequest.includeCommonColumnsMode !== 'both') {
-        settings.push(
+        traceAnalysisSettings.push(
           `Include Common Columns for ${
             traceAnalysisRequest.includeCommonColumnsMode !== 'reqOnly'
               ? 'Test Case Only'
@@ -317,51 +329,36 @@ const TestContentSelector = observer(
       if (traceAnalysisRequest.traceAnalysisMode !== 'none') {
         const traceMode =
           traceAnalysisRequest.traceAnalysisMode === 'query' ? 'from Query' : 'from Linked Requirements';
-        settings.push(`Requirements ${traceMode}`);
+        traceAnalysisSettings.push(`Requirements ${traceMode}`);
 
         if (traceAnalysisRequest.traceAnalysisMode === 'query') {
           if (traceAnalysisRequest.reqTestQuery?.value) {
-            settings.push(`Requirement to Test Query: ${traceAnalysisRequest.reqTestQuery.value}`);
+            traceAnalysisSettings.push(
+              `Requirement to Test Query: ${traceAnalysisRequest.reqTestQuery.value}`
+            );
           }
           if (traceAnalysisRequest.testReqQuery?.value) {
-            settings.push(`Test to Requirement Query: ${traceAnalysisRequest.testReqQuery.value}`);
+            traceAnalysisSettings.push(
+              `Test to Requirement Query: ${traceAnalysisRequest.testReqQuery.value}`
+            );
           }
         }
       }
 
-      return (
-        <Box>
-          <Typography
-            variant='subtitle2'
-            color='textSecondary'
-            sx={{ whiteSpace: 'pre-line' }}
-          >
-            {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No trace analysis settings enabled'}
-          </Typography>
-        </Box>
-      );
-    };
+      const sections = [
+        {
+          title: 'Linked MOM Settings',
+          settings: linkedMomSettings,
+          emptyMessage: 'No linked mom settings enabled',
+        },
+        {
+          title: 'Trace Analysis Settings',
+          settings: traceAnalysisSettings,
+          emptyMessage: 'No trace analysis settings enabled',
+        },
+      ];
 
-    const generateIncludedLinkedMomSettings = () => {
-      const settings = [];
-      if (linkedMomRequest.linkedMomMode !== 'none') {
-        settings.push(`Linked MOM Mode: ${linkedMomRequest.linkedMomMode}`);
-      }
-      if (linkedMomRequest.linkedMomQuery?.value) {
-        settings.push(`Linked MOM Query: ${linkedMomRequest.linkedMomQuery.value}`);
-      }
-
-      return (
-        <Box>
-          <Typography
-            variant='subtitle2'
-            color='textSecondary'
-            sx={{ whiteSpace: 'pre-line' }}
-          >
-            {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No linked mom settings enabled'}
-          </Typography>
-        </Box>
-      );
+      return <SettingsDisplay sections={sections} />;
     };
 
     const attachmentTypeElements = (
@@ -452,6 +449,55 @@ const TestContentSelector = observer(
         </div>
         <div>
           <FormControlLabel
+            control={
+              <Checkbox
+                checked={isSuiteSpecific}
+                onChange={(event, checked) => {
+                  setIsSuiteSpecific(checked);
+                }}
+              />
+            }
+            label='Enable suite specific selection '
+          />
+        </div>
+        <div>
+          {isSuiteSpecific ? (
+            <Autocomplete
+              style={{ marginBlock: 8, width: 300 }}
+              multiple
+              options={store.testSuiteList}
+              disableCloseOnSelect
+              autoHighlight
+              loading={store.loadingState.testSuitesLoadingState}
+              value={selectedTestSuites}
+              groupBy={(option) => option.parent}
+              getOptionLabel={(option) => `${option.name} - (${option.id})`}
+              renderOption={(props, option, { selected }) => (
+                <li {...props}>
+                  <Checkbox
+                    icon={icon}
+                    checkedIcon={checkedIcon}
+                    style={{ marginRight: 8 }}
+                    checked={selected}
+                  />
+                  {`${option.name} - (${option.id})`}
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label='With suite cases'
+                  variant='outlined'
+                />
+              )}
+              onChange={async (event, newValue) => {
+                setSelectedTestSuites(newValue);
+              }}
+            />
+          ) : null}
+        </div>
+        <div>
+          <FormControlLabel
             label='Generate STD for Manual Formal Testing (Hard Copy)'
             control={
               <Checkbox
@@ -502,71 +548,97 @@ const TestContentSelector = observer(
             </Box>
           )}
         </div>
-        <div>
-          <LinkedMomDialog
-            store={store}
-            sharedQueries={store.sharedQueries}
-            prevLinkedMomRequest={linkedMomRequest}
-            onLinkedMomChange={setLinkedMomRequest}
-          />
-          {generateIncludedLinkedMomSettings()}
-        </div>
-        <div>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={isSuiteSpecific}
-                onChange={(event, checked) => {
-                  setIsSuiteSpecific(checked);
-                }}
-              />
-            }
-            label='Enable suite specific selection '
-          />
-        </div>
-        <div>
-          {isSuiteSpecific ? (
-            <Autocomplete
-              style={{ marginBlock: 8, width: 300 }}
-              multiple
-              options={store.testSuiteList}
-              disableCloseOnSelect
-              autoHighlight
-              loading={store.loadingState.testSuitesLoadingState}
-              value={selectedTestSuites}
-              groupBy={(option) => option.parent}
-              getOptionLabel={(option) => `${option.name} - (${option.id})`}
-              renderOption={(props, option, { selected }) => (
-                <li {...props}>
-                  <Checkbox
-                    icon={icon}
-                    checkedIcon={checkedIcon}
-                    style={{ marginRight: 8 }}
-                    checked={selected}
-                  />
-                  {`${option.name} - (${option.id})`}
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='With suite cases'
-                  variant='outlined'
-                />
-              )}
-              onChange={async (event, newValue) => {
-                setSelectedTestSuites(newValue);
-              }}
+        <Grid
+          container
+          direction='row'
+          spacing={2}
+          sx={{ mt: 1 }}
+        >
+          <Grid
+            item
+            xs={6}
+          >
+            <LinkedMomDialog
+              store={store}
+              sharedQueries={store.sharedQueries}
+              prevLinkedMomRequest={linkedMomRequest}
+              onLinkedMomChange={setLinkedMomRequest}
             />
-          ) : null}
-        </div>
-        <TraceAnalysisDialog
-          store={store}
-          sharedQueries={store.sharedQueries}
-          prevTraceAnalysisRequest={traceAnalysisRequest}
-          onTraceAnalysisChange={setTraceAnalysisRequest}
-        />
-        {generateIncludedTraceAnalysisSettings()}
+          </Grid>
+          <Grid
+            item
+            xs={6}
+          >
+            <TraceAnalysisDialog
+              store={store}
+              sharedQueries={store.sharedQueries}
+              prevTraceAnalysisRequest={traceAnalysisRequest}
+              onTraceAnalysisChange={setTraceAnalysisRequest}
+            />
+          </Grid>
+          {/* Bottom row - Settings displays */}
+          <Grid
+            item
+            xs={6}
+          >
+            <SettingsDisplay
+              title='Linked MOM Settings'
+              settings={(() => {
+                const linkedMomSettings = [];
+                if (linkedMomRequest.linkedMomMode !== 'none') {
+                  linkedMomSettings.push(`Linked MOM Mode: ${linkedMomRequest.linkedMomMode}`);
+                }
+                if (linkedMomRequest.linkedMomQuery?.value) {
+                  linkedMomSettings.push(`Linked MOM Query: ${linkedMomRequest.linkedMomQuery.value}`);
+                }
+                return linkedMomSettings;
+              })()}
+              emptyMessage='No linked mom settings enabled'
+            />
+          </Grid>
+          <Grid
+            item
+            xs={6}
+          >
+            <SettingsDisplay
+              title='Trace Analysis Settings'
+              settings={(() => {
+                const traceAnalysisSettings = [];
+                if (traceAnalysisRequest.includeCommonColumnsMode !== 'both') {
+                  traceAnalysisSettings.push(
+                    `Include Common Columns for ${
+                      traceAnalysisRequest.includeCommonColumnsMode !== 'reqOnly'
+                        ? 'Test Case Only'
+                        : 'Requirement Only'
+                    }`
+                  );
+                }
+                if (traceAnalysisRequest.traceAnalysisMode !== 'none') {
+                  const traceMode =
+                    traceAnalysisRequest.traceAnalysisMode === 'query'
+                      ? 'from Query'
+                      : 'from Linked Requirements';
+                  traceAnalysisSettings.push(`Requirements ${traceMode}`);
+
+                  if (traceAnalysisRequest.traceAnalysisMode === 'query') {
+                    if (traceAnalysisRequest.reqTestQuery?.value) {
+                      traceAnalysisSettings.push(
+                        `Requirement to Test Query: ${traceAnalysisRequest.reqTestQuery.value}`
+                      );
+                    }
+                    if (traceAnalysisRequest.testReqQuery?.value) {
+                      traceAnalysisSettings.push(
+                        `Test to Requirement Query: ${traceAnalysisRequest.testReqQuery.value}`
+                      );
+                    }
+                  }
+                }
+                return traceAnalysisSettings;
+              })()}
+              emptyMessage='No trace analysis settings enabled'
+            />
+          </Grid>
+        </Grid>
 
         <br />
         <br />

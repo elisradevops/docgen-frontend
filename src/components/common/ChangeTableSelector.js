@@ -18,6 +18,7 @@ import QueryTree from './QueryTree';
 import { toast } from 'react-toastify';
 import UploadAttachmentFileButton from './UploadAttachmentFileButton';
 import LinkedWiSelectionDialog from '../dialogs/LinkedWiSelectionDialog';
+import SettingsDisplay from './SettingsDisplay';
 
 const baseChangeTableDataType = [
   { key: 0, text: 'git-object-range', type: 'range' },
@@ -184,19 +185,7 @@ const ChangeTableSelector = observer(
         }
       }
 
-      return (
-        <Box>
-          <Typography
-            variant='subtitle2'
-            color='textSecondary'
-            sx={{ whiteSpace: 'pre-line' }}
-          >
-            {linkedWiOptions?.isEnabled && settings.length > 0
-              ? `Included:\n${settings.join('\n')}`
-              : 'Linked work items are not included'}
-          </Typography>
-        </Box>
-      );
+      return settings;
     };
 
     return (
@@ -292,7 +281,11 @@ const ChangeTableSelector = observer(
             prevOptions={linkedWiOptions}
             setOptions={setLinkedWiOptions}
           />
-          <div>{generateIncludedLinkedWorkItemSelection()}</div>
+          <SettingsDisplay
+            title='Linked Work Item Settings'
+            settings={generateIncludedLinkedWorkItemSelection()}
+            emptyMessage='No linked work item settings enabled'
+          />
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', width: 300 }}>
           <FormControlLabel
