@@ -13,8 +13,10 @@ import {
   Grid,
   Radio,
   RadioGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import { CiLink } from 'react-icons/ci';
 import QueryTree from '../common/QueryTree';
 
 const defaultSelectedQueries = {
@@ -74,6 +76,7 @@ const LinkedMomDialog = observer(({ store, sharedQueries, prevLinkedMomRequest, 
           value='query'
           label='By Query'
           control={<Radio />}
+          disabled={!queryTrees?.linkedMomTree || !(queryTrees?.linkedMomTree?.length > 0)}
         />
       </RadioGroup>
     </Box>
@@ -93,19 +96,32 @@ const LinkedMomDialog = observer(({ store, sharedQueries, prevLinkedMomRequest, 
   };
 
   const handleClose = () => {
-    onLinkedMomChange(linkedMomRequest);
+    // If query mode is selected but no query is chosen, reset to default
+    if (linkedMomRequest.linkedMomMode === 'query' && !linkedMomRequest.linkedMomQuery?.value) {
+      const resetRequest = { ...defaultSelectedQueries, linkedMomMode: 'none' };
+      onLinkedMomChange(resetRequest);
+    } else {
+      onLinkedMomChange(linkedMomRequest);
+    }
     setOpenDialog(false);
   };
 
   return (
     <>
-      <Button
-        variant='contained'
-        color='primary'
-        onClick={handleClickOpen}
-      >
-        Open Linked MOM Dialog
-      </Button>
+      <Tooltip title='Open Linked MOM Dialog'>
+        <Button
+          variant='outlined'
+          color='secondary'
+          onClick={handleClickOpen}
+          startIcon={<CiLink />}
+          sx={{
+            width: '100%',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Linked MOM
+        </Button>
+      </Tooltip>
       <Dialog
         open={openDialog}
         onClose={handleClose}

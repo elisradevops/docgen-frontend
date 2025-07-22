@@ -73,7 +73,13 @@ const OpenPcrDialog = observer(({ store, sharedQueries, prevOpenPcrRequest, onOp
   };
 
   const handleClose = () => {
-    onOpenPcrChange(openPcrRequest);
+    // If query mode is selected but no query is chosen, reset to default
+    if (openPcrRequest.openPcrMode === 'query' && !openPcrRequest.testToOpenPcrQuery?.value) {
+      const resetRequest = { ...defaultSelectedQueries, openPcrMode: 'none' };
+      onOpenPcrChange(resetRequest);
+    } else {
+      onOpenPcrChange(openPcrRequest);
+    }
     setOpenDialog(false);
   };
 
@@ -147,8 +153,8 @@ const OpenPcrDialog = observer(({ store, sharedQueries, prevOpenPcrRequest, onOp
   return (
     <>
       <Button
-        variant='contained'
-        color='primary'
+        variant='outlined'
+        color='secondary'
         onClick={handleClickOpen}
         startIcon={<ManageSearchIcon />}
       >

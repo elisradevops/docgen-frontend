@@ -14,6 +14,7 @@ import { observer } from 'mobx-react';
 import { validateQuery } from '../../utils/queryValidation';
 import { toast } from 'react-toastify';
 import OpenPcrDialog from '../dialogs/OpenPcrDialog';
+import SettingsDisplay from './SettingsDisplay';
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
@@ -337,8 +338,8 @@ const STRTableSelector = observer(
       }
       if (openPCRsSelectionRequest.openPcrMode !== 'none') {
         const traceMode =
-          openPCRsSelectionRequest.openPcrMode === 'query' ? 'from Query' : 'from Linked Requirements';
-        settings.push(`Requirements ${traceMode}`);
+          openPCRsSelectionRequest.openPcrMode === 'query' ? 'from Query' : 'from Linked Open Items';
+        settings.push(`Open PCRs ${traceMode}`);
 
         if (openPCRsSelectionRequest.openPcrMode === 'query') {
           if (openPCRsSelectionRequest.testToOpenPcrQuery?.value) {
@@ -350,17 +351,7 @@ const STRTableSelector = observer(
         }
       }
 
-      return (
-        <Box>
-          <Typography
-            variant='subtitle2'
-            color='textSecondary'
-            sx={{ whiteSpace: 'pre-line' }}
-          >
-            {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No trace analysis settings enabled'}
-          </Typography>
-        </Box>
-      );
+      return settings;
     };
 
     const attachmentTypeElements = (attachmentProp) => {
@@ -488,17 +479,7 @@ const STRTableSelector = observer(
         }
       }
 
-      return (
-        <Box sx={{ maxWidth: 300 }}>
-          <Typography
-            variant='subtitle2'
-            color='textSecondary'
-            sx={{ whiteSpace: 'pre-line' }}
-          >
-            {settings.length > 0 ? `Included:\n${settings.join('\n')}` : 'No additional settings enabled'}
-          </Typography>
-        </Box>
-      );
+      return settings;
     };
 
     async function handleTestPlanChanged(value) {
@@ -620,7 +601,12 @@ const STRTableSelector = observer(
             prevOpenPcrRequest={openPCRsSelectionRequest}
             onOpenPcrChange={setOpenPCRsSelectionRequest}
           />
-          {generateIncludedOpenPcrSettings()}
+          {/* {generateIncludedOpenPcrSettings()} */}
+          <SettingsDisplay
+            title='Open PCR Settings'
+            settings={generateIncludedOpenPcrSettings()}
+            emptyMessage='No open pcr settings enabled'
+          />
         </div>
 
         <div>
@@ -673,7 +659,11 @@ const STRTableSelector = observer(
               prevStepExecution={stepExecutionState}
               onStepExecutionStateChange={setStepExecutionState}
             />
-            <div>{generateIncludedStepExecutionSettings()}</div>
+            <SettingsDisplay
+              title='Detailed Steps Execution Settings'
+              settings={generateIncludedStepExecutionSettings()}
+              emptyMessage='No detailed steps execution settings enabled'
+            />
           </Collapse>
         </div>
 

@@ -15,6 +15,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import LinkIcon from '@mui/icons-material/Link';
 import { observer } from 'mobx-react';
+import { CiLink } from 'react-icons/ci';
 const defaultLinkedWiOptions = { isEnabled: false, linkedWiTypes: 'both', linkedWiRelationship: 'both' };
 const LinkedWiSelectionDialog = observer(({ prevOptions, setOptions }) => {
   const [openDialog, setOpenDialog] = useState(false);
@@ -94,9 +95,10 @@ const LinkedWiSelectionDialog = observer(({ prevOptions, setOptions }) => {
   return (
     <>
       <Button
-        variant='contained'
+        variant='outlined'
+        color='secondary'
         onClick={handleClickOpen}
-        startIcon={<LinkIcon />}
+        startIcon={<CiLink />}
       >
         Linked Work Item Selection
       </Button>
