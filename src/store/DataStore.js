@@ -50,6 +50,7 @@ class DocGenDataStore {
       favoriteList: observable,
       selectedFavorite: observable,
       attachmentWikiUrl: observable,
+      isCustomTemplate: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -133,6 +134,7 @@ class DocGenDataStore {
   favoriteList = [];
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
+  isCustomTemplate = false;
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -288,6 +290,8 @@ class DocGenDataStore {
   };
   //for setting selected template
   setSelectedTemplate(templateObject) {
+    // If template is not in shared folder, it means it is a custom template
+    this.isCustomTemplate = templateObject?.text?.split('/').shift() !== 'shared';
     this.selectedTemplate = templateObject;
   }
 
@@ -677,9 +681,14 @@ class DocGenDataStore {
   }
 
   get requestJson() {
-    let tempFileName = `${this.teamProjectName}-${this.docType}-${
-      this.contextName
-    }-${this.getFormattedDate()}`;
+    const templateName =
+      this.selectedTemplate?.text
+        ?.split('/')
+        .pop()
+        .replace(/\.dotx?$/, '') || 'template';
+    const tempFileName = this.isCustomTemplate
+      ? `${templateName}-${this.getFormattedDate()}`
+      : `${this.teamProjectName}-${this.docType}-${this.contextName}-${this.getFormattedDate()}`;
     return {
       tfsCollectionUri: azureDevopsUrl,
       PAT: azuredevopsPat,
