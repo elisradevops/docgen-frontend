@@ -18,6 +18,7 @@ import SVDGuide from '../common/SVDGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import ClearIcon from '@mui/icons-material/Clear';
 import { indigo } from '@mui/material/colors';
+import FormattingSettingsDialog from '../dialogs/FormattingSettingsDialog';
 
 const defaultItem = { key: '', text: '' };
 const StyledTabs = styled((props) => (
@@ -188,6 +189,7 @@ const MainTabs = observer(({ store }) => {
                 }}
                 value={selectedTeamProject}
               />
+              {selectedTab !== 99 && selectedTab !== 100 && <FormattingSettingsDialog store={store} />}
               {projectClearable && (
                 <Tooltip
                   title='Clear the selected TeamProject to view all shared templates'

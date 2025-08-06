@@ -16,6 +16,7 @@ import { toast } from 'react-toastify';
 import logger from '../../../utils/logger';
 import FavoriteDialog from '../../dialogs/FavoriteDialog';
 import TestReporterSelector from '../../common/TestReporterSelector';
+import FormattingSettingsDialog from '../../dialogs/FormattingSettingsDialog';
 
 const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
