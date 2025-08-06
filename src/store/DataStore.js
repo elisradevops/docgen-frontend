@@ -73,6 +73,7 @@ class DocGenDataStore {
       setGitRepoCommits: action,
       fetchPipelineList: action,
       setPipelineList: action,
+      setFormattingSettings: action,
       fetchPipelineRunHistory: action,
       fetchReleaseDefinitionList: action,
       setReleaseDefinitionList: action,
@@ -135,9 +136,18 @@ class DocGenDataStore {
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
   isCustomTemplate = false;
+  formattingSettings = {
+    trimAdditionalSpacingInDescriptions: false,
+    trimAdditionalSpacingInTables: false,
+    //TODO:Add later more settings
+  };
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
+  }
+
+  setFormattingSettings(formattingSettings) {
+    this.formattingSettings = formattingSettings;
   }
 
   fetchDocFolders() {
@@ -701,6 +711,7 @@ class DocGenDataStore {
         enableDirectDownload: false,
       },
       contentControls: this.contentControls,
+      formattingSettings: this.formattingSettings,
     };
   }
   getTeamProjectsList() {
