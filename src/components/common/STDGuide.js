@@ -38,6 +38,12 @@ export default function STDGuide() {
             secondary='Retrieve the STD document for manual formal testing.'
           />
         </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Flat Tree By One Level'
+            secondary='If there is only one level 1 suite with nested suites, then the tree will be flattened by one level.'
+          />
+        </ListItem>
         {/* Collapsible for Attachment Types */}
         <ListItemButton onClick={handleClickAttachmentTypes}>
           <ListItemIcon>{openIncludeAttachmentTypes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
