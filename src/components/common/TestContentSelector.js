@@ -55,7 +55,7 @@ const TestContentSelector = observer(
     const [linkedMomRequest, setLinkedMomRequest] = useState(defaultLinkedMomRequest);
     const [includeCustomerId, setIncludeCustomerId] = useState(false);
     const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
-    const [flatTreeByOneLevel, setFlatTreeByOneLevel] = useState(false);
+    const [flatSuiteTestCases, setFlatSuiteTestCases] = useState(false);
     const UpdateDocumentRequestObject = useCallback(() => {
       let testSuiteIdList = undefined;
       let nonRecursiveTestSuiteIdList = undefined;
@@ -98,7 +98,7 @@ const TestContentSelector = observer(
             includeCustomerId: includeCustomerId,
             traceAnalysisRequest: traceAnalysisRequest,
             linkedMomRequest: linkedMomRequest,
-            flatTreeByOneLevel: flatTreeByOneLevel,
+            flatSuiteTestCases: flatSuiteTestCases,
           },
         },
         contentControlIndex
@@ -119,7 +119,7 @@ const TestContentSelector = observer(
       linkedMomRequest,
       includeCustomerId,
       traceAnalysisRequest,
-      flatTreeByOneLevel,
+      flatSuiteTestCases,
       contentControlIndex,
       selectedTestSuites,
       store.testSuiteList,
@@ -141,7 +141,7 @@ const TestContentSelector = observer(
       includeCustomerId,
       traceAnalysisRequest,
       editingMode,
-      flatTreeByOneLevel,
+      flatSuiteTestCases,
       UpdateDocumentRequestObject,
     ]);
 
@@ -183,7 +183,7 @@ const TestContentSelector = observer(
         includeAttachmentContent,
         includeRequirements,
         includeCustomerId,
-        flatTreeByOneLevel,
+        flatSuiteTestCases,
       } = dataToSave;
 
       setIncludeAttachments(includeAttachments);
@@ -192,7 +192,7 @@ const TestContentSelector = observer(
       setIncludeAttachmentContent(includeAttachmentContent);
       setIncludeRequirements(includeRequirements);
       setIncludeCustomerId(includeCustomerId);
-      setFlatTreeByOneLevel(flatTreeByOneLevel);
+      setFlatSuiteTestCases(flatSuiteTestCases);
     }, []);
 
     // Validate and process trace analysis request
@@ -515,11 +515,11 @@ const TestContentSelector = observer(
         </div>
         <div>
           <FormControlLabel
-            label='Flat Tree By One Level'
+            label='Flat Test Cases of a Single Suite'
             control={
               <Checkbox
-                checked={flatTreeByOneLevel}
-                onChange={(event, checked) => setFlatTreeByOneLevel(checked)}
+                checked={flatSuiteTestCases}
+                onChange={(event, checked) => setFlatSuiteTestCases(checked)}
               />
             }
           />

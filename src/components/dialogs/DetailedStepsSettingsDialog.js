@@ -199,12 +199,12 @@ const DetailedStepsSettingsDialog = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <div>
         <FormControlLabel
-          label='Flat Tree By One Level'
+          label='Flat Test Cases of a Single Suite'
           control={
             <Checkbox
-              checked={stepExecutionState.flatTreeByOneLevel}
+              checked={stepExecutionState.flatSuiteTestCases}
               onChange={(event, checked) => {
-                setStepExecutionState((prev) => ({ ...prev, flatTreeByOneLevel: checked }));
+                setStepExecutionState((prev) => ({ ...prev, flatSuiteTestCases: checked }));
               }}
             />
           }

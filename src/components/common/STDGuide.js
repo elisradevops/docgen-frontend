@@ -40,8 +40,8 @@ export default function STDGuide() {
         </ListItem>
         <ListItem>
           <ListItemText
-            primary='Flat Tree By One Level'
-            secondary='If there is only one level 1 suite with nested suites, then the tree will be flattened by one level.'
+            primary='Flat Test Cases of a Single Suite'
+            secondary='Display only the test cases directly linked to a single selected suite'
           />
         </ListItem>
         {/* Collapsible for Attachment Types */}
