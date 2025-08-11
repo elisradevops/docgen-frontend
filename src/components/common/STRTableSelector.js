@@ -31,7 +31,7 @@ const initialStepsExecutionState = {
     includeCustomerId: false,
     requirementInclusionMode: 'linkedRequirement',
     testReqQuery: null,
-    flatTreeByOneLevel: false,
+    flatSuiteTestCases: false,
   },
 };
 
