@@ -92,6 +92,12 @@ export default function STRGuide() {
           >
             <ListItem style={{ paddingLeft: 32 }}>
               <ListItemText
+                primary='Flat Tree By One Level'
+                secondary='If there is only one level 1 suite with children, then the tree will be flattened by one level.'
+              />
+            </ListItem>
+            <ListItem style={{ paddingLeft: 32 }}>
+              <ListItemText
                 primary='Generate Attachments'
                 secondary='Include attachments for any step in the selected suites cases.'
               />

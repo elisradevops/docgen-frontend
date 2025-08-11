@@ -55,6 +55,7 @@ const TestContentSelector = observer(
     const [linkedMomRequest, setLinkedMomRequest] = useState(defaultLinkedMomRequest);
     const [includeCustomerId, setIncludeCustomerId] = useState(false);
     const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
+    const [flatTreeByOneLevel, setFlatTreeByOneLevel] = useState(false);
     const UpdateDocumentRequestObject = useCallback(() => {
       let testSuiteIdList = undefined;
       let nonRecursiveTestSuiteIdList = undefined;
@@ -97,6 +98,7 @@ const TestContentSelector = observer(
             includeCustomerId: includeCustomerId,
             traceAnalysisRequest: traceAnalysisRequest,
             linkedMomRequest: linkedMomRequest,
+            flatTreeByOneLevel: flatTreeByOneLevel,
           },
         },
         contentControlIndex
@@ -117,6 +119,7 @@ const TestContentSelector = observer(
       linkedMomRequest,
       includeCustomerId,
       traceAnalysisRequest,
+      flatTreeByOneLevel,
       contentControlIndex,
       selectedTestSuites,
       store.testSuiteList,
@@ -138,6 +141,7 @@ const TestContentSelector = observer(
       includeCustomerId,
       traceAnalysisRequest,
       editingMode,
+      flatTreeByOneLevel,
       UpdateDocumentRequestObject,
     ]);
 
@@ -179,6 +183,7 @@ const TestContentSelector = observer(
         includeAttachmentContent,
         includeRequirements,
         includeCustomerId,
+        flatTreeByOneLevel,
       } = dataToSave;
 
       setIncludeAttachments(includeAttachments);
@@ -187,6 +192,7 @@ const TestContentSelector = observer(
       setIncludeAttachmentContent(includeAttachmentContent);
       setIncludeRequirements(includeRequirements);
       setIncludeCustomerId(includeCustomerId);
+      setFlatTreeByOneLevel(flatTreeByOneLevel);
     }, []);
 
     // Validate and process trace analysis request
@@ -503,6 +509,17 @@ const TestContentSelector = observer(
               <Checkbox
                 checked={includeHardCopyRun}
                 onChange={(event, checked) => setIncludeHardCopyRun(checked)}
+              />
+            }
+          />
+        </div>
+        <div>
+          <FormControlLabel
+            label='Flat Tree By One Level'
+            control={
+              <Checkbox
+                checked={flatTreeByOneLevel}
+                onChange={(event, checked) => setFlatTreeByOneLevel(checked)}
               />
             }
           />

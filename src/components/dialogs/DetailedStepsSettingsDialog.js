@@ -199,6 +199,19 @@ const DetailedStepsSettingsDialog = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', ml: 3 }}>
       <div>
         <FormControlLabel
+          label='Flat Tree By One Level'
+          control={
+            <Checkbox
+              checked={stepExecutionState.flatTreeByOneLevel}
+              onChange={(event, checked) => {
+                setStepExecutionState((prev) => ({ ...prev, flatTreeByOneLevel: checked }));
+              }}
+            />
+          }
+        />
+      </div>
+      <div>
+        <FormControlLabel
           label='Generate Attachments'
           control={
             <Checkbox
