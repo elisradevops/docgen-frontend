@@ -18,6 +18,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 const defaultFormattingSettings = {
   trimAdditionalSpacingInDescriptions: false,
   trimAdditionalSpacingInTables: false,
+  processVoidList: false,
 };
 
 const FormattingSettingsDialog = ({ store }) => {
@@ -85,6 +86,11 @@ const FormattingSettingsDialog = ({ store }) => {
         key: 'trimAdditionalSpacingInTables',
         label: 'Trim additional spacing in tables',
         description: 'Applies tighter spacing to table cells for more compact layout',
+      },
+      {
+        key: 'processVoidList',
+        label: 'Process Void List',
+        description: 'Processes the void list in the document',
       },
     ],
     []
