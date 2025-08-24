@@ -11,9 +11,13 @@ import {
   Tooltip,
   Typography,
   Box,
+  Collapse,
+  Link,
 } from '@mui/material';
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 const defaultFormattingSettings = {
   trimAdditionalSpacingInDescriptions: false,
@@ -25,6 +29,7 @@ const FormattingSettingsDialog = ({ store }) => {
   const [openDialog, setOpenDialog] = useState(false);
   const [formattingSettings, setFormattingSettings] = useState(defaultFormattingSettings);
   const [hasChanges, setHasChanges] = useState(false);
+  const [expanded, setExpanded] = useState({});
 
   // Initialize settings from store when dialog opens
   useEffect(() => {
@@ -49,8 +54,19 @@ const FormattingSettingsDialog = ({ store }) => {
     [store.formattingSettings]
   );
 
+  const toggleDescription = useCallback(
+    (settingKey) => () =>
+      setExpanded((prev) => ({
+        ...prev,
+        [settingKey]: !prev[settingKey],
+      })),
+    []
+  );
+
   const handleOpen = useCallback(() => {
     setOpenDialog(true);
+    // Reset expanded sections on each open
+    setExpanded({});
   }, []);
 
   const handleClose = useCallback(() => {
@@ -90,7 +106,38 @@ const FormattingSettingsDialog = ({ store }) => {
       {
         key: 'processVoidList',
         label: 'Process Void List',
-        description: 'Processes the void list in the document',
+        collapsible: true,
+        summary: 'Parses #VL-XX {content}# and exports an Excel file + validation report.',
+        description: (
+          <Box
+            component='ul'
+            sx={{
+              pl: 3,
+              m: 0,
+              typography: 'body2',
+              color: 'text.secondary',
+              '& li': { mb: 0.5 },
+              '& code': {
+                fontFamily:
+                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                fontSize: '0.85em',
+              },
+            }}
+          >
+            <li>
+              Processes Void List patterns of “#VL-XX <code>{'{content}'}</code>#”, where XX is a valid
+              number.
+            </li>
+            <li>
+              When enabled, creates an Excel file where the key is the VL-XX code and the value is the{' '}
+              <code>{'{content}'}</code>.
+            </li>
+            <li>
+              Generates a validation report for issues: invalid codes (non-whole numbers) and duplicates
+              (allowed; adds a warning and appends a following index).
+            </li>
+          </Box>
+        ),
       },
     ],
     []
@@ -156,18 +203,85 @@ const FormattingSettingsDialog = ({ store }) => {
                         >
                           {setting.label}
                         </Typography>
-                        <Typography
-                          variant='body2'
-                          color='text.secondary'
-                          component='div'
-                          sx={{ mt: 0.5 }}
-                        >
-                          {setting.description}
-                        </Typography>
+                        {setting.collapsible ? (
+                          <>
+                            <Box sx={{ mt: 0.5 }}>
+                              <Link
+                                component='button'
+                                underline='hover'
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleDescription(setting.key)();
+                                }}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                aria-expanded={!!expanded[setting.key]}
+                                aria-controls={`${setting.key}-details`}
+                                sx={{
+                                  cursor: 'pointer',
+                                  fontSize: '0.875rem',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  p: 0,
+                                }}
+                              >
+                                {expanded[setting.key] ? (
+                                  <>
+                                    <ExpandLessIcon fontSize='small' sx={{ mr: 0.5 }} /> Hide details
+                                  </>
+                                ) : (
+                                  <>
+                                    <ExpandMoreIcon fontSize='small' sx={{ mr: 0.5 }} /> Show details
+                                  </>
+                                )}
+                              </Link>
+                            </Box>
+                            {!expanded[setting.key] && setting.summary ? (
+                              <Typography
+                                variant='body2'
+                                color='text.secondary'
+                                component='div'
+                                sx={{ mt: 0.5 }}
+                              >
+                                {setting.summary}
+                              </Typography>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Typography
+                            variant='body2'
+                            color='text.secondary'
+                            component='div'
+                            sx={{ mt: 0.5 }}
+                          >
+                            {setting.description}
+                          </Typography>
+                        )}
                       </Box>
                     }
                     sx={{ alignItems: 'flex-start', mb: 1 }}
                   />
+                  {setting.collapsible ? (
+                    <Collapse in={!!expanded[setting.key]}>
+                      <Typography
+                        id={`${setting.key}-details`}
+                        variant='body2'
+                        color='text.secondary'
+                        component='div'
+                        sx={{ mt: 0.5, ml: 6 }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        {setting.description}
+                      </Typography>
+                    </Collapse>
+                  ) : null}
                 </Box>
               </Grid>
             ))}
