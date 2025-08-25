@@ -11,7 +11,8 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Button from '@mui/material/Button';
 import { styled } from '@mui/material/styles';
-import { Autocomplete, Box, Grid, TextField, Tooltip } from '@mui/material';
+import { Box, Grid, IconButton, Tooltip } from '@mui/material';
+import SmartAutocomplete from '../common/SmartAutocomplete';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
 import SVDGuide from '../common/SVDGuide';
@@ -19,6 +20,7 @@ import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import ClearIcon from '@mui/icons-material/Clear';
 import { indigo } from '@mui/material/colors';
 import FormattingSettingsDialog from '../dialogs/FormattingSettingsDialog';
+import { SyncOutlined } from '@ant-design/icons';
 
 const defaultItem = { key: '', text: '' };
 const StyledTabs = styled((props) => (
@@ -94,6 +96,16 @@ const MainTabs = observer(({ store }) => {
     }
   }, [store.documentTypes?.length]);
 
+  // Derive syncing state from store loading flags
+  const syncing =
+    selectedTab === 99
+      ? store.loadingState?.documentsLoadingState
+      : selectedTab === 100
+      ? store.loadingState?.templatesLoadingState
+      : false;
+
+  const isProjectSelected = Boolean(selectedTeamProject?.key && selectedTeamProject?.text);
+
   const generateGuide = (docType) => {
     switch (docType) {
       case 'STD':
@@ -104,6 +116,22 @@ const MainTabs = observer(({ store }) => {
         return <SVDGuide />;
       default:
         return null;
+    }
+  };
+
+  const handleSync = () => {
+    // Re-apply the currently selected project to trigger store loaders
+    if (selectedTeamProject?.key && selectedTeamProject?.text) {
+      store.setTeamProject(selectedTeamProject.key, selectedTeamProject.text);
+    }
+
+    // Additionally refresh according to the active tab
+    if (selectedTab === 99) {
+      // Documents tab
+      store.fetchDocuments();
+    } else if (selectedTab === 100) {
+      // Templates tab
+      store.fetchTemplatesListForDownload();
     }
   };
 
@@ -167,29 +195,43 @@ const MainTabs = observer(({ store }) => {
               xs={12}
               sx={{ display: 'flex', justifyContent: 'flex-start', gap: '8px', alignItems: 'center' }}
             >
-              <Autocomplete
+                <SmartAutocomplete
                 disableClearable
                 style={{ marginBlock: 8, width: 300 }}
                 autoHighlight
                 openOnFocus
-                options={store.teamProjectsList.map((teamProject) => {
-                  return { key: teamProject.id, text: teamProject.name };
-                })}
-                getOptionLabel={(option) => `${option.text}`}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label='Select a TeamProject'
-                    variant='outlined'
-                  />
-                )}
-                onChange={async (event, newValue) => {
+                loading={store.loadingState.teamProjectsLoadingState}
+                options={store.teamProjectsList.map((teamProject) => ({
+                  key: teamProject.id,
+                  text: teamProject.name,
+                }))}
+                label='Select a TeamProject'
+                value={selectedTeamProject}
+                onChange={async (_e, newValue) => {
                   setSelectedTeamProject(newValue || defaultItem);
                   store.setTeamProject(newValue?.key || '', newValue?.text || '');
+                  // Clear selected template so defaults can be re-evaluated for the new project
+                  store.setSelectedTemplate(null);
                 }}
-                value={selectedTeamProject}
               />
-              {selectedTab !== 99 && selectedTab !== 100 && <FormattingSettingsDialog store={store} />}
+              {selectedTab !== 99 && selectedTab !== 100 ? (
+                <FormattingSettingsDialog store={store} />
+              ) : (
+                <Tooltip
+                  title={syncing ? 'Syncing…' : !isProjectSelected ? 'Select a TeamProject' : 'Sync'}
+                  placement='top'
+                >
+                  <IconButton
+                    aria-label='sync'
+                    color='info'
+                    onClick={handleSync}
+                    disabled={syncing || !isProjectSelected}
+                    size='small'
+                  >
+                    <SyncOutlined spin={syncing} />
+                  </IconButton>
+                </Tooltip>
+              )}
               {projectClearable && (
                 <Tooltip
                   title='Clear the selected TeamProject to view all shared templates'
@@ -203,6 +245,8 @@ const MainTabs = observer(({ store }) => {
                     onClick={() => {
                       setSelectedTeamProject(defaultItem);
                       store.setTeamProject('', '');
+                      // Also clear any selected template when clearing the project
+                      store.setSelectedTemplate(null);
                     }}
                   >
                     Clear

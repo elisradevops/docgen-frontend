@@ -2,10 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 // import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
-import TextField from '@mui/material/TextField';
-import Autocomplete from '@mui/material/Autocomplete';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
 import { Box, Radio, RadioGroup, FormLabel, Typography, Stack, Grid } from '@mui/material';
 import TraceAnalysisDialog from '../dialogs/TraceAnalysisDialog';
@@ -14,9 +10,7 @@ import { validateQuery } from '../../utils/queryValidation';
 import { toast } from 'react-toastify';
 import LinkedMomDialog from '../dialogs/LinkedMomDialog';
 import SettingsDisplay from './SettingsDisplay'; // Import the new SettingsDisplay component
-
-const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
-const checkedIcon = <CheckBoxIcon fontSize='small' />;
+import SmartAutocomplete from './SmartAutocomplete';
 const defaultSelectedQueries = {
   traceAnalysisMode: 'none',
   reqTestQuery: null,
@@ -310,6 +304,13 @@ const TestContentSelector = observer(
       }
     }, [loadSavedData, store.selectedFavorite]);
 
+    // Clear local suite selections when no test plan is selected to avoid showing stale suites across tabs
+    useEffect(() => {
+      if (!selectedTestPlan?.key) {
+        setSelectedTestSuites([]);
+      }
+    }, [selectedTestPlan?.key]);
+
     const generateIncludedSettings = () => {
       const linkedMomSettings = [];
       const traceAnalysisSettings = [];
@@ -431,23 +432,15 @@ const TestContentSelector = observer(
         /> */}
         </div>
         <div>
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
-            options={store.testPlansList?.map((testplan) => {
-              return { key: testplan.id, text: testplan.name };
-            })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select a Test Plan'
-                variant='outlined'
-              />
-            )}
-            onChange={async (event, newValue) => {
+            loading={store.loadingState.testPlanListLoading}
+            options={store.testPlansList?.map((testplan) => ({ key: testplan.id, text: testplan.name }))}
+            label='Select a Test Plan'
+            onChange={async (_event, newValue) => {
               await handleTestPlanChanged(newValue);
             }}
             value={selectedTestPlan}
@@ -468,35 +461,20 @@ const TestContentSelector = observer(
         </div>
         <div>
           {isSuiteSpecific ? (
-            <Autocomplete
+            <SmartAutocomplete
               style={{ marginBlock: 8, width: 300 }}
               multiple
-              options={store.testSuiteList}
+              options={selectedTestPlan?.key ? store.testSuiteList : []}
               disableCloseOnSelect
               autoHighlight
-              loading={store.loadingState.testSuitesLoadingState}
+              loading={store.loadingState.testSuiteListLoading}
               value={selectedTestSuites}
               groupBy={(option) => option.parent}
+              showCheckbox
               getOptionLabel={(option) => `${option.name} - (${option.id})`}
-              renderOption={(props, option, { selected }) => (
-                <li {...props}>
-                  <Checkbox
-                    icon={icon}
-                    checkedIcon={checkedIcon}
-                    style={{ marginRight: 8 }}
-                    checked={selected}
-                  />
-                  {`${option.name} - (${option.id})`}
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='With suite cases'
-                  variant='outlined'
-                />
-              )}
-              onChange={async (event, newValue) => {
+              isOptionEqualToValue={(option, value) => option?.id === value?.id}
+              label='With suite cases'
+              onChange={async (_event, newValue) => {
                 setSelectedTestSuites(newValue);
               }}
             />

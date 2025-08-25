@@ -128,9 +128,21 @@ class DocGenDataStore {
   docType = '';
   contextName = '';
   loadingState = {
+    testPlanListLoading: false,
+    teamProjectsLoadingState: false,
     sharedQueriesLoadingState: false,
     testSuiteListLoading: false,
     fieldsByTypeLoadingState: false,
+    contentControlsLoadingState: false,
+    documentsLoadingState: false,
+    templatesLoadingState: false,
+    gitBranchLoadingState: false,
+    gitRepoLoadingState: false,
+    gitRefsLoadingState: false,
+    gitCommitsLoadingState: false,
+    pipelineLoadingState: false,
+    pullRequestLoadingState: false,
+    releaseDefinitionLoadingState: false,
   };
   favoriteList = [];
   selectedFavorite = null;
@@ -151,6 +163,8 @@ class DocGenDataStore {
   }
 
   fetchDocFolders() {
+    //Add loading state
+    this.loadingState.contentControlsLoadingState = true;
     getBucketFileList('document-forms')
       .then(async (data = []) => {
         await Promise.all(
@@ -165,11 +179,16 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching bucket file list: ${err.message}`);
         logger.error('Error stack: ');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.contentControlsLoadingState = false;
       });
   }
 
   // Every time selecting a tab of a certain doctype, all the specified files from that type are returned
   async fetchDocFormsTemplates(docType) {
+    //Add loading state
+    this.loadingState.contentControlsLoadingState = true;
     try {
       this.documentTemplates = [];
 
@@ -201,12 +220,15 @@ class DocGenDataStore {
       logger.error(`Error occurred while fetching fetchDocFormsTemplates: ${err.message}`);
       logger.error('Error stack:');
       logger.error(err.stack);
+    } finally {
+      this.loadingState.contentControlsLoadingState = false;
     }
   }
 
   //for fetching teamProjects
   fetchTeamProjects() {
     if (azureDevopsUrl && azuredevopsPat) {
+      this.loadingState.teamProjectsLoadingState = true;
       this.azureRestClient
         .getTeamProjects()
         .then((data) => {
@@ -217,6 +239,9 @@ class DocGenDataStore {
           logger.error(`Error occurred while fetching team projects: ${err.message}`);
           logger.error('Error stack:');
           logger.error(err.stack);
+        })
+        .finally(() => {
+          this.loadingState.teamProjectsLoadingState = false;
         });
     } else {
       const msg = 'Missing required cookies: azuredevopsUrl or azuredevopsPat';
@@ -300,8 +325,14 @@ class DocGenDataStore {
   };
   //for setting selected template
   setSelectedTemplate(templateObject) {
+    // Allow clearing selection safely
+    if (!templateObject) {
+      this.isCustomTemplate = false;
+      this.selectedTemplate = null;
+      return;
+    }
     // If template is not in shared folder, it means it is a custom template
-    this.isCustomTemplate = templateObject?.text?.split('/').shift() !== 'shared';
+    this.isCustomTemplate = templateObject?.text?.split('/')?.shift() !== 'shared';
     this.selectedTemplate = templateObject;
   }
 
@@ -360,6 +391,7 @@ class DocGenDataStore {
 
   //for fetching repo list
   fetchGitRepoList() {
+    this.loadingState.gitRepoLoadingState = true;
     this.azureRestClient
       .getGitRepoList(this.teamProject)
       .then((data) => {
@@ -369,11 +401,15 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching git repo list: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.gitRepoLoadingState = false;
       });
   }
 
   //for fetching repo list
   fetchGitRepoBrances(RepoId) {
+    this.loadingState.gitBranchLoadingState = true;
     this.azureRestClient
       .getGitRepoBrances(RepoId, this.teamProject)
       .then((data) => {
@@ -383,6 +419,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching get repo branches: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.gitBranchLoadingState = false;
       });
   }
 
@@ -397,7 +436,17 @@ class DocGenDataStore {
   }
   //for fetching git repo commits
   async fetchGitRepoCommits(RepoId) {
-    return await this.azureRestClient.getGitRepoCommits(RepoId, this.teamProject);
+    this.loadingState.gitCommitsLoadingState = true;
+    try {
+      return await this.azureRestClient.getGitRepoCommits(RepoId, this.teamProject);
+    } catch (err) {
+      logger.error(`Error occurred while fetching git repo commits: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      return [];
+    } finally {
+      this.loadingState.gitCommitsLoadingState = false;
+    }
   }
 
   //for setting git repo commits
@@ -410,6 +459,7 @@ class DocGenDataStore {
   }
   //for fetching repo pull requests
   fetchRepoPullRequests(RepoId) {
+    this.loadingState.pullRequestLoadingState = true;
     this.azureRestClient
       .getRepoPullRequests(RepoId, this.teamProject)
       .then((data) => {
@@ -419,13 +469,27 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching repo pull requests: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.pullRequestLoadingState = false;
       });
   }
   //for fetching pipeline list
   fetchPipelineList() {
-    this.azureRestClient.getPipelineList(this.teamProject).then((data) => {
-      this.setPipelineList(data);
-    });
+    this.loadingState.pipelineLoadingState = true;
+    this.azureRestClient
+      .getPipelineList(this.teamProject)
+      .then((data) => {
+        this.setPipelineList(data);
+      })
+      .catch((err) => {
+        logger.error(`Error occurred while fetching pipeline list: ${err.message}`);
+        logger.error('Error stack:');
+        logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.pipelineLoadingState = false;
+      });
   }
   //for setting pipeline list
   setPipelineList(data) {
@@ -445,6 +509,7 @@ class DocGenDataStore {
 
   //for fetching release list
   fetchReleaseDefinitionList() {
+    this.loadingState.releaseDefinitionLoadingState = true;
     this.azureRestClient
       .getReleaseDefinitionList(this.teamProject)
       .then((data) => {
@@ -454,6 +519,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching Release Definition List: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.releaseDefinitionLoadingState = false;
       });
   }
   //for setting release list
@@ -462,6 +530,7 @@ class DocGenDataStore {
   }
   //for fetching release history
   async fetchReleaseDefinitionHistory(releaseDefinitionId) {
+    this.loadingState.releaseDefinitionLoadingState = true;
     try {
       const data = await this.azureRestClient.getReleaseDefinitionHistory(
         releaseDefinitionId,
@@ -472,11 +541,14 @@ class DocGenDataStore {
       logger.error(`Error occurred while fetching Release Definition History: ${err.message}`);
       logger.error('Error stack:');
       logger.error(err.stack);
+    } finally {
+      this.loadingState.releaseDefinitionLoadingState = false;
     }
   }
 
   //for fetching test plans
   fetchTestPlans() {
+    this.loadingState.testPlanListLoading = true;
     this.azureRestClient
       .getTestPlansList(this.teamProject)
       .then((data) => {
@@ -491,6 +563,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching test plans: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.testPlanListLoading = false;
       });
   }
 
@@ -500,7 +575,7 @@ class DocGenDataStore {
   }
 
   fetchTestSuitesList(testPlanId) {
-    this.loadingState.testSuitesLoadingState = true;
+    this.loadingState.testSuiteListLoading = true;
     this.azureRestClient
       .getTestSuiteByPlanList(this.teamProject, testPlanId)
       .then((data) => {
@@ -514,7 +589,7 @@ class DocGenDataStore {
         logger.error('Error stack:', err.stack);
       })
       .finally(() => {
-        this.loadingState.testSuitesLoadingState = false;
+        this.loadingState.testSuiteListLoading = false;
       });
   }
 
@@ -528,6 +603,7 @@ class DocGenDataStore {
 
   //for fetching documents
   fetchDocuments() {
+    this.loadingState.documentsLoadingState = true;
     getBucketFileList(this.ProjectBucketName, null, true)
       .then((data) => {
         data.sort(function (a, b) {
@@ -539,11 +615,15 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching documents: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.documentsLoadingState = false;
       });
   }
 
   //for fetching documents
   fetchTemplatesListForDownload() {
+    this.loadingState.templatesLoadingState = true;
     getBucketFileList('templates', null, true, this.teamProjectName, true)
       .then((data) => {
         // Process the data to fix the URLs
@@ -564,6 +644,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching templates: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.templatesLoadingState = false;
       });
   }
 
@@ -573,7 +656,21 @@ class DocGenDataStore {
   }
 
   async fetchGitObjectRefsByType(selectedRepo, gitObjectType) {
-    return await this.azureRestClient.GetRepoReferences(selectedRepo, this.teamProject, gitObjectType);
+    this.loadingState.gitRefsLoadingState = true;
+    try {
+      return await this.azureRestClient.GetRepoReferences(
+        selectedRepo,
+        this.teamProject,
+        gitObjectType
+      );
+    } catch (err) {
+      logger.error(`Error occurred while fetching git ${gitObjectType} references: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      return [];
+    } finally {
+      this.loadingState.gitRefsLoadingState = false;
+    }
   }
 
   //add a content control object to the doc object
@@ -621,11 +718,17 @@ class DocGenDataStore {
       if (this.docType !== '' && this.userDetails && this.contentControls?.length > 0) {
         const item = this.contentControls[0];
         const { data: dataToSave } = item;
+        // Also persist the currently selected template with the favorite
+        const payload = {
+          ...dataToSave,
+          selectedTemplate: this.selectedTemplate || null,
+          isCustomTemplate: !!this.isCustomTemplate,
+        };
         await createFavorite(
           this.userDetails.userId,
           favName,
           this.docType,
-          dataToSave,
+          payload,
           this.teamProject,
           isShared
         );
@@ -645,6 +748,15 @@ class DocGenDataStore {
 
   loadFavorite(favoriteId) {
     this.selectedFavorite = this.favoriteList.find((fav) => fav.id === favoriteId);
+    try {
+      const savedTemplate = this.selectedFavorite?.dataToSave?.selectedTemplate;
+      if (savedTemplate) {
+        // Apply the saved template selection
+        this.setSelectedTemplate(savedTemplate);
+      }
+    } catch (e) {
+      logger.error(`Error applying template from favorite: ${e.message}`);
+    }
   }
 
   setAttachmentWiki(attachmentWikiUrl) {

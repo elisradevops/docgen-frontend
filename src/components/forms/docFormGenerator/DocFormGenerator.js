@@ -30,6 +30,9 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
     if (docType !== '') {
       logger.debug(`Fetching doc forms templates for docType: ${docType}`);
       store.setDocType(docType);
+      // Clear selected template when switching doc types so the correct default is chosen
+      store.setSelectedTemplate(null);
+      setSelectedTemplate(null);
       store.clearLoadedFavorite();
       setLoadingForm(true);
       store
@@ -69,6 +72,73 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       store.fetchSharedQueries();
     }
   }, [selectedTeamProject]);
+
+  // Keep local selectedTemplate in sync with store when a real template is set (avoid flicker on clear)
+  useEffect(() => {
+    if (store.selectedTemplate) {
+      setSelectedTemplate(store.selectedTemplate);
+    }
+  }, [store.selectedTemplate]);
+
+  // Auto-select default template when none is selected: pick first 'shared' template (fallback to first)
+  useEffect(() => {
+    const pickDefaultTemplate = async () => {
+      if (!docType) return;
+      // Don't override if a template is already selected in the store
+      if (store.selectedTemplate?.url) return;
+      try {
+        const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
+        if (!Array.isArray(templates) || templates.length === 0) return;
+
+        // Storage key aligned with Templates dialog
+        const storageKey = `template:${docType}:${selectedTeamProject || 'shared'}`;
+        const sharedTemplates = templates.filter((t) => String(t.name || '').startsWith('shared/'));
+        let chosen = null;
+
+        // 1) Prefer docType-specific default names inside 'shared'
+        const base = (n) => String(n || '').split('/').pop().replace('.dotx', '');
+        const dt = String(docType || '').toLowerCase();
+        const preferNames =
+          dt === 'svd' ? ['Software Version Description', 'SVD'] :
+          dt === 'std' ? ['STD'] :
+          dt === 'str' ? ['STR'] : [];
+        chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
+
+        // 2) Fallback: first shared
+        if (!chosen) {
+          chosen = sharedTemplates[0] || null;
+        }
+
+        // 3) Respect saved selection only if nothing chosen yet
+        if (!chosen) {
+          try {
+            const saved = localStorage.getItem(storageKey);
+            if (saved) {
+              chosen = templates.find((t) => t.url === saved) || null;
+            }
+          } catch {}
+        }
+
+        // 4) Final fallback: first overall
+        if (!chosen) {
+          chosen = templates[0];
+        }
+
+        if (chosen) {
+          const fileObject = { url: chosen.url, text: chosen.name };
+          setSelectedTemplate(fileObject);
+          store.setSelectedTemplate(fileObject);
+          try {
+            localStorage.setItem(storageKey, fileObject.url);
+          } catch {}
+        }
+      } catch (e) {
+        logger.error(`Error while auto-selecting default template: ${e.message}`);
+      }
+    };
+    pickDefaultTemplate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docType, selectedTeamProject, store.selectedTemplate]);
 
   const generateFormControls = (formControl, contentControlIndex) => {
     switch (formControl.skin) {

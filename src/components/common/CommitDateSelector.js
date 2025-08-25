@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PrimaryButton } from '@fluentui/react';
 // import { headingLevelOptions } from '../../store/data/dropDownOptions';
-import Autocomplete from '@mui/material/Autocomplete';
-import TextField from '@mui/material/TextField';
+import SmartAutocomplete from './SmartAutocomplete';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -159,22 +158,16 @@ const CommitDateSelector = observer(
         }}
       /> */}
 
-        <Autocomplete
+        <SmartAutocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
+          loading={store.loadingState.gitRepoLoadingState}
           options={repoList.map((repo) => {
             return { key: repo.id, text: repo.name };
           })}
-          getOptionLabel={(option) => `${option.text}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='Select a Repo'
-              variant='outlined'
-            />
-          )}
+          label='Select a Repo'
           onChange={async (event, newValue) => {
             store.fetchGitRepoBrances(newValue.key);
             setSelectedRepo(newValue);
@@ -183,25 +176,19 @@ const CommitDateSelector = observer(
         />
 
         {selectedRepo.key !== '' ? (
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
+            loading={store.loadingState.gitBranchLoadingState}
             options={store.branchesList?.map((branch) => {
               let splitName = branch.name.split('/');
               let indexAfterHeads = splitName.indexOf('heads') + 1;
               let elementsAfterHeads = splitName.slice(indexAfterHeads).join('/');
               return { key: elementsAfterHeads, text: elementsAfterHeads };
             })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select a branch'
-                variant='outlined'
-              />
-            )}
+            label='Select a branch'
             onChange={async (event, newValue) => {
               setSelectedBranch(newValue);
             }}

@@ -1,15 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { PrimaryButton } from '@fluentui/react';
 import { headingLevelOptions } from '../../store/data/dropDownOptions';
-import Autocomplete from '@mui/material/Autocomplete';
-import Checkbox from '@mui/material/Checkbox';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import TextField from '@mui/material/TextField';
+import SmartAutocomplete from './SmartAutocomplete';
 import { observer } from 'mobx-react';
 
-const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
-const checkedIcon = <CheckBoxIcon fontSize='small' />;
+// Icons handled internally by SmartAutocomplete when showCheckbox=true
 
 const PullRequestSelector = observer(
   ({
@@ -69,25 +64,18 @@ const PullRequestSelector = observer(
 
     return (
       <div>
-        <Autocomplete
+        <SmartAutocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
           options={headingLevelOptions}
-          getOptionLabel={(option) => `${option.text}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='Select an Heading level'
-              variant='outlined'
-            />
-          )}
+          label='Select an Heading level'
           onChange={async (event, newValue) => {
             setContentHeadingLevel(newValue.key);
           }}
         />
-        <Autocomplete
+        <SmartAutocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
@@ -95,14 +83,7 @@ const PullRequestSelector = observer(
           options={repoList.map((repo) => {
             return { key: repo.id, text: repo.name };
           })}
-          getOptionLabel={(option) => `${option.text}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='Select a Repo'
-              variant='outlined'
-            />
-          )}
+          label='Select a Repo'
           onChange={async (event, newValue) => {
             store.fetchRepoPullRequests(newValue.key);
             setSelectedRepo(newValue);
@@ -110,31 +91,16 @@ const PullRequestSelector = observer(
         />
 
         {selectedRepo.key !== '' ? (
-          <Autocomplete
+          <SmartAutocomplete
             style={{ marginBlock: 8, width: 300 }}
             multiple
             options={pullRequests}
             disableCloseOnSelect
             autoHighlight
+            showCheckbox
             getOptionLabel={(option) => `${option.title} - (${option.pullRequestId})`}
-            renderOption={(props, option, { selected }) => (
-              <li {...props}>
-                <Checkbox
-                  icon={icon}
-                  checkedIcon={checkedIcon}
-                  style={{ marginRight: 8 }}
-                  checked={selected}
-                />
-                {`${option.title} - (${option.pullRequestId})`}
-              </li>
-            )}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='selected pull requests'
-                variant='outlined'
-              />
-            )}
+            isOptionEqualToValue={(option, value) => option?.pullRequestId === value?.pullRequestId}
+            label='selected pull requests'
             onChange={async (event, newValue) => {
               setSelectedPullRequests(newValue);
             }}

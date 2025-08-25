@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PrimaryButton } from '@fluentui/react';
-import Autocomplete from '@mui/material/Autocomplete';
-import TextField from '@mui/material/TextField';
+import SmartAutocomplete from './SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
 
@@ -220,50 +219,27 @@ const PipelineSelector = observer(
 
     return (
       <div>
-        {/* <Autocomplete
-        disableClearable
-        style={{ marginBlock: 8, width: 300 }}
-        autoHighlight
-        openOnFocus
-        options={headingLevelOptions}
-        getOptionLabel={(option) => `${option.text}`}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label='Select an Heading level'
-            variant='outlined'
-          />
-        )}
-        onChange={async (event, newValue) => {
-          setContentHeadingLevel(newValue.key);
-        }}
-      /> */}
-        <Autocomplete
+        {/* Heading level selector is currently not in use */}
+        <SmartAutocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
+          loading={store.loadingState.pipelineLoadingState}
           options={Array.from(store.pipelineList || [])
             .slice() // Create a copy first
             .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
             .map((pipeline) => {
               return { key: pipeline.id, text: `${pipeline.id} - ${pipeline.name}` };
             })}
-          getOptionLabel={(option) => `${option.text}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='Select a Pipeline'
-              variant='outlined'
-            />
-          )}
+          label='Select a Pipeline'
           onChange={async (event, newValue) => {
             await handleOnPipelineSelect(newValue);
           }}
           value={selectedPipeline}
         />
         {selectedPipeline.key !== '' ? (
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
@@ -271,14 +247,7 @@ const PipelineSelector = observer(
             options={[...pipelineRunHistory].map((run) => {
               return { key: run.id, text: run.name };
             })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select start pipeline run'
-                variant='outlined'
-              />
-            )}
+            label='Select start pipeline run'
             onChange={async (event, newValue) => {
               handleStartPointPipelineSelect(newValue);
             }}
@@ -286,7 +255,7 @@ const PipelineSelector = observer(
           />
         ) : null}
         {selectedPipeline.key !== '' && selectedPipelineRunStart !== defaultSelectedItem ? (
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
@@ -294,14 +263,7 @@ const PipelineSelector = observer(
             options={endPointRunHistory.map((run) => {
               return { key: run.id, text: run.name };
             })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select end pipeline run'
-                variant='outlined'
-              />
-            )}
+            label='Select end pipeline run'
             onChange={async (event, newValue) => {
               setSelectedPipelineRunEnd(newValue);
             }}

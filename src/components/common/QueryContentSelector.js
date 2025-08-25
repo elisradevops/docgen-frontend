@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import { Dropdown } from '@fluentui/react/lib/Dropdown';
 import { PrimaryButton } from '@fluentui/react';
-import Autocomplete from '@mui/material/Autocomplete';
-import TextField from '@mui/material/TextField';
+import SmartAutocomplete from './SmartAutocomplete';
 
 const dropdownStyles = {
   dropdown: { width: 300 },
@@ -25,21 +24,14 @@ const QueryContentSelector = ({
   });
   return (
     <div>
-      <Autocomplete
+      <SmartAutocomplete
         disableClearable
         style={{ marginBlock: 8, width: 300 }}
         autoHighlight
         openOnFocus
         options={headingLevelOptions}
-        getOptionLabel={(option) => `${option.text}`}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label='Select an Heading level'
-            variant='outlined'
-          />
-        )}
-        onChange={async (event, newValue) => {
+        label='Select an Heading level'
+        onChange={async (_e, newValue) => {
           setContentHeadingLevel(newValue.key);
         }}
       />

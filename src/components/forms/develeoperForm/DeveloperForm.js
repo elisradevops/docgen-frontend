@@ -7,9 +7,8 @@ import { Dropdown } from '@fluentui/react/lib/Dropdown';
 import { TextField } from '@fluentui/react/lib/TextField';
 
 import { PrimaryButton } from '@fluentui/react';
-import Autocomplete from '@mui/material/Autocomplete';
-import TextFieldM from '@mui/material/TextField';
 import Grid from '@mui/material/Grid';
+import SmartAutocomplete from '../../common/SmartAutocomplete';
 
 import TestContentSelector from '../../common/TestContentSelector';
 import QueryContentSelector from '../../common/QueryContentSelector';
@@ -46,23 +45,14 @@ const DeveloperForm = observer(({ store }) => {
               store.setDocumentTitle(newValue);
             }}
           />
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
-            options={store.templateList.map((template) => {
-              return { url: template.url, text: template.name };
-            })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextFieldM
-                {...params}
-                label='Select a Template'
-                variant='outlined'
-              />
-            )}
-            onChange={async (event, newValue) => {
+            options={store.templateList.map((template) => ({ url: template.url, text: template.name }))}
+            label='Select a Template'
+            onChange={async (_e, newValue) => {
               store.setSelectedTemplate(newValue);
             }}
           />

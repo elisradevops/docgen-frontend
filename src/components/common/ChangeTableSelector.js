@@ -4,15 +4,8 @@ import CommitDateSelector from './CommitDateSelector';
 import PipelineSelector from './PipelineSelector';
 import ReleaseSelector from './ReleaseSelector';
 import { observer } from 'mobx-react';
-import {
-  Autocomplete,
-  Box,
-  Checkbox,
-  Collapse,
-  FormControlLabel,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Box, Checkbox, Collapse, FormControlLabel, Typography } from '@mui/material';
+import SmartAutocomplete from './SmartAutocomplete';
 import PullRequestSelector from './PullRequestSelector';
 import QueryTree from './QueryTree';
 import { toast } from 'react-toastify';
@@ -303,21 +296,14 @@ const ChangeTableSelector = observer(
         <br />
         <div>
           <div>
-            <Autocomplete
+            <SmartAutocomplete
               disableClearable
               style={{ marginBlock: 8, width: 300 }}
               autoHighlight
               openOnFocus
               options={baseChangeTableDataType}
               value={selectedType}
-              getOptionLabel={(option) => `${option.text}`}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='Select Base Data Type'
-                  variant='outlined'
-                />
-              )}
+              label='Select Base Data Type'
               onChange={(event, newValue) => {
                 setSelectedType(newValue);
               }}
