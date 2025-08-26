@@ -17,6 +17,7 @@ import Subject from '@mui/icons-material/Subject';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import logger from '../../utils/logger';
+import { makeKey, tryLocalStorageGet, tryLocalStorageSet } from '../../utils/storage';
 
 const validDefaultTemplates = ['STD', 'STR', 'SVD', 'Software Version Description'];
 
@@ -31,7 +32,7 @@ export const TemplateFileSelectDialog = ({
   const [loadingTemplateFiles, setLoadingTemplateFiles] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
 
-  const storageKey = (docType, project) => `template:${docType}:${project || 'shared'}`;
+  const storageKey = (docType, project) => makeKey('template', docType, project || 'shared');
   const formatWhen = (d) => {
     if (!d) return '';
     try {
@@ -76,7 +77,10 @@ export const TemplateFileSelectDialog = ({
           // 3) Respect saved selection only if nothing chosen yet
           if (!chosen) {
             try {
-              const saved = localStorage.getItem(storageKey(docType, selectedTeamProject));
+              const saved =
+                tryLocalStorageGet(storageKey(docType, selectedTeamProject)) ||
+                // Legacy (pre-namespace) fallback
+                localStorage.getItem(`template:${docType}:${selectedTeamProject || 'shared'}`);
               if (saved) {
                 chosen = templates.find((t) => t.url === saved) || null;
               }
@@ -93,7 +97,7 @@ export const TemplateFileSelectDialog = ({
             setSelectedTemplate(fileObject);
             store.setSelectedTemplate(fileObject);
             try {
-              localStorage.setItem(storageKey(docType, selectedTeamProject), fileObject.url);
+              tryLocalStorageSet(storageKey(docType, selectedTeamProject), fileObject.url);
             } catch {}
           }
         }
@@ -130,7 +134,7 @@ export const TemplateFileSelectDialog = ({
       store.setSelectedTemplate(fileObject);
       setSelectedTemplate(fileObject);
       try {
-        localStorage.setItem(storageKey(docType, selectedTeamProject), fileObject.url);
+        tryLocalStorageSet(storageKey(docType, selectedTeamProject), fileObject.url);
       } catch {}
       toast.success(`Template uploaded and selected: ${fileObject.text.split('/').pop()}`);
     }
@@ -233,7 +237,7 @@ export const TemplateFileSelectDialog = ({
                       store.setSelectedTemplate(newValue);
                       setSelectedTemplate(newValue);
                       try {
-                        localStorage.setItem(storageKey(docType, selectedTeamProject), newValue.url);
+                        tryLocalStorageSet(storageKey(docType, selectedTeamProject), newValue.url);
                       } catch {}
                     }
                   }}

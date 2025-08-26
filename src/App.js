@@ -1,25 +1,94 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import MainTabs from './components/tabs/MainTabs';
 import SettingsPage from './components/settings/SettingPage';
-import { Slide, ToastContainer } from 'react-toastify';
+import { Slide, ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useCookies } from 'react-cookie';
+import { makeKey, tryLocalStorageSet, trySessionStorageGet, trySessionStorageSet, trySessionStorageRemove } from './utils/storage';
 
 function App({ store }) {
-  const [cookies, setCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
+  const [cookies, setCookie, removeCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
 
-  const login = (selectedUrl, selectedPat) => {
+  const login = async (selectedUrl, selectedPat) => {
+    // Validate credentials first
+    const normalizeUrl = (u) => {
+      if (!u) return '';
+      const hasProtocol = /^https?:\/\//i.test(u);
+      return (hasProtocol ? u : `https://${u}`).replace(/\/+$/,'');
+    };
+    const normalizedInputUrl = normalizeUrl(selectedUrl);
+    const result = await store.testCredentials(normalizedInputUrl, selectedPat);
+    if (!result.ok) {
+      const msg = result.status === 401
+        ? 'Invalid or expired PAT. Please create/copy a new PAT and try again.'
+        : `Login failed${result.status ? ` (${result.status})` : ''}. ${result.message || ''}`;
+      toast.error(msg);
+      return; // Block login
+    }
+
+    // Persist cookies only after validation succeeds
     let d = new Date();
     d.setTime(d.getTime() + 525960 * 60 * 1000);
-    // Set the cookies for the selected URL and PAT
-    setCookie('azuredevopsUrl', selectedUrl.endsWith('/') ? selectedUrl : selectedUrl.concat('/'), {
-      path: '/',
-      expires: d,
-    });
+    const normalizedUrl = `${normalizedInputUrl}/`;
+    setCookie('azuredevopsUrl', normalizedUrl, { path: '/', expires: d });
     setCookie('azuredevopsPat', selectedPat, { path: '/', expires: d });
-    store.fetchUserDetails();
-    window.location.reload(); // Reload the page after signing in
+    try {
+      // Primary: namespaced per organization
+      tryLocalStorageSet(makeKey('lastOrgUrl'), normalizedInputUrl);
+      // Legacy/global for pre-login prefill compatibility
+      window.localStorage.setItem('lastOrgUrl', normalizedInputUrl);
+    } catch {}
+    // Update the in-memory API client to use the fresh credentials (no full reload)
+    try {
+      if (typeof store?.setCredentials === 'function') {
+        store.setCredentials(normalizedUrl, selectedPat);
+      }
+    } catch {}
+    // Persist a post-login flag so we can show the welcome toast AFTER the reload
+    try {
+      trySessionStorageSet(
+        makeKey('postLoginWelcome'),
+        JSON.stringify({ name: result.name, ts: Date.now() })
+      );
+    } catch {}
+    // Reload the page to ensure all modules pick up fresh cookies/environment
+    window.location.reload();
   };
+
+  // Ensure top-level redirect to Login on global unauthorized
+  useEffect(() => {
+    const onUnauthorized = () => {
+      try {
+        removeCookie('azuredevopsUrl', { path: '/' });
+        removeCookie('azuredevopsPat', { path: '/' });
+      } catch {}
+    };
+    window.addEventListener('auth-unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth-unauthorized', onUnauthorized);
+  }, [removeCookie]);
+
+  // Keep the store's API client in sync with cookies (handles refresh/autofill cases)
+  useEffect(() => {
+    try {
+      if (cookies.azuredevopsUrl && cookies.azuredevopsPat && typeof store?.setCredentials === 'function') {
+        store.setCredentials(cookies.azuredevopsUrl, cookies.azuredevopsPat);
+      }
+    } catch {}
+  }, [cookies.azuredevopsUrl, cookies.azuredevopsPat]);
+
+  // Show welcome toast after a successful login + reload
+  useEffect(() => {
+    try {
+      const raw = trySessionStorageGet(makeKey('postLoginWelcome'));
+      if (raw) {
+        trySessionStorageRemove(makeKey('postLoginWelcome'));
+        const data = JSON.parse(raw);
+        if (data?.name) {
+          toast.success(`Welcome ${data.name}!`);
+        }
+      }
+    } catch {}
+  }, []);
 
   return (
     <div className='App'>

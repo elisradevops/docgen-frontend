@@ -1,6 +1,6 @@
 import { observable, action, makeObservable, computed } from 'mobx';
 import { configureLogger, makeLoggable } from 'mobx-log';
-import RestApi from './actions/AzuredevopsRestapi';
+import RestApi, { setAuthErrorHandler } from './actions/AzuredevopsRestapi';
 import cookies from 'js-cookies';
 import {
   getBucketFileList,
@@ -15,8 +15,13 @@ import {
 } from '../store/data/docManagerApi';
 import { toast } from 'react-toastify';
 import logger from '../utils/logger';
-const azureDevopsUrl = cookies.getItem('azuredevopsUrl');
-const azuredevopsPat = cookies.getItem('azuredevopsPat');
+const sanitizeCookie = (v) => {
+  if (v == null) return '';
+  const s = String(v).trim();
+  return s === 'null' || s === 'undefined' ? '' : s;
+};
+const azureDevopsUrl = sanitizeCookie(cookies.getItem('azuredevopsUrl'));
+const azuredevopsPat = sanitizeCookie(cookies.getItem('azuredevopsPat'));
 class DocGenDataStore {
   azureRestClient = new RestApi(azureDevopsUrl, azuredevopsPat);
 
@@ -51,6 +56,9 @@ class DocGenDataStore {
       selectedFavorite: observable,
       attachmentWikiUrl: observable,
       isCustomTemplate: observable,
+      // auth-related
+      isAuthenticated: observable,
+      lastAuthErrorStatus: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -87,6 +95,8 @@ class DocGenDataStore {
       fetchLoadingState: action,
       uploadFile: action,
       fetchUserDetails: action,
+      testCredentials: action,
+      setCredentials: action,
       fetchFavoritesList: action,
       deleteFavorite: action,
       saveFavorite: action,
@@ -94,6 +104,26 @@ class DocGenDataStore {
       setAttachmentWiki: action,
     });
     makeLoggable(this);
+    // Global 401 handler -> set flags and dispatch event for UI to react
+    setAuthErrorHandler(() => {
+      if (this.lastAuthErrorStatus !== 401) {
+        this.lastAuthErrorStatus = 401;
+      }
+      this.isAuthenticated = false;
+      try {
+        window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+      } catch (e) {
+        // no-op in non-browser contexts
+      }
+    });
+    // Ensure client is initialized from current cookies (module-level reads may be stale at import time)
+    try {
+      const urlFromCookies = sanitizeCookie(cookies.getItem('azuredevopsUrl'));
+      const patFromCookies = sanitizeCookie(cookies.getItem('azuredevopsPat'));
+      if (urlFromCookies && patFromCookies) {
+        this.setCredentials(urlFromCookies, patFromCookies);
+      }
+    } catch {}
     this.fetchDocFolders();
     this.fetchTeamProjects();
     this.fetchCollectionLinkTypes();
@@ -148,6 +178,9 @@ class DocGenDataStore {
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
   isCustomTemplate = false;
+  // auth-related state
+  isAuthenticated = false;
+  lastAuthErrorStatus = null; // e.g., 401 when PAT is invalid/expired
   formattingSettings = {
     trimAdditionalSpacingInDescriptions: false,
     trimAdditionalSpacingInTables: false,
@@ -160,6 +193,12 @@ class DocGenDataStore {
 
   setFormattingSettings(formattingSettings) {
     this.formattingSettings = formattingSettings;
+  }
+
+  // Update the underlying Azure DevOps client when credentials change (e.g., after login)
+  setCredentials(orgUrl, pat) {
+    const normalizedUrl = (orgUrl || '').endsWith('/') ? orgUrl : `${orgUrl || ''}/`;
+    this.azureRestClient = new RestApi(normalizedUrl, pat);
   }
 
   fetchDocFolders() {
@@ -243,10 +282,6 @@ class DocGenDataStore {
         .finally(() => {
           this.loadingState.teamProjectsLoadingState = false;
         });
-    } else {
-      const msg = 'Missing required cookies: azuredevopsUrl or azuredevopsPat';
-      logger.error(msg);
-      toast.error(msg, { autoClose: false });
     }
   }
   //for setting focused teamProject
@@ -302,14 +337,98 @@ class DocGenDataStore {
     });
   }
 
-  fetchUserDetails() {
-    this.azureRestClient.getUserDetails().then((data) => {
-      if (data.identity) {
+  // Validate credentials without mutating global store credentials.
+  // Returns { ok: true, name, userId } on success; otherwise { ok: false, status, message }.
+  async testCredentials(url, pat) {
+    try {
+      const normalizedUrl = (url || '').endsWith('/') ? url : `${url || ''}/`;
+      const tempClient = new RestApi(normalizedUrl, pat);
+      const data = await tempClient.getUserDetails();
+      // Some servers may redirect to an HTML sign-in page; detect that early
+      if (typeof data === 'string' && /(<!DOCTYPE|<html\b)/i.test(data)) {
+        // Treat as an auth redirect; bubble up a synthetic 302 to map a clearer message
+        throw { status: 302, message: 'Received sign-in HTML instead of JSON (likely auth redirect).' };
+      }
+      logger.debug(`User details fetched. hasIdentity=${!!(data && data.identity)}`);
+      if (data?.identity) {
+        const { DisplayName: name, TeamFoundationId: userId } = data.identity;
+        return { ok: true, name, userId };
+      }
+      return { ok: false, status: 0, message: 'Unknown authentication response' };
+    } catch (err) {
+      const status =
+        err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
+      logger.error(
+        `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
+      );
+      let message = 'Authentication failed';
+      const raw = `${err?.message || ''}`;
+      const isNetworkErr = /(Network\s?Error|Failed to fetch|NetworkError)/i.test(raw);
+      const u = (url || '').toLowerCase();
+      const looksLikeAzdoOrTfs = /dev\.azure\.com|visualstudio\.com|\/tfs/i.test(u);
+      if (status === 401) {
+        message = 'Unauthorized (401). Your PAT is invalid or expired.';
+      } else if (status === 403) {
+        message = 'Forbidden (403). Your PAT may not have the required scopes.';
+      } else if (typeof status === 'number' && status >= 300 && status < 400) {
+        // Many ADO/TFS setups redirect unauthenticated users (e.g., to a sign-in page)
+        // Treat this as an auth failure to give a clearer hint
+        message = `Redirect (${status}). The server redirected to a sign-in page, which usually indicates invalid credentials or a policy requiring interactive login. Use a valid PAT and ensure the org allows non-interactive access.`;
+      } else if (!status && isNetworkErr) {
+        // Heuristic: when calling ADO/TFS from the browser with invalid creds, CORS blocks the 401 body
+        if (pat?.trim() && looksLikeAzdoOrTfs) {
+          message = `Likely unauthorized (401), but the browser blocked the response due to CORS. Verify your PAT, required scopes, organization URL, or network/VPN.`;
+        } else {
+          message = `Network error. Could not reach ${url}. Check the organization URL and your network/VPN.`;
+        }
+      } else if (raw) {
+        message = raw;
+      }
+      logger.error(`Auth validation failed${status ? ` (${status})` : ''}: ${message}`);
+      return { ok: false, status, message };
+    }
+  }
+
+  // Attempts to fetch and cache user details for current store credentials.
+  // Returns true on success, false on failure. On failure, sets lastAuthErrorStatus (e.g., 401).
+  async fetchUserDetails() {
+    try {
+      const data = await this.azureRestClient.getUserDetails();
+      if (data?.identity) {
         const { DisplayName: name, TeamFoundationId: userId } = data.identity;
         logger.debug(`User details: ${name} - ${userId}`);
         this.userDetails = { name, userId };
+        this.isAuthenticated = true;
+        this.lastAuthErrorStatus = null;
+        return true;
       }
-    });
+      this.isAuthenticated = false;
+      this.lastAuthErrorStatus = null;
+      return false;
+    } catch (err) {
+      const status =
+        err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
+      this.isAuthenticated = false;
+      this.lastAuthErrorStatus = status ?? null;
+      logger.error(
+        `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
+      );
+      logger.error('Error stack:');
+      logger.error(err?.stack);
+      // Proactively emit unauthorized when we can infer it (covers CORS-masked 401s after PAT revoke)
+      try {
+        const raw = `${err?.message || ''}`;
+        const isNetworkErr = /(Network\s?Error|Failed to fetch|NetworkError|ERR_FAILED)/i.test(raw);
+        const urlFromCookies = sanitizeCookie(cookies.getItem('azuredevopsUrl')).toLowerCase();
+        const patFromCookies = sanitizeCookie(cookies.getItem('azuredevopsPat'));
+        const looksLikeAzdoOrTfs = /dev\.azure\.com|visualstudio\.com|\/tfs/i.test(urlFromCookies);
+        if (status === 401 || status === 302 || (!status && isNetworkErr && looksLikeAzdoOrTfs && patFromCookies)) {
+          // Dispatch global event; App/MainTabs listeners will clear cookies and show login
+          window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+        }
+      } catch {}
+      return false;
+    }
   }
 
   //for setting the selected link type filters
@@ -658,11 +777,7 @@ class DocGenDataStore {
   async fetchGitObjectRefsByType(selectedRepo, gitObjectType) {
     this.loadingState.gitRefsLoadingState = true;
     try {
-      return await this.azureRestClient.GetRepoReferences(
-        selectedRepo,
-        this.teamProject,
-        gitObjectType
-      );
+      return await this.azureRestClient.GetRepoReferences(selectedRepo, this.teamProject, gitObjectType);
     } catch (err) {
       logger.error(`Error occurred while fetching git ${gitObjectType} references: ${err.message}`);
       logger.error('Error stack:');

@@ -17,6 +17,7 @@ import logger from '../../../utils/logger';
 import FavoriteDialog from '../../dialogs/FavoriteDialog';
 import TestReporterSelector from '../../common/TestReporterSelector';
 import FormattingSettingsDialog from '../../dialogs/FormattingSettingsDialog';
+import { makeKey, tryLocalStorageGet, tryLocalStorageSet } from '../../../utils/storage';
 
 const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
@@ -90,8 +91,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
         if (!Array.isArray(templates) || templates.length === 0) return;
 
-        // Storage key aligned with Templates dialog
-        const storageKey = `template:${docType}:${selectedTeamProject || 'shared'}`;
+        // Storage key aligned with Templates dialog (namespaced)
+        const storageKey = makeKey('template', docType, selectedTeamProject || 'shared');
         const sharedTemplates = templates.filter((t) => String(t.name || '').startsWith('shared/'));
         let chosen = null;
 
@@ -112,7 +113,10 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         // 3) Respect saved selection only if nothing chosen yet
         if (!chosen) {
           try {
-            const saved = localStorage.getItem(storageKey);
+            const saved =
+              tryLocalStorageGet(storageKey) ||
+              // Legacy fallback (pre-namespace)
+              localStorage.getItem(`template:${docType}:${selectedTeamProject || 'shared'}`);
             if (saved) {
               chosen = templates.find((t) => t.url === saved) || null;
             }
@@ -129,7 +133,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           setSelectedTemplate(fileObject);
           store.setSelectedTemplate(fileObject);
           try {
-            localStorage.setItem(storageKey, fileObject.url);
+            tryLocalStorageSet(storageKey, fileObject.url);
           } catch {}
         }
       } catch (e) {

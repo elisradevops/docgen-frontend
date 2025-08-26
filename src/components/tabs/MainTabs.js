@@ -21,6 +21,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import { indigo } from '@mui/material/colors';
 import FormattingSettingsDialog from '../dialogs/FormattingSettingsDialog';
 import { SyncOutlined } from '@ant-design/icons';
+import { toast } from 'react-toastify';
 
 const defaultItem = { key: '', text: '' };
 const StyledTabs = styled((props) => (
@@ -82,13 +83,35 @@ const MainTabs = observer(({ store }) => {
   const [selectedTeamProject, setSelectedTeamProject] = useState(defaultItem);
   const [projectClearable, setProjectClearable] = useState(false);
   const logout = () => {
-    removeCookie('azuredevopsUrl');
-    removeCookie('azuredevopsPat');
+    removeCookie('azuredevopsUrl', { path: '/' });
+    removeCookie('azuredevopsPat', { path: '/' });
   };
 
   useEffect(() => {
-    if (cookies.azuredevopsUrl && cookies.azuredevopsPat) store.fetchUserDetails();
+    if (cookies.azuredevopsUrl && cookies.azuredevopsPat) {
+      (async () => {
+        const ok = await store.fetchUserDetails();
+        if (!ok) {
+          if (store.lastAuthErrorStatus === 401) {
+            toast.error('Session expired or invalid PAT. Please sign in again.');
+            logout();
+          } else if (store.lastAuthErrorStatus) {
+            toast.error(`Authentication check failed (${store.lastAuthErrorStatus}).`);
+          }
+        }
+      })();
+    }
   }, [cookies]);
+
+  // Global 401 handling via browser event dispatched from DataStore handler
+  useEffect(() => {
+    const onUnauthorized = () => {
+      toast.error('Your session has expired (401). Please sign in again.');
+      logout();
+    };
+    window.addEventListener('auth-unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth-unauthorized', onUnauthorized);
+  }, []);
 
   useEffect(() => {
     if (store.documentTypes?.length > 0) {

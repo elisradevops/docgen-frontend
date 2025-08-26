@@ -40,6 +40,7 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
   const [favoriteToDelete, setFavoriteToDelete] = useState(null); // { id, name }
   const [deletingFavoriteLoading, setDeletingFavoriteLoading] = useState(false);
   const [confirmDeleteInput, setConfirmDeleteInput] = useState('');
+  const [openDuplicateDialog, setOpenDuplicateDialog] = useState(false);
   const [filterMode, setFilterMode] = useState('all'); // 'all' | 'shared' | 'private'
 
   const fetchFavorites = useCallback(async () => {
@@ -152,23 +153,35 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
     }
   };
 
+  const handleConfirmDuplicateSave = async () => {
+    setNewFavoriteLoading(true);
+    try {
+      await store.saveFavorite(newFavoriteName.trim(), isShared);
+      toast.success('Favorite saved');
+      await fetchFavorites();
+      setOpenDuplicateDialog(false);
+      setOpenDialog(false);
+    } catch (err) {
+      logger.error('Error saving duplicate favorite:', err.message);
+    } finally {
+      setNewFavoriteLoading(false);
+    }
+  };
+
   //If the user selects a favorite, set it as the selected favorite
   const handleSaveNewFavorite = async () => {
-    setNewFavoriteLoading(true);
-    // Warn if duplicate name exists
+    const trimmed = newFavoriteName.trim();
+    if (!trimmed) return;
+    // Warn if duplicate name exists via custom dialog
     const duplicate = favoriteList.some(
-      (f) => f.name?.trim().toLowerCase() === newFavoriteName.trim().toLowerCase()
+      (f) => f.name?.trim().toLowerCase() === trimmed.toLowerCase()
     );
     if (duplicate) {
-      const proceed = window.confirm(
-        'A favorite with this name already exists. Create another with the same name?'
-      );
-      if (!proceed) {
-        setNewFavoriteLoading(false);
-        return;
-      }
+      setOpenDuplicateDialog(true);
+      return;
     }
-    await store.saveFavorite(newFavoriteName.trim(), isShared);
+    setNewFavoriteLoading(true);
+    await store.saveFavorite(trimmed, isShared);
     toast.success('Favorite saved');
     await fetchFavorites();
     setNewFavoriteLoading(false);
@@ -584,6 +597,40 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
             }
           >
             Delete
+          </LoadingButton>
+        </DialogActions>
+      </Dialog>
+      {/* Duplicate Favorite Name Dialog */}
+      <Dialog
+        open={openDuplicateDialog}
+        onClose={() => (newFavoriteLoading ? null : setOpenDuplicateDialog(false))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !newFavoriteLoading) {
+            handleConfirmDuplicateSave();
+          }
+        }}
+      >
+        <DialogTitle>Favorite name already exists</DialogTitle>
+        <DialogContent>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Alert severity='warning'>
+              A favorite with the name "{(newFavoriteName || '').trim()}" already exists.
+            </Alert>
+            <Typography variant='body2' color='text.secondary'>
+              Do you want to create another favorite with the same name?
+            </Typography>
+          </div>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={newFavoriteLoading} onClick={() => setOpenDuplicateDialog(false)}>
+            Cancel
+          </Button>
+          <LoadingButton
+            variant='contained'
+            loading={newFavoriteLoading}
+            onClick={handleConfirmDuplicateSave}
+          >
+            Create
           </LoadingButton>
         </DialogActions>
       </Dialog>
