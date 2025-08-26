@@ -118,7 +118,10 @@ const SettingsPage = observer(({ store, login }) => {
         Welcome to DocGen
       </Typography>
 
-      <Card elevation={6} sx={{ width: '100%', maxWidth: cardMaxWidth, borderRadius: 3, zIndex: 1 }}>
+      <Card
+        elevation={6}
+        sx={{ width: '100%', maxWidth: cardMaxWidth, borderRadius: 3, zIndex: 1 }}
+      >
         <CardHeader
           avatar={
             <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -171,7 +174,12 @@ const SettingsPage = observer(({ store, login }) => {
               InputProps={{
                 endAdornment: (
                   <InputAdornment position='end'>
-                    <IconButton aria-label='paste PAT' onClick={pastePat} edge='end' size='small'>
+                    <IconButton
+                      aria-label='paste PAT'
+                      onClick={pastePat}
+                      edge='end'
+                      size='small'
+                    >
                       <ContentPasteRoundedIcon fontSize='small' />
                     </IconButton>
                     <IconButton
@@ -186,19 +194,6 @@ const SettingsPage = observer(({ store, login }) => {
                 ),
               }}
             />
-
-            <Typography variant='caption' sx={{ display: 'block' }}>
-              Tip: Use minimal scopes needed (Read for Work Items, Test, Repos, Pipelines/Build & Release). Learn how to
-              create a PAT in{' '}
-              <Link
-                href='https://learn.microsoft.com/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate'
-                target='_blank'
-                rel='noopener noreferrer'
-              >
-                Microsoft docs
-              </Link>
-              .
-            </Typography>
 
             <Button
               type='submit'
