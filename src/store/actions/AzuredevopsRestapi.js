@@ -1,93 +1,152 @@
 import AzureRestApi from '@elisra-devops/docgen-data-provider';
 import logger from '../../utils/logger';
 
+let globalAuthErrorHandler = null;
+export function setAuthErrorHandler(fn) {
+  globalAuthErrorHandler = typeof fn === 'function' ? fn : null;
+}
+
 export default class AzuredevopsRestapi {
   azureRestApi;
   constructor(orgUrl, token) {
     this.azureRestApi = new AzureRestApi(orgUrl, token);
   }
+
+  async _wrap(callFn) {
+    try {
+      return await callFn();
+    } catch (err) {
+      const status =
+        err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
+      // Some environments return 302 (redirect to interactive sign-in) for invalid creds; treat as auth failure too
+      if ((status === 401 || status === 302) && globalAuthErrorHandler) {
+        try {
+          globalAuthErrorHandler(err);
+        } catch (e) {
+          // avoid breaking the original error flow
+        }
+      }
+      throw err;
+    }
+  }
+
   async getTeamProjects() {
-    let managmentDataProvider = await this.azureRestApi.getMangementDataProvider();
-    return managmentDataProvider.GetProjects();
+    return this._wrap(async () => {
+      let managmentDataProvider = await this.azureRestApi.getMangementDataProvider();
+      return managmentDataProvider.GetProjects();
+    });
   }
 
   async getSharedQueries(teamProjectId = null, docType = '') {
-    let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
-    return ticketDataProvider.GetSharedQueries(teamProjectId, '', docType);
+    return this._wrap(async () => {
+      let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
+      return ticketDataProvider.GetSharedQueries(teamProjectId, '', docType);
+    });
   }
 
   async getFieldsByType(teamProjectId = null, itemType = 'Test Case') {
-    let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
-    return ticketDataProvider.GetFieldsByType(teamProjectId, itemType);
+    return this._wrap(async () => {
+      let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
+      return ticketDataProvider.GetFieldsByType(teamProjectId, itemType);
+    });
   }
 
   async getQueryResults(queryId = null, teamProjectId = '') {
-    let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
-    return ticketDataProvider.GetQueryResultById(queryId, teamProjectId);
+    return this._wrap(async () => {
+      let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
+      return ticketDataProvider.GetQueryResultById(queryId, teamProjectId);
+    });
   }
 
   async getTestPlansList(teamProjectId = '') {
-    let testDataProvider = await this.azureRestApi.getTestDataProvider();
-    return testDataProvider.GetTestPlans(teamProjectId);
+    return this._wrap(async () => {
+      let testDataProvider = await this.azureRestApi.getTestDataProvider();
+      return testDataProvider.GetTestPlans(teamProjectId);
+    });
   }
 
   async getTestSuiteByPlanList(teamProjectId = '', testPlanId = '') {
-    let testDataProvider = await this.azureRestApi.getTestDataProvider();
-    return testDataProvider.GetTestSuitesByPlan(teamProjectId, testPlanId, true);
+    return this._wrap(async () => {
+      let testDataProvider = await this.azureRestApi.getTestDataProvider();
+      return testDataProvider.GetTestSuitesByPlan(teamProjectId, testPlanId, true);
+    });
   }
   async getGitRepoList(teamProjectId = '') {
-    let gitDataProvider = await this.azureRestApi.getGitDataProvider();
-    return gitDataProvider.GetTeamProjectGitReposList(teamProjectId);
+    return this._wrap(async () => {
+      let gitDataProvider = await this.azureRestApi.getGitDataProvider();
+      return gitDataProvider.GetTeamProjectGitReposList(teamProjectId);
+    });
   }
 
   async getGitRepoBrances(RepoId = '', teamProjectId = '') {
-    let gitDataProvider = await this.azureRestApi.getGitDataProvider();
-    return gitDataProvider.GetRepoBranches(teamProjectId, RepoId);
+    return this._wrap(async () => {
+      let gitDataProvider = await this.azureRestApi.getGitDataProvider();
+      return gitDataProvider.GetRepoBranches(teamProjectId, RepoId);
+    });
   }
 
   async getGitRepoCommits(RepoId = '', teamProjectId = '', versionIdentifier = '') {
-    let gitDataProvider = await this.azureRestApi.getGitDataProvider();
-    return gitDataProvider.GetCommitsForRepo(teamProjectId, RepoId, versionIdentifier);
+    return this._wrap(async () => {
+      let gitDataProvider = await this.azureRestApi.getGitDataProvider();
+      return gitDataProvider.GetCommitsForRepo(teamProjectId, RepoId, versionIdentifier);
+    });
   }
 
   async getReleaseDefinitionList(teamProjectId = '') {
-    let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
-    return pipelineDataProvider.GetAllReleaseDefenitions(teamProjectId);
+    return this._wrap(async () => {
+      let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
+      return pipelineDataProvider.GetAllReleaseDefenitions(teamProjectId);
+    });
   }
 
   async getPipelineList(teamProjectId = '') {
-    let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
-    return pipelineDataProvider.GetAllPipelines(teamProjectId);
+    return this._wrap(async () => {
+      let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
+      return pipelineDataProvider.GetAllPipelines(teamProjectId);
+    });
   }
 
   async getReleaseDefinitionHistory(definitionId = '', teamProjectId = '') {
-    let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
-    return pipelineDataProvider.GetReleaseHistory(teamProjectId, definitionId);
+    return this._wrap(async () => {
+      let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
+      return pipelineDataProvider.GetReleaseHistory(teamProjectId, definitionId);
+    });
   }
 
   async getPipelineRunHistory(pipelineId = '', teamProjectId = '') {
-    let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
-    return pipelineDataProvider.GetPipelineRunHistory(teamProjectId, pipelineId);
+    return this._wrap(async () => {
+      let pipelineDataProvider = await this.azureRestApi.getPipelinesDataProvider();
+      return pipelineDataProvider.GetPipelineRunHistory(teamProjectId, pipelineId);
+    });
   }
   async getRepoPullRequests(RepoId = '', teamProjectId = '') {
-    let gitDataProvider = await this.azureRestApi.getGitDataProvider();
-    return gitDataProvider.GetPullRequestsForRepo(teamProjectId, RepoId);
+    return this._wrap(async () => {
+      let gitDataProvider = await this.azureRestApi.getGitDataProvider();
+      return gitDataProvider.GetPullRequestsForRepo(teamProjectId, RepoId);
+    });
   }
 
   async GetRepoBranches(RepoId = '', teamProjectId = '') {
-    let gitDataProvider = await this.azureRestApi.getGitDataProvider();
-    return gitDataProvider.GetRepoBranches(teamProjectId, RepoId);
+    return this._wrap(async () => {
+      let gitDataProvider = await this.azureRestApi.getGitDataProvider();
+      return gitDataProvider.GetRepoBranches(teamProjectId, RepoId);
+    });
   }
 
   async GetRepoReferences(RepoId, teamProjectId, gitObjectType) {
-    let gitDataProvider = await this.azureRestApi.getGitDataProvider();
-    return gitDataProvider.GetRepoReferences(teamProjectId, RepoId, gitObjectType);
+    return this._wrap(async () => {
+      let gitDataProvider = await this.azureRestApi.getGitDataProvider();
+      return gitDataProvider.GetRepoReferences(teamProjectId, RepoId, gitObjectType);
+    });
   }
 
   async getCollectionLinkTypes() {
     try {
-      let mangementDataProvider = this.azureRestApi.getMangementDataProvider();
-      let linkTypes = await mangementDataProvider.GetCllectionLinkTypes();
+      // Using wrapper to catch 401 too
+      let linkTypes = await this._wrap(async () => {
+        let mangementDataProvider = await this.azureRestApi.getMangementDataProvider();
+        return await mangementDataProvider.GetCllectionLinkTypes();
+      });
       return await linkTypes.value
         .map((link) => {
           return {
@@ -114,7 +173,18 @@ export default class AzuredevopsRestapi {
   }
 
   async getUserDetails() {
-    let managementDataProvider = await this.azureRestApi.getMangementDataProvider();
-    return managementDataProvider.GetUserProfile();
+    return this._wrap(async () => {
+      let managementDataProvider = await this.azureRestApi.getMangementDataProvider();
+      const res = await managementDataProvider.GetUserProfile();
+      // If the response is an HTML sign-in page (redirect), convert to an auth error to be handled consistently
+      if (typeof res === 'string' && /(<!DOCTYPE|<html\b)/i.test(res)) {
+        const err = new Error(
+          'Received sign-in HTML instead of JSON while fetching user details. Likely unauthorized.'
+        );
+        err.status = 401; // force global unauthorized flow
+        throw err;
+      }
+      return res;
+    });
   }
 }

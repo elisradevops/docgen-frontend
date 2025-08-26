@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PrimaryButton } from '@fluentui/react';
-import { Grid, Divider, TextField, Autocomplete, Typography, Tooltip } from '@mui/material';
+import {
+  Grid,
+  Divider,
+  Typography,
+  Tooltip,
+  Button,
+  ButtonGroup,
+  Box,
+} from '@mui/material';
+import SmartAutocomplete from './SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
 const gitObjType = [
@@ -39,6 +48,8 @@ const GitObjectRangeSelector = observer(
 
     const [sourceGitRefOptions, setSourceGitRefOptions] = useState([]);
     const [targetGitRefOptions, setTargetGitRefOptions] = useState([]);
+    const [sourceLoading, setSourceLoading] = useState(false);
+    const [targetLoading, setTargetLoading] = useState(false);
 
     const UpdateDocumentRequestObject = useCallback(() => {
       if (selectedRepo.text) {
@@ -141,12 +152,16 @@ const GitObjectRangeSelector = observer(
       async (repoObj, fromTypeObj, toTypeObj, data) => {
         try {
           // Load source references
+          setSourceLoading(true);
           const sourceOptions = await loadReferencesForType(repoObj.name, fromTypeObj.key);
           setSourceGitRefOptions(sourceOptions);
+          setSourceLoading(false);
 
           // Load target references
+          setTargetLoading(true);
           const targetOptions = await loadReferencesForType(repoObj.name, toTypeObj.key);
           setTargetGitRefOptions(targetOptions);
+          setTargetLoading(false);
 
           // Process source reference
           const fromRefObj = processReference(
@@ -172,10 +187,127 @@ const GitObjectRangeSelector = observer(
         } catch (error) {
           console.error('Error loading references:', error);
           toast.error('Failed to load git references');
+          setSourceLoading(false);
+          setTargetLoading(false);
         }
       },
       [loadReferencesForType, processReference]
     );
+
+    // Helpers to determine the latest tag (by semver when possible)
+    const parseTagSemver = useCallback((name) => {
+      if (!name) return null;
+      const cleaned = String(name)
+        .trim()
+        .replace(/^refs\/tags\//, '')
+        .replace(/^release[-\/]/i, '')
+        .replace(/^v/i, '');
+      const m = cleaned.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$/);
+      if (!m) return null;
+      return {
+        major: Number(m[1] || 0),
+        minor: Number(m[2] || 0),
+        patch: Number(m[3] || 0),
+        prerelease: m[4] || null,
+      };
+    }, []);
+
+    const compareSemverAsc = useCallback((a, b) => {
+      if (a.major !== b.major) return a.major - b.major;
+      if (a.minor !== b.minor) return a.minor - b.minor;
+      if (a.patch !== b.patch) return a.patch - b.patch;
+      // Same version numbers: release > prerelease
+      if (a.prerelease && !b.prerelease) return -1;
+      if (!a.prerelease && b.prerelease) return 1;
+      if (a.prerelease && b.prerelease) return a.prerelease.localeCompare(b.prerelease);
+      return 0;
+    }, []);
+
+    const compareTagNamesAsc = useCallback(
+      (aName, bName) => {
+        const aV = parseTagSemver(aName);
+        const bV = parseTagSemver(bName);
+        if (aV && bV) return compareSemverAsc(aV, bV);
+        // Fallback: natural numeric compare
+        return String(aName).localeCompare(String(bName), undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        });
+      },
+      [parseTagSemver, compareSemverAsc]
+    );
+
+    // Preset handlers for Target (To)
+    const presetTargetToHead = useCallback(async () => {
+      if (!selectedRepo?.text) return;
+      try {
+        setTargetLoading(true);
+        const commits = await store.fetchGitRepoCommits(selectedRepo.text);
+        setTargetGitRefOptions(commits);
+        const first = commits?.[0];
+        if (first) {
+          setGitRefState((prev) => ({
+            ...prev,
+            target: {
+              gitObjType: findGitObjectType('commit'),
+              gitObjRef: { key: first.value, text: first.name },
+            },
+          }));
+        }
+      } finally {
+        setTargetLoading(false);
+      }
+    }, [findGitObjectType, selectedRepo?.text, store]);
+
+    const presetTargetToDefaultBranch = useCallback(async () => {
+      if (!selectedRepo?.text) return;
+      try {
+        setTargetLoading(true);
+        const branches = await store.fetchGitObjectRefsByType(selectedRepo.text, 'branch');
+        setTargetGitRefOptions(branches);
+        // Try to find default branch if property exists; fallback to 'main'/'master' or first
+        let chosen =
+          branches?.find((b) => b.isDefault || b.default || b.isBase) ||
+          branches?.find((b) => /^(main|master)$/i.test(b.name)) ||
+          branches?.[0];
+        if (chosen) {
+          setGitRefState((prev) => ({
+            ...prev,
+            target: {
+              gitObjType: findGitObjectType('branch'),
+              gitObjRef: { key: chosen.value, text: chosen.name },
+            },
+          }));
+        }
+      } finally {
+        setTargetLoading(false);
+      }
+    }, [findGitObjectType, selectedRepo?.text, store]);
+
+    const presetTargetToLatestTag = useCallback(async () => {
+      if (!selectedRepo?.text) return;
+      try {
+        setTargetLoading(true);
+        const tags = await store.fetchGitObjectRefsByType(selectedRepo.text, 'tag');
+        // Sort with latest first by semver; fallback to natural numeric
+        const sorted = Array.isArray(tags)
+          ? [...tags].sort((a, b) => -compareTagNamesAsc(a?.name, b?.name))
+          : [];
+        setTargetGitRefOptions(sorted);
+        const chosen = sorted?.[0];
+        if (chosen) {
+          setGitRefState((prev) => ({
+            ...prev,
+            target: {
+              gitObjType: findGitObjectType('tag'),
+              gitObjRef: { key: chosen.value, text: chosen.name },
+            },
+          }));
+        }
+      } finally {
+        setTargetLoading(false);
+      }
+    }, [compareTagNamesAsc, findGitObjectType, selectedRepo?.text, store]);
 
     // Helper functions with useCallback
     const processGitData = useCallback(
@@ -202,7 +334,14 @@ const GitObjectRangeSelector = observer(
     );
 
     useEffect(() => {
-      if (editingMode === false) {
+      if (
+        editingMode === false &&
+        selectedRepo?.key &&
+        gitRefState.source.gitObjType.key &&
+        gitRefState.source.gitObjRef.key &&
+        gitRefState.target.gitObjType.key &&
+        gitRefState.target.gitObjRef.key
+      ) {
         UpdateDocumentRequestObject();
       }
     }, [selectedRepo, gitRefState, editingMode, UpdateDocumentRequestObject, store?.attachmentWikiUrl]);
@@ -221,24 +360,26 @@ const GitObjectRangeSelector = observer(
       }
     }, [dataToRead, selectedRepo]);
 
+    const isFromComplete = Boolean(gitRefState.source.gitObjType.key && gitRefState.source.gitObjRef.key);
+    const isRangeComplete = Boolean(
+      gitRefState.source.gitObjType.key &&
+        gitRefState.source.gitObjRef.key &&
+        gitRefState.target.gitObjType.key &&
+        gitRefState.target.gitObjRef.key
+    );
+
     return (
       <div>
-        <Autocomplete
+        <SmartAutocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
+          loading={store.loadingState.gitRepoLoadingState}
           options={store.repoList.map((repo) => {
             return { key: repo.id, text: repo.name };
           })}
-          getOptionLabel={(option) => `${option.text}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='Select a Repo'
-              variant='outlined'
-            />
-          )}
+          label='Select a Repo'
           value={selectedRepo}
           onChange={async (event, newValue) => {
             setSelectedRepo(newValue);
@@ -265,22 +406,16 @@ const GitObjectRangeSelector = observer(
               item
               xs={4}
             >
-              <Autocomplete
+              <SmartAutocomplete
                 disableClearable
                 autoHighlight
                 openOnFocus
                 size='small'
                 options={gitObjType}
                 value={gitRefState.source.gitObjType}
-                getOptionLabel={(option) => `${option.text}`}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label='Object Type'
-                    variant='outlined'
-                  />
-                )}
+                label='Object Type'
                 onChange={async (event, newValue) => {
+                  setSourceLoading(true);
                   let objects = [];
                   if (newValue.key !== 'commit') {
                     objects = await store.fetchGitObjectRefsByType(selectedRepo.text, newValue.key);
@@ -293,41 +428,36 @@ const GitObjectRangeSelector = observer(
                       gitObjType: newValue,
                       gitObjRef: defaultGitRefState.source.gitObjRef,
                     },
+                    // Clear target when source changes
+                    target: defaultGitRefState.target,
                   });
                   setSourceGitRefOptions(objects);
+                  // Clear target options as well
+                  setTargetGitRefOptions([]);
+                  setSourceLoading(false);
                 }}
+                disabled={sourceLoading}
               />
             </Grid>
             <Grid
               item
               xs={8}
             >
-              <Autocomplete
+              <SmartAutocomplete
                 disableClearable
-                autoFocus
                 openOnFocus
                 size='small'
+                loading={sourceLoading}
                 value={gitRefState.source.gitObjRef}
                 options={sourceGitRefOptions.map((ref) => {
                   return { key: ref.value, text: ref.name };
                 })}
-                getOptionLabel={(option) => `${option.text}`}
                 renderOption={(props, option) => (
-                  <Tooltip
-                    title={option.text}
-                    placement='right'
-                    arrow
-                  >
+                  <Tooltip title={option.text} placement='right' arrow>
                     <li {...props}>{option.text}</li>
                   </Tooltip>
                 )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label='Ref'
-                    variant='outlined'
-                  />
-                )}
+                label='Ref'
                 onChange={async (event, newValue) => {
                   setGitRefState({
                     ...gitRefState,
@@ -335,7 +465,11 @@ const GitObjectRangeSelector = observer(
                       gitObjType: gitRefState.source.gitObjType,
                       gitObjRef: newValue,
                     },
+                    // Clear target when source ref changes
+                    target: defaultGitRefState.target,
                   });
+                  // Clear target options as well
+                  setTargetGitRefOptions([]);
                 }}
               />
             </Grid>
@@ -352,27 +486,59 @@ const GitObjectRangeSelector = observer(
                 <Typography>To</Typography>
               </Divider>
             </Grid>
+            {/* Preset buttons for Target */}
+            <Grid
+              item
+              xs={12}
+            >
+              {!isFromComplete && (
+                <Typography
+                  variant='caption'
+                  color='text.secondary'
+                >
+                  Select From type and ref first
+                </Typography>
+              )}
+              <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                <ButtonGroup
+                  size='small'
+                  variant='outlined'
+                >
+                  <Button
+                    onClick={presetTargetToHead}
+                    disabled={targetLoading || !selectedRepo?.key || !isFromComplete}
+                  >
+                    HEAD (latest commit)
+                  </Button>
+                  <Button
+                    onClick={presetTargetToDefaultBranch}
+                    disabled={targetLoading || !selectedRepo?.key || !isFromComplete}
+                  >
+                    Default branch
+                  </Button>
+                  <Button
+                    onClick={presetTargetToLatestTag}
+                    disabled={targetLoading || !selectedRepo?.key || !isFromComplete}
+                  >
+                    Latest tag
+                  </Button>
+                </ButtonGroup>
+              </Box>
+            </Grid>
             <Grid
               item
               xs={4}
             >
-              <Autocomplete
+              <SmartAutocomplete
                 disableClearable
                 autoHighlight
                 openOnFocus
                 options={gitObjType}
                 value={gitRefState.target.gitObjType}
                 size='small'
-                getOptionLabel={(option) => `${option.text}`}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    size='small'
-                    label='Object Type'
-                    variant='outlined'
-                  />
-                )}
+                label='Object Type'
                 onChange={async (event, newValue) => {
+                  setTargetLoading(true);
                   let objects = [];
                   if (newValue.key !== 'commit') {
                     objects = await store.fetchGitObjectRefsByType(selectedRepo.text, newValue.key);
@@ -387,39 +553,30 @@ const GitObjectRangeSelector = observer(
                     },
                   });
                   setTargetGitRefOptions(objects);
+                  setTargetLoading(false);
                 }}
+                disabled={targetLoading || !isFromComplete}
               />
             </Grid>
             <Grid
               item
               xs={8}
             >
-              <Autocomplete
+              <SmartAutocomplete
                 disableClearable
-                autoFocus
                 openOnFocus
                 size='small'
+                loading={targetLoading}
                 options={targetGitRefOptions.map((ref) => {
                   return { key: ref.value, text: ref.name };
                 })}
                 value={gitRefState.target.gitObjRef}
-                getOptionLabel={(option) => `${option.text}`}
                 renderOption={(props, option) => (
-                  <Tooltip
-                    title={option.text}
-                    placement='right'
-                    arrow
-                  >
+                  <Tooltip title={option.text} placement='right' arrow>
                     <li {...props}>{option.text}</li>
                   </Tooltip>
                 )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label='Ref'
-                    variant='outlined'
-                  />
-                )}
+                label='Ref'
                 onChange={async (event, newValue) => {
                   setGitRefState({
                     ...gitRefState,
@@ -429,6 +586,7 @@ const GitObjectRangeSelector = observer(
                     },
                   });
                 }}
+                disabled={!isFromComplete || targetLoading}
               />
             </Grid>
           </Grid>
@@ -436,6 +594,17 @@ const GitObjectRangeSelector = observer(
 
         <br />
         <br />
+        {/* Inline summary strip */}
+        {isRangeComplete && (
+          <Box sx={{ mb: 1 }}>
+            <Typography
+              variant='body2'
+              color='text.secondary'
+            >
+              {`Comparing: ${gitRefState.source.gitObjType.text}:${gitRefState.source.gitObjRef.text} → ${gitRefState.target.gitObjType.text}:${gitRefState.target.gitObjRef.text}`}
+            </Typography>
+          </Box>
+        )}
         {editingMode ? (
           <PrimaryButton
             text='Add Content To Document'

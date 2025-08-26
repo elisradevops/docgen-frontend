@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PrimaryButton } from '@fluentui/react';
-import Autocomplete from '@mui/material/Autocomplete';
-import TextField from '@mui/material/TextField';
+import SmartAutocomplete from './SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
 const defaultSelectedItem = {
@@ -233,11 +232,12 @@ const ReleaseSelector = observer(
           setContentHeadingLevel(newValue.key);
         }}
       /> */}
-        <Autocomplete
+        <SmartAutocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
+          loading={store.loadingState.releaseDefinitionLoadingState}
           options={Array.from(store.releaseDefinitionList || [])
             .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
             .map((releaseDefinition) => {
@@ -246,21 +246,14 @@ const ReleaseSelector = observer(
                 text: `${releaseDefinition.id} - ${releaseDefinition.name}`,
               };
             })}
-          getOptionLabel={(option) => `${option.text}`}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label='Select a Release'
-              variant='outlined'
-            />
-          )}
+          label='Select a Release'
           onChange={async (event, newValue) => {
             await handleOnReleaseSelect(newValue);
           }}
           value={selectedReleaseDefinition}
         />
         {selectedReleaseDefinition.key !== '' ? (
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
@@ -268,14 +261,7 @@ const ReleaseSelector = observer(
             options={[...releaseDefinitionHistory].map((run) => {
               return { key: run.id, text: run.name };
             })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select start release'
-                variant='outlined'
-              />
-            )}
+            label='Select start release'
             onChange={async (event, newValue) => {
               handleStartPointReleaseSelect(newValue);
             }}
@@ -283,7 +269,7 @@ const ReleaseSelector = observer(
           />
         ) : null}
         {selectedReleaseDefinition.key !== '' && selectedReleaseHistoryStart !== defaultSelectedItem ? (
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
@@ -291,14 +277,7 @@ const ReleaseSelector = observer(
             options={endPointReleaseHistory.map((run) => {
               return { key: run.id, text: run.name };
             })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select end release'
-                variant='outlined'
-              />
-            )}
+            label='Select end release'
             onChange={async (event, newValue) => {
               setSelectedReleaseHistoryEnd(newValue);
             }}

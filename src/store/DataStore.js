@@ -1,6 +1,6 @@
 import { observable, action, makeObservable, computed } from 'mobx';
 import { configureLogger, makeLoggable } from 'mobx-log';
-import RestApi from './actions/AzuredevopsRestapi';
+import RestApi, { setAuthErrorHandler } from './actions/AzuredevopsRestapi';
 import cookies from 'js-cookies';
 import {
   getBucketFileList,
@@ -15,8 +15,13 @@ import {
 } from '../store/data/docManagerApi';
 import { toast } from 'react-toastify';
 import logger from '../utils/logger';
-const azureDevopsUrl = cookies.getItem('azuredevopsUrl');
-const azuredevopsPat = cookies.getItem('azuredevopsPat');
+const sanitizeCookie = (v) => {
+  if (v == null) return '';
+  const s = String(v).trim();
+  return s === 'null' || s === 'undefined' ? '' : s;
+};
+const azureDevopsUrl = sanitizeCookie(cookies.getItem('azuredevopsUrl'));
+const azuredevopsPat = sanitizeCookie(cookies.getItem('azuredevopsPat'));
 class DocGenDataStore {
   azureRestClient = new RestApi(azureDevopsUrl, azuredevopsPat);
 
@@ -51,6 +56,9 @@ class DocGenDataStore {
       selectedFavorite: observable,
       attachmentWikiUrl: observable,
       isCustomTemplate: observable,
+      // auth-related
+      isAuthenticated: observable,
+      lastAuthErrorStatus: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -87,6 +95,8 @@ class DocGenDataStore {
       fetchLoadingState: action,
       uploadFile: action,
       fetchUserDetails: action,
+      testCredentials: action,
+      setCredentials: action,
       fetchFavoritesList: action,
       deleteFavorite: action,
       saveFavorite: action,
@@ -94,6 +104,26 @@ class DocGenDataStore {
       setAttachmentWiki: action,
     });
     makeLoggable(this);
+    // Global 401 handler -> set flags and dispatch event for UI to react
+    setAuthErrorHandler(() => {
+      if (this.lastAuthErrorStatus !== 401) {
+        this.lastAuthErrorStatus = 401;
+      }
+      this.isAuthenticated = false;
+      try {
+        window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+      } catch (e) {
+        // no-op in non-browser contexts
+      }
+    });
+    // Ensure client is initialized from current cookies (module-level reads may be stale at import time)
+    try {
+      const urlFromCookies = sanitizeCookie(cookies.getItem('azuredevopsUrl'));
+      const patFromCookies = sanitizeCookie(cookies.getItem('azuredevopsPat'));
+      if (urlFromCookies && patFromCookies) {
+        this.setCredentials(urlFromCookies, patFromCookies);
+      }
+    } catch {}
     this.fetchDocFolders();
     this.fetchTeamProjects();
     this.fetchCollectionLinkTypes();
@@ -128,14 +158,29 @@ class DocGenDataStore {
   docType = '';
   contextName = '';
   loadingState = {
+    testPlanListLoading: false,
+    teamProjectsLoadingState: false,
     sharedQueriesLoadingState: false,
     testSuiteListLoading: false,
     fieldsByTypeLoadingState: false,
+    contentControlsLoadingState: false,
+    documentsLoadingState: false,
+    templatesLoadingState: false,
+    gitBranchLoadingState: false,
+    gitRepoLoadingState: false,
+    gitRefsLoadingState: false,
+    gitCommitsLoadingState: false,
+    pipelineLoadingState: false,
+    pullRequestLoadingState: false,
+    releaseDefinitionLoadingState: false,
   };
   favoriteList = [];
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
   isCustomTemplate = false;
+  // auth-related state
+  isAuthenticated = false;
+  lastAuthErrorStatus = null; // e.g., 401 when PAT is invalid/expired
   formattingSettings = {
     trimAdditionalSpacingInDescriptions: false,
     trimAdditionalSpacingInTables: false,
@@ -150,7 +195,15 @@ class DocGenDataStore {
     this.formattingSettings = formattingSettings;
   }
 
+  // Update the underlying Azure DevOps client when credentials change (e.g., after login)
+  setCredentials(orgUrl, pat) {
+    const normalizedUrl = (orgUrl || '').endsWith('/') ? orgUrl : `${orgUrl || ''}/`;
+    this.azureRestClient = new RestApi(normalizedUrl, pat);
+  }
+
   fetchDocFolders() {
+    //Add loading state
+    this.loadingState.contentControlsLoadingState = true;
     getBucketFileList('document-forms')
       .then(async (data = []) => {
         await Promise.all(
@@ -165,11 +218,16 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching bucket file list: ${err.message}`);
         logger.error('Error stack: ');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.contentControlsLoadingState = false;
       });
   }
 
   // Every time selecting a tab of a certain doctype, all the specified files from that type are returned
   async fetchDocFormsTemplates(docType) {
+    //Add loading state
+    this.loadingState.contentControlsLoadingState = true;
     try {
       this.documentTemplates = [];
 
@@ -201,12 +259,15 @@ class DocGenDataStore {
       logger.error(`Error occurred while fetching fetchDocFormsTemplates: ${err.message}`);
       logger.error('Error stack:');
       logger.error(err.stack);
+    } finally {
+      this.loadingState.contentControlsLoadingState = false;
     }
   }
 
   //for fetching teamProjects
   fetchTeamProjects() {
     if (azureDevopsUrl && azuredevopsPat) {
+      this.loadingState.teamProjectsLoadingState = true;
       this.azureRestClient
         .getTeamProjects()
         .then((data) => {
@@ -217,11 +278,10 @@ class DocGenDataStore {
           logger.error(`Error occurred while fetching team projects: ${err.message}`);
           logger.error('Error stack:');
           logger.error(err.stack);
+        })
+        .finally(() => {
+          this.loadingState.teamProjectsLoadingState = false;
         });
-    } else {
-      const msg = 'Missing required cookies: azuredevopsUrl or azuredevopsPat';
-      logger.error(msg);
-      toast.error(msg, { autoClose: false });
     }
   }
   //for setting focused teamProject
@@ -277,14 +337,98 @@ class DocGenDataStore {
     });
   }
 
-  fetchUserDetails() {
-    this.azureRestClient.getUserDetails().then((data) => {
-      if (data.identity) {
+  // Validate credentials without mutating global store credentials.
+  // Returns { ok: true, name, userId } on success; otherwise { ok: false, status, message }.
+  async testCredentials(url, pat) {
+    try {
+      const normalizedUrl = (url || '').endsWith('/') ? url : `${url || ''}/`;
+      const tempClient = new RestApi(normalizedUrl, pat);
+      const data = await tempClient.getUserDetails();
+      // Some servers may redirect to an HTML sign-in page; detect that early
+      if (typeof data === 'string' && /(<!DOCTYPE|<html\b)/i.test(data)) {
+        // Treat as an auth redirect; bubble up a synthetic 302 to map a clearer message
+        throw { status: 302, message: 'Received sign-in HTML instead of JSON (likely auth redirect).' };
+      }
+      logger.debug(`User details fetched. hasIdentity=${!!(data && data.identity)}`);
+      if (data?.identity) {
+        const { DisplayName: name, TeamFoundationId: userId } = data.identity;
+        return { ok: true, name, userId };
+      }
+      return { ok: false, status: 0, message: 'Unknown authentication response' };
+    } catch (err) {
+      const status =
+        err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
+      logger.error(
+        `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
+      );
+      let message = 'Authentication failed';
+      const raw = `${err?.message || ''}`;
+      const isNetworkErr = /(Network\s?Error|Failed to fetch|NetworkError)/i.test(raw);
+      const u = (url || '').toLowerCase();
+      const looksLikeAzdoOrTfs = /dev\.azure\.com|visualstudio\.com|\/tfs/i.test(u);
+      if (status === 401) {
+        message = 'Unauthorized (401). Your PAT is invalid or expired.';
+      } else if (status === 403) {
+        message = 'Forbidden (403). Your PAT may not have the required scopes.';
+      } else if (typeof status === 'number' && status >= 300 && status < 400) {
+        // Many ADO/TFS setups redirect unauthenticated users (e.g., to a sign-in page)
+        // Treat this as an auth failure to give a clearer hint
+        message = `Redirect (${status}). The server redirected to a sign-in page, which usually indicates invalid credentials or a policy requiring interactive login. Use a valid PAT and ensure the org allows non-interactive access.`;
+      } else if (!status && isNetworkErr) {
+        // Heuristic: when calling ADO/TFS from the browser with invalid creds, CORS blocks the 401 body
+        if (pat?.trim() && looksLikeAzdoOrTfs) {
+          message = `Likely unauthorized (401), but the browser blocked the response due to CORS. Verify your PAT, required scopes, organization URL, or network/VPN.`;
+        } else {
+          message = `Network error. Could not reach ${url}. Check the organization URL and your network/VPN.`;
+        }
+      } else if (raw) {
+        message = raw;
+      }
+      logger.error(`Auth validation failed${status ? ` (${status})` : ''}: ${message}`);
+      return { ok: false, status, message };
+    }
+  }
+
+  // Attempts to fetch and cache user details for current store credentials.
+  // Returns true on success, false on failure. On failure, sets lastAuthErrorStatus (e.g., 401).
+  async fetchUserDetails() {
+    try {
+      const data = await this.azureRestClient.getUserDetails();
+      if (data?.identity) {
         const { DisplayName: name, TeamFoundationId: userId } = data.identity;
         logger.debug(`User details: ${name} - ${userId}`);
         this.userDetails = { name, userId };
+        this.isAuthenticated = true;
+        this.lastAuthErrorStatus = null;
+        return true;
       }
-    });
+      this.isAuthenticated = false;
+      this.lastAuthErrorStatus = null;
+      return false;
+    } catch (err) {
+      const status =
+        err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
+      this.isAuthenticated = false;
+      this.lastAuthErrorStatus = status ?? null;
+      logger.error(
+        `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
+      );
+      logger.error('Error stack:');
+      logger.error(err?.stack);
+      // Proactively emit unauthorized when we can infer it (covers CORS-masked 401s after PAT revoke)
+      try {
+        const raw = `${err?.message || ''}`;
+        const isNetworkErr = /(Network\s?Error|Failed to fetch|NetworkError|ERR_FAILED)/i.test(raw);
+        const urlFromCookies = sanitizeCookie(cookies.getItem('azuredevopsUrl')).toLowerCase();
+        const patFromCookies = sanitizeCookie(cookies.getItem('azuredevopsPat'));
+        const looksLikeAzdoOrTfs = /dev\.azure\.com|visualstudio\.com|\/tfs/i.test(urlFromCookies);
+        if (status === 401 || status === 302 || (!status && isNetworkErr && looksLikeAzdoOrTfs && patFromCookies)) {
+          // Dispatch global event; App/MainTabs listeners will clear cookies and show login
+          window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+        }
+      } catch {}
+      return false;
+    }
   }
 
   //for setting the selected link type filters
@@ -300,8 +444,14 @@ class DocGenDataStore {
   };
   //for setting selected template
   setSelectedTemplate(templateObject) {
+    // Allow clearing selection safely
+    if (!templateObject) {
+      this.isCustomTemplate = false;
+      this.selectedTemplate = null;
+      return;
+    }
     // If template is not in shared folder, it means it is a custom template
-    this.isCustomTemplate = templateObject?.text?.split('/').shift() !== 'shared';
+    this.isCustomTemplate = templateObject?.text?.split('/')?.shift() !== 'shared';
     this.selectedTemplate = templateObject;
   }
 
@@ -360,6 +510,7 @@ class DocGenDataStore {
 
   //for fetching repo list
   fetchGitRepoList() {
+    this.loadingState.gitRepoLoadingState = true;
     this.azureRestClient
       .getGitRepoList(this.teamProject)
       .then((data) => {
@@ -369,11 +520,15 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching git repo list: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.gitRepoLoadingState = false;
       });
   }
 
   //for fetching repo list
   fetchGitRepoBrances(RepoId) {
+    this.loadingState.gitBranchLoadingState = true;
     this.azureRestClient
       .getGitRepoBrances(RepoId, this.teamProject)
       .then((data) => {
@@ -383,6 +538,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching get repo branches: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.gitBranchLoadingState = false;
       });
   }
 
@@ -397,7 +555,17 @@ class DocGenDataStore {
   }
   //for fetching git repo commits
   async fetchGitRepoCommits(RepoId) {
-    return await this.azureRestClient.getGitRepoCommits(RepoId, this.teamProject);
+    this.loadingState.gitCommitsLoadingState = true;
+    try {
+      return await this.azureRestClient.getGitRepoCommits(RepoId, this.teamProject);
+    } catch (err) {
+      logger.error(`Error occurred while fetching git repo commits: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      return [];
+    } finally {
+      this.loadingState.gitCommitsLoadingState = false;
+    }
   }
 
   //for setting git repo commits
@@ -410,6 +578,7 @@ class DocGenDataStore {
   }
   //for fetching repo pull requests
   fetchRepoPullRequests(RepoId) {
+    this.loadingState.pullRequestLoadingState = true;
     this.azureRestClient
       .getRepoPullRequests(RepoId, this.teamProject)
       .then((data) => {
@@ -419,13 +588,27 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching repo pull requests: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.pullRequestLoadingState = false;
       });
   }
   //for fetching pipeline list
   fetchPipelineList() {
-    this.azureRestClient.getPipelineList(this.teamProject).then((data) => {
-      this.setPipelineList(data);
-    });
+    this.loadingState.pipelineLoadingState = true;
+    this.azureRestClient
+      .getPipelineList(this.teamProject)
+      .then((data) => {
+        this.setPipelineList(data);
+      })
+      .catch((err) => {
+        logger.error(`Error occurred while fetching pipeline list: ${err.message}`);
+        logger.error('Error stack:');
+        logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.pipelineLoadingState = false;
+      });
   }
   //for setting pipeline list
   setPipelineList(data) {
@@ -445,6 +628,7 @@ class DocGenDataStore {
 
   //for fetching release list
   fetchReleaseDefinitionList() {
+    this.loadingState.releaseDefinitionLoadingState = true;
     this.azureRestClient
       .getReleaseDefinitionList(this.teamProject)
       .then((data) => {
@@ -454,6 +638,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching Release Definition List: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.releaseDefinitionLoadingState = false;
       });
   }
   //for setting release list
@@ -462,6 +649,7 @@ class DocGenDataStore {
   }
   //for fetching release history
   async fetchReleaseDefinitionHistory(releaseDefinitionId) {
+    this.loadingState.releaseDefinitionLoadingState = true;
     try {
       const data = await this.azureRestClient.getReleaseDefinitionHistory(
         releaseDefinitionId,
@@ -472,11 +660,14 @@ class DocGenDataStore {
       logger.error(`Error occurred while fetching Release Definition History: ${err.message}`);
       logger.error('Error stack:');
       logger.error(err.stack);
+    } finally {
+      this.loadingState.releaseDefinitionLoadingState = false;
     }
   }
 
   //for fetching test plans
   fetchTestPlans() {
+    this.loadingState.testPlanListLoading = true;
     this.azureRestClient
       .getTestPlansList(this.teamProject)
       .then((data) => {
@@ -491,6 +682,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching test plans: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.testPlanListLoading = false;
       });
   }
 
@@ -500,7 +694,7 @@ class DocGenDataStore {
   }
 
   fetchTestSuitesList(testPlanId) {
-    this.loadingState.testSuitesLoadingState = true;
+    this.loadingState.testSuiteListLoading = true;
     this.azureRestClient
       .getTestSuiteByPlanList(this.teamProject, testPlanId)
       .then((data) => {
@@ -514,7 +708,7 @@ class DocGenDataStore {
         logger.error('Error stack:', err.stack);
       })
       .finally(() => {
-        this.loadingState.testSuitesLoadingState = false;
+        this.loadingState.testSuiteListLoading = false;
       });
   }
 
@@ -528,6 +722,7 @@ class DocGenDataStore {
 
   //for fetching documents
   fetchDocuments() {
+    this.loadingState.documentsLoadingState = true;
     getBucketFileList(this.ProjectBucketName, null, true)
       .then((data) => {
         data.sort(function (a, b) {
@@ -539,11 +734,15 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching documents: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.documentsLoadingState = false;
       });
   }
 
   //for fetching documents
   fetchTemplatesListForDownload() {
+    this.loadingState.templatesLoadingState = true;
     getBucketFileList('templates', null, true, this.teamProjectName, true)
       .then((data) => {
         // Process the data to fix the URLs
@@ -564,6 +763,9 @@ class DocGenDataStore {
         logger.error(`Error occurred while fetching templates: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+      })
+      .finally(() => {
+        this.loadingState.templatesLoadingState = false;
       });
   }
 
@@ -573,7 +775,17 @@ class DocGenDataStore {
   }
 
   async fetchGitObjectRefsByType(selectedRepo, gitObjectType) {
-    return await this.azureRestClient.GetRepoReferences(selectedRepo, this.teamProject, gitObjectType);
+    this.loadingState.gitRefsLoadingState = true;
+    try {
+      return await this.azureRestClient.GetRepoReferences(selectedRepo, this.teamProject, gitObjectType);
+    } catch (err) {
+      logger.error(`Error occurred while fetching git ${gitObjectType} references: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      return [];
+    } finally {
+      this.loadingState.gitRefsLoadingState = false;
+    }
   }
 
   //add a content control object to the doc object
@@ -621,11 +833,17 @@ class DocGenDataStore {
       if (this.docType !== '' && this.userDetails && this.contentControls?.length > 0) {
         const item = this.contentControls[0];
         const { data: dataToSave } = item;
+        // Also persist the currently selected template with the favorite
+        const payload = {
+          ...dataToSave,
+          selectedTemplate: this.selectedTemplate || null,
+          isCustomTemplate: !!this.isCustomTemplate,
+        };
         await createFavorite(
           this.userDetails.userId,
           favName,
           this.docType,
-          dataToSave,
+          payload,
           this.teamProject,
           isShared
         );
@@ -645,6 +863,15 @@ class DocGenDataStore {
 
   loadFavorite(favoriteId) {
     this.selectedFavorite = this.favoriteList.find((fav) => fav.id === favoriteId);
+    try {
+      const savedTemplate = this.selectedFavorite?.dataToSave?.selectedTemplate;
+      if (savedTemplate) {
+        // Apply the saved template selection
+        this.setSelectedTemplate(savedTemplate);
+      }
+    } catch (e) {
+      logger.error(`Error applying template from favorite: ${e.message}`);
+    }
   }
 
   setAttachmentWiki(attachmentWikiUrl) {

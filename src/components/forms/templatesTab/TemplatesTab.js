@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { observer } from 'mobx-react';
 import { Alert, Grid } from '@mui/material';
-import { Button, Table, Tooltip, Input, Space } from 'antd';
+import { Button, Table, Tooltip, Input, Space, Popconfirm } from 'antd';
 import { DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import { toast } from 'react-toastify';
 import Highlighter from 'react-highlight-words';
@@ -102,14 +102,28 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   });
 
   const handleTemplateDelete = (template) => {
+    const templateName = template.name.split('/').pop();
     setDeletingTemplateEtag(template.etag);
     store
       .deleteFileObject(template, 'templates')
-      .then((res) => {
-        toast.success('Template deleted successfully');
+      .then(() => {
+        toast.success(`Template "${templateName}" deleted successfully`);
+        // If the deleted template is currently selected, clear it and inform the user
+        if (store.selectedTemplate?.url === template.url) {
+          try {
+            store.setSelectedTemplate(null);
+            toast.info('The deleted template was selected and has been cleared.');
+          } catch (e) {
+            // Non-blocking UX: log but avoid breaking flow
+            console.warn('Failed to clear selected template after deletion:', e);
+          }
+        }
+        // If shared, inform about global impact
+        if (template.name.startsWith('shared/')) {
+          toast.warn('A shared template was deleted. This affects all projects that use it.');
+        }
       })
       .catch((err) => {
-        const templateName = template.name.split('/').pop();
         toast.error(`Error while deleting template ${templateName}: ${err.message}`, { autoClose: false });
       })
       .finally(() => {
@@ -155,17 +169,35 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
     {
       title: 'Action',
       key: 'action',
-      render: (_, record) => (
-        <Tooltip title='Delete Template'>
-          <Button
-            loading={deletingTemplateEtag === record.etag}
-            disabled={record.name.startsWith('shared/')}
-            onClick={() => handleTemplateDelete(record)}
-            icon={<DeleteOutlined />}
-            danger
-          />
-        </Tooltip>
-      ),
+      render: (_, record) => {
+        const isShared = record.name.startsWith('shared/');
+        const fileName = record.name.split('/').pop();
+        const isCurrentlySelected = store.selectedTemplate?.url === record.url;
+        return (
+          <Popconfirm
+            title={`Delete template "${fileName}"?`}
+            description={(() => {
+              const notes = [];
+              if (isCurrentlySelected) notes.push('It is currently selected and will be unselected after deletion');
+              if (isShared) notes.push('This is a shared template and deleting it affects all projects');
+              notes.push('This action cannot be undone');
+              return notes.join('. ') + '.';
+            })()}
+            okText='Delete'
+            cancelText='Cancel'
+            okButtonProps={{ danger: true, loading: deletingTemplateEtag === record.etag }}
+            onConfirm={() => handleTemplateDelete(record)}
+          >
+            <Tooltip title='Delete Template'>
+              <Button
+                loading={deletingTemplateEtag === record.etag}
+                icon={<DeleteOutlined />}
+                danger
+              />
+            </Tooltip>
+          </Popconfirm>
+        );
+      },
     },
   ];
 

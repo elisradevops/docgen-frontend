@@ -2,10 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 // import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
-import TextField from '@mui/material/TextField';
-import Autocomplete from '@mui/material/Autocomplete';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { PrimaryButton } from '@fluentui/react';
 import { FormLabel, Box, Radio, RadioGroup, Collapse, Typography } from '@mui/material';
 import { toJS } from 'mobx';
@@ -15,8 +11,7 @@ import { validateQuery } from '../../utils/queryValidation';
 import { toast } from 'react-toastify';
 import OpenPcrDialog from '../dialogs/OpenPcrDialog';
 import SettingsDisplay from './SettingsDisplay';
-const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
-const checkedIcon = <CheckBoxIcon fontSize='small' />;
+import SmartAutocomplete from './SmartAutocomplete';
 
 const initialStepsExecutionState = {
   isEnabled: false,
@@ -177,6 +172,13 @@ const STRTableSelector = observer(
           }))
         : setQueryTrees({ testReqTree: [] });
     }, [store.sharedQueries, store.sharedQueries.acquiredTrees]);
+
+    // Clear local suite selections when no test plan is selected to avoid showing stale suites across tabs
+    useEffect(() => {
+      if (!selectedTestPlan?.key) {
+        setSelectedTestSuites([]);
+      }
+    }, [selectedTestPlan?.key]);
 
     //For detailed steps execution
     useEffect(() => {
@@ -496,26 +498,18 @@ const STRTableSelector = observer(
     return (
       <>
         <div>
-          <Autocomplete
+          <SmartAutocomplete
             disableClearable
             style={{ marginBlock: 8, width: 300 }}
             autoHighlight
             openOnFocus
-            options={store.testPlansList.map((testplan) => {
-              return { key: testplan.id, text: testplan.name };
-            })}
-            getOptionLabel={(option) => `${option.text}`}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label='Select a Test Plan'
-                variant='outlined'
-              />
-            )}
-            onChange={async (event, newValue) => {
+            loading={store.loadingState.testPlanLoadingState}
+            options={store.testPlansList.map((testplan) => ({ key: testplan.id, text: testplan.name }))}
+            label='Select a Test Plan'
+            value={selectedTestPlan}
+            onChange={async (_event, newValue) => {
               await handleTestPlanChanged(newValue);
             }}
-            value={selectedTestPlan}
           />
         </div>
         <div>
@@ -533,34 +527,19 @@ const STRTableSelector = observer(
         </div>
         {isSuiteSpecific && (
           <div>
-            <Autocomplete
+            <SmartAutocomplete
               style={{ marginBlock: 8, width: 300 }}
               multiple
-              options={store.testSuiteList}
+              options={selectedTestPlan?.key ? store.testSuiteList : []}
               disableCloseOnSelect
               autoHighlight
-              loading={store.loadingState.testSuitesLoadingState}
+              loading={store.loadingState.testSuiteListLoading}
               groupBy={(option) => option.parent}
+              showCheckbox
               getOptionLabel={(option) => `${option.name} - (${option.id})`}
-              renderOption={(props, option, { selected }) => (
-                <li {...props}>
-                  <Checkbox
-                    icon={icon}
-                    checkedIcon={checkedIcon}
-                    style={{ marginRight: 8 }}
-                    checked={selected}
-                  />
-                  {`${option.name} - (${option.id})`}
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='With suite cases'
-                  variant='outlined'
-                />
-              )}
-              onChange={async (event, newValue) => {
+              isOptionEqualToValue={(option, value) => option?.id === value?.id}
+              label='With suite cases'
+              onChange={async (_event, newValue) => {
                 setSelectedTestSuites(newValue);
               }}
               value={selectedTestSuites}

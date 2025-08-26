@@ -1,20 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Transfer } from 'antd';
-import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
-import CheckBoxIcon from '@mui/icons-material/CheckBox';
-import {
-  Autocomplete,
-  Box,
-  Checkbox,
-  Collapse,
-  FormControlLabel,
-  FormLabel,
-  Grid,
-  Radio,
-  RadioGroup,
-  Stack,
-  TextField,
-} from '@mui/material';
+import { Box, Checkbox, Collapse, FormControlLabel, FormLabel, Grid, Radio, RadioGroup, Stack } from '@mui/material';
+import SmartAutocomplete from './SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
 import QueryTree from './QueryTree';
@@ -30,8 +17,7 @@ const defaultSelectedQueries = {
   includeCommonColumnsMode: 'both',
 };
 
-const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
-const checkedIcon = <CheckBoxIcon fontSize='small' />;
+// Checkboxes for multi-select in suites are rendered internally by SmartAutocomplete when showCheckbox=true
 
 const BASE_FIELDS = [
   { text: 'Execution Date', key: 'executionDate@runResultField' },
@@ -111,6 +97,13 @@ const TestReporterSelector = observer(
           }))
         : setQueryTrees({ testAssociatedTree: [] });
     }, [store.sharedQueries, store.sharedQueries.acquiredTrees]);
+
+    // Clear local suite selections when no test plan is selected to avoid showing stale suites across tabs
+    useEffect(() => {
+      if (!selectedTestPlan?.key) {
+        setSelectedTestSuites([]);
+      }
+    }, [selectedTestPlan?.key]);
 
     const handleTestPlanChanged = useCallback(
       async (newValue) => {
@@ -327,21 +320,13 @@ const TestReporterSelector = observer(
             item
             xs={4}
           >
-            <Autocomplete
+            <SmartAutocomplete
               disableClearable
               autoHighlight
               openOnFocus
-              options={store.testPlansList.map((testplan) => {
-                return { key: testplan.id, text: testplan.name };
-              })}
-              getOptionLabel={(option) => `${option.text}`}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='Select a Test Plan'
-                  variant='outlined'
-                />
-              )}
+              loading={store.loadingState.testPlanLoadingState}
+              options={store.testPlansList.map((testplan) => ({ key: testplan.id, text: testplan.name }))}
+              label='Select a Test Plan'
               onChange={async (event, newValue) => {
                 await handleTestPlanChanged(newValue);
               }}
@@ -352,32 +337,17 @@ const TestReporterSelector = observer(
             item
             xs={8}
           >
-            <Autocomplete
+            <SmartAutocomplete
               multiple
-              options={store.testSuiteList}
-              loading={store.loadingState.testSuitesLoadingState}
+              options={selectedTestPlan?.key ? store.testSuiteList : []}
+              loading={store.loadingState.testSuiteListLoading}
               disableCloseOnSelect
               autoHighlight
               groupBy={(option) => option.parent}
               getOptionLabel={(option) => `${option.name} - (${option.id})`}
-              renderOption={(props, option, { selected }) => (
-                <li {...props}>
-                  <Checkbox
-                    icon={icon}
-                    checkedIcon={checkedIcon}
-                    style={{ marginRight: 8 }}
-                    checked={selected}
-                  />
-                  {`${option.name} - (${option.id})`}
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label='With suite cases'
-                  variant='outlined'
-                />
-              )}
+              optionValueKey='id'
+              label='With suite cases'
+              showCheckbox
               onChange={async (event, newValue) => {
                 setSelectedTestSuites(newValue);
               }}
