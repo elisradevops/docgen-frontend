@@ -103,6 +103,11 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
 
   const handleTemplateDelete = (template) => {
     const templateName = template.name.split('/').pop();
+    // Prevent deletion of shared templates at the UI level
+    if (template.name.startsWith('shared/')) {
+      toast.error('Deleting shared templates is not allowed.');
+      return;
+    }
     setDeletingTemplateEtag(template.etag);
     store
       .deleteFileObject(template, 'templates')
@@ -173,13 +178,21 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         const isShared = record.name.startsWith('shared/');
         const fileName = record.name.split('/').pop();
         const isCurrentlySelected = store.selectedTemplate?.url === record.url;
+        // For shared templates, hide deletion by disabling the action
+        if (isShared) {
+          return (
+            <Tooltip title='Shared templates cannot be deleted'>
+              <Button icon={<DeleteOutlined />} danger disabled />
+            </Tooltip>
+          );
+        }
         return (
           <Popconfirm
             title={`Delete template "${fileName}"?`}
             description={(() => {
               const notes = [];
-              if (isCurrentlySelected) notes.push('It is currently selected and will be unselected after deletion');
-              if (isShared) notes.push('This is a shared template and deleting it affects all projects');
+              if (isCurrentlySelected)
+                notes.push('It is currently selected and will be unselected after deletion');
               notes.push('This action cannot be undone');
               return notes.join('. ') + '.';
             })()}
