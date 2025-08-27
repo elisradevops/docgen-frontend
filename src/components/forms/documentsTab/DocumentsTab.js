@@ -172,6 +172,7 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
         xs={12}
       >
         <Table
+          loading={store.loadingState.documentsLoadingState}
           dataSource={store.documents}
           rowKey='name'
           columns={columns}

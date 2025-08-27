@@ -220,6 +220,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         xs={12}
       >
         <Table
+          loading={store.loadingState.templatesLoadingState}
           columns={columns}
           dataSource={templates.map((row, index) => ({
             ...row,
