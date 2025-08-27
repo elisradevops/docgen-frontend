@@ -1,6 +1,6 @@
 {
   "name": "dg-ui",
-  "version": "0.78.0",
+  "version": "0.79.0",
   "private": true,
   "resolutions": {
     "react-error-overlay": "6.0.9"
