@@ -1,6 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Transfer } from 'antd';
-import { Box, Checkbox, Collapse, FormControlLabel, FormLabel, Grid, Radio, RadioGroup, Stack } from '@mui/material';
+import {
+  Box,
+  Checkbox,
+  Collapse,
+  FormControlLabel,
+  FormLabel,
+  Grid,
+  Radio,
+  RadioGroup,
+  Paper,
+  Typography,
+  Chip,
+} from '@mui/material';
 import SmartAutocomplete from './SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
@@ -104,6 +116,27 @@ const TestReporterSelector = observer(
         setSelectedTestSuites([]);
       }
     }, [selectedTestPlan?.key]);
+
+    // Map suite id -> suite for readable grouping in the suites autocomplete
+    const suiteById = useMemo(() => {
+      const map = new Map();
+      (store.testSuiteList || []).forEach((s) => map.set(s.id, s));
+      return map;
+    }, [store.testSuiteList]);
+
+    // Count selected suites including their descendants (unique)
+    const selectedSuitesDescendantCount = useMemo(() => {
+      if (!selectedTestSuites || selectedTestSuites.length === 0) return 0;
+      const all = store.testSuiteList || [];
+      const set = new Set();
+      const addChildren = (id) => {
+        if (set.has(id)) return;
+        set.add(id);
+        all.filter((s) => s.parent === id).forEach((child) => addChildren(child.id));
+      };
+      selectedTestSuites.forEach((s) => addChildren(s.id));
+      return set.size;
+    }, [selectedTestSuites, store.testSuiteList]);
 
     const handleTestPlanChanged = useCallback(
       async (newValue) => {
@@ -312,224 +345,286 @@ const TestReporterSelector = observer(
       >
         <Grid
           container
-          spacing={2}
+          spacing={1}
           alignItems='center'
           sx={{ marginY: 1, justifyContent: 'center' }}
         >
           <Grid
             item
-            xs={4}
-          >
-            <SmartAutocomplete
-              disableClearable
-              autoHighlight
-              openOnFocus
-              loading={store.loadingState.testPlanLoadingState}
-              options={store.testPlansList.map((testplan) => ({ key: testplan.id, text: testplan.name }))}
-              label='Select a Test Plan'
-              onChange={async (event, newValue) => {
-                await handleTestPlanChanged(newValue);
-              }}
-              value={selectedTestPlan}
-            />
-          </Grid>
-          <Grid
-            item
-            xs={8}
-          >
-            <SmartAutocomplete
-              multiple
-              options={selectedTestPlan?.key ? store.testSuiteList : []}
-              loading={store.loadingState.testSuiteListLoading}
-              disableCloseOnSelect
-              autoHighlight
-              groupBy={(option) => option.parent}
-              getOptionLabel={(option) => `${option.name} - (${option.id})`}
-              optionValueKey='id'
-              label='With suite cases'
-              showCheckbox
-              onChange={async (event, newValue) => {
-                setSelectedTestSuites(newValue);
-              }}
-              value={selectedTestSuites}
-            />
-          </Grid>
-          <Grid
-            item
             xs={12}
           >
-            <Stack
-              direction='row'
-              spacing={2}
+            <Paper
+              variant='outlined'
+              sx={{ p: 1.25 }}
             >
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={allowGrouping}
-                      onChange={(event, checked) => {
-                        setAllowGrouping(checked);
-                      }}
-                    />
-                  }
-                  label='Allow Grouping by Test Suite'
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={allowCrossTestPlan}
-                      onChange={(event, checked) => {
-                        setAllowCrossTestPlan(checked);
-                      }}
-                    />
-                  }
-                  label='Allow Results From Cross Test Plans'
-                />
-
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={enableRunTestCaseFilter}
-                      onChange={(event, checked) => {
-                        setEnableRunTestCaseFilter(checked);
-                      }}
-                    />
-                  }
-                  label='Filter Out Not Run Test Cases'
-                />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={enableRunStepStatusFilter}
-                      onChange={(event, checked) => {
-                        setEnableRunStepStatusFilter(checked);
-                      }}
-                    />
-                  }
-                  label='Filter Out Not Run Steps'
-                />
-              </Box>
-
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                <FormLabel
-                  id='error-filter-mode'
-                  label='Error Filter Mode'
+              <Typography
+                variant='subtitle2'
+                sx={{ mb: 0.5 }}
+              >
+                Scope
+              </Typography>
+              <Grid
+                container
+                spacing={1}
+                alignItems='center'
+              >
+                <Grid
+                  item
+                  xs={4}
                 >
-                  Show only Failed or With Comments via:
-                </FormLabel>
-                <RadioGroup
-                  defaultValue='none'
-                  row
-                  name='error-filter-mode'
-                  value={errorFilterMode}
-                  onChange={(event) => {
-                    setErrorFilterMode(event.target.value);
-                  }}
+                  <SmartAutocomplete
+                    size='small'
+                    disableClearable
+                    autoHighlight
+                    openOnFocus
+                    loading={store.loadingState.testPlanLoadingState}
+                    options={store.testPlansList.map((testplan) => ({
+                      key: testplan.id,
+                      text: testplan.name,
+                    }))}
+                    label='Select a Test Plan'
+                    textFieldProps={{
+                      size: 'small',
+                      sx: {
+                        '& .MuiInputBase-root': { minHeight: 56 },
+                      },
+                    }}
+                    onChange={async (event, newValue) => {
+                      await handleTestPlanChanged(newValue);
+                    }}
+                    value={selectedTestPlan}
+                  />
+                </Grid>
+                <Grid
+                  item
+                  xs={8}
                 >
-                  <FormControlLabel
-                    value='none'
-                    label='None'
-                    control={<Radio />}
+                  <SmartAutocomplete
+                    multiple
+                    size='small'
+                    options={selectedTestPlan?.key ? store.testSuiteList : []}
+                    loading={store.loadingState.testSuiteListLoading}
+                    disableCloseOnSelect
+                    autoHighlight
+                    groupBy={(option) => {
+                      const parent = suiteById.get(option.parent);
+                      return parent ? `Parent: ${parent.name}` : 'Top Level';
+                    }}
+                    getOptionLabel={(option) => `${option.name} - (${option.id})`}
+                    optionValueKey='id'
+                    label='Test Suites (include child suites)'
+                    placeholder='Search suites...'
+                    textFieldProps={{
+                      size: 'small',
+                      helperText: selectedTestPlan?.key
+                        ? 'Descendants are auto-included'
+                        : 'Select a test plan first',
+                    }}
+                    showCheckbox
+                    disabled={!selectedTestPlan?.key}
+                    onChange={async (_event, newValue) => {
+                      setSelectedTestSuites(newValue);
+                    }}
+                    value={selectedTestSuites}
                   />
-                  <FormControlLabel
-                    value='onlyTestCaseResult'
-                    label='By Test Case Level'
-                    control={<Radio />}
-                  />
-                  <FormControlLabel
-                    value='onlyTestStepsResult'
-                    label='By Test Steps Level'
-                    control={<Radio />}
-                  />
-                  <FormControlLabel
-                    value='both'
-                    label='By Test Case and Test Steps Level'
-                    control={<Radio />}
-                  />
-                </RadioGroup>
-
-                <FormLabel
-                  id='linked-item-query-group'
-                  label='Linked Item Fetch Type'
-                >
-                  Linked Item Based on:
-                </FormLabel>
-                <RadioGroup
-                  defaultValue='none'
-                  row
-                  name='linked-item-query-group'
-                  value={linkedQueryRequest.linkedQueryMode}
-                  onChange={(event) => {
-                    handleLinkedQueryChange(event.target.value);
-                  }}
-                >
-                  <FormControlLabel
-                    value='none'
-                    label='None'
-                    control={<Radio />}
-                  />
-                  <FormControlLabel
-                    value='linked'
-                    label='Linked'
-                    control={<Radio />}
-                  />
-                  <FormControlLabel
-                    value='query'
-                    label='Query'
-                    control={<Radio />}
-                    disabled={
-                      queryTrees.testAssociatedTree === null || !queryTrees.testAssociatedTree.length > 0
-                    }
-                  />
-                </RadioGroup>
-                <Collapse
-                  in={linkedQueryRequest.linkedQueryMode === 'query'}
-                  timeout='auto'
-                  unmountOnExit
-                >
-                  <QueryTree
-                    data={queryTrees.testAssociatedTree}
-                    prevSelectedQuery={linkedQueryRequest.testAssociatedQuery}
-                    onSelectedQuery={onQuerySelected}
-                    queryType={'test-associated'}
-                    isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                  />
-                </Collapse>
-              </Box>
-            </Stack>
+                </Grid>
+              </Grid>
+            </Paper>
           </Grid>
-          {/* Empty Space */}
           <Grid
             item
-            xs={8}
-          />
+            xs={12}
+          >
+            <Paper
+              variant='outlined'
+              sx={{ p: 1.25 }}
+            >
+              <Typography
+                variant='subtitle2'
+                sx={{ mb: 0.5 }}
+              >
+                Filters and Linked Items
+              </Typography>
+              <Grid
+                container
+                spacing={1}
+              >
+                <Grid
+                  item
+                  xs={5}
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={allowGrouping}
+                          onChange={(event, checked) => {
+                            setAllowGrouping(checked);
+                          }}
+                        />
+                      }
+                      label='Allow Grouping by Test Suite'
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={allowCrossTestPlan}
+                          onChange={(event, checked) => {
+                            setAllowCrossTestPlan(checked);
+                          }}
+                        />
+                      }
+                      label='Include results from other test plans'
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={enableRunTestCaseFilter}
+                          onChange={(event, checked) => {
+                            setEnableRunTestCaseFilter(checked);
+                          }}
+                        />
+                      }
+                      label='Only include executed test cases'
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={enableRunStepStatusFilter}
+                          onChange={(event, checked) => {
+                            setEnableRunStepStatusFilter(checked);
+                          }}
+                        />
+                      }
+                      label='Only include executed steps'
+                    />
+                  </Box>
+                </Grid>
+                <Grid
+                  item
+                  xs={7}
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <FormLabel id='error-filter-mode-label'>Error Filter Mode</FormLabel>
+                    <RadioGroup
+                      row
+                      name='error-filter-mode'
+                      aria-labelledby='error-filter-mode-label'
+                      value={errorFilterMode}
+                      onChange={(event) => {
+                        setErrorFilterMode(event.target.value);
+                      }}
+                    >
+                      <FormControlLabel
+                        value='none'
+                        label='None'
+                        control={<Radio size='small' />}
+                      />
+                      <FormControlLabel
+                        value='onlyTestCaseResult'
+                        label='By test case level'
+                        control={<Radio size='small' />}
+                      />
+                      <FormControlLabel
+                        value='onlyTestStepsResult'
+                        label='By step level'
+                        control={<Radio size='small' />}
+                      />
+                      <FormControlLabel
+                        value='both'
+                        label='By test case and step level'
+                        control={<Radio size='small' />}
+                      />
+                    </RadioGroup>
+                    <FormLabel id='linked-item-query-group-label'>Linked Item Fetch Type</FormLabel>
+                    <RadioGroup
+                      row
+                      name='linked-item-query-group'
+                      aria-labelledby='linked-item-query-group-label'
+                      value={linkedQueryRequest.linkedQueryMode}
+                      onChange={(event) => {
+                        handleLinkedQueryChange(event.target.value);
+                      }}
+                    >
+                      <FormControlLabel
+                        value='none'
+                        label='None'
+                        control={<Radio size='small' />}
+                      />
+                      <FormControlLabel
+                        value='linked'
+                        label='Linked'
+                        control={<Radio size='small' />}
+                      />
+                      <FormControlLabel
+                        value='query'
+                        label='Query'
+                        control={<Radio size='small' />}
+                        disabled={
+                          !queryTrees.testAssociatedTree || queryTrees.testAssociatedTree.length === 0
+                        }
+                      />
+                    </RadioGroup>
+                    <Collapse
+                      in={linkedQueryRequest.linkedQueryMode === 'query'}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <QueryTree
+                        data={queryTrees.testAssociatedTree}
+                        prevSelectedQuery={linkedQueryRequest.testAssociatedQuery}
+                        onSelectedQuery={onQuerySelected}
+                        queryType={'test-associated'}
+                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                      />
+                    </Collapse>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+          </Grid>
 
           <Grid
             item
             xs={12}
           >
-            <Transfer
-              showSearch
-              style={{
-                width: '75%',
-                display: 'flex',
-                justifyContent: 'start',
-              }}
-              listStyle={{
-                width: 'calc(50% - 20px)', // Each list takes almost half the width
-                flexGrow: 1,
-                height: '300px',
-              }}
-              listHeight={350} // Controls the scrollable area height
-              dataSource={fieldsToSelect}
-              targetKeys={selectedFields}
-              render={(item) => item.text}
-              onChange={(nextTargetKeys) => {
-                setSelectedFields(nextTargetKeys);
-              }}
-              titles={['Available Fields', 'Selected Fields']}
-              filterOption={(input, option) => option.text.toLowerCase().includes(input.toLowerCase())}
-            />
+            <Paper
+              variant='outlined'
+              sx={{ p: 1.25 }}
+            >
+              <Typography
+                variant='subtitle2'
+                sx={{ mb: 0.5 }}
+              >
+                Columns (Fields)
+              </Typography>
+              <Transfer
+                showSearch
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'flex-start',
+                }}
+                listStyle={{
+                  width: 'calc(50% - 20px)',
+                  flexGrow: 1,
+                  height: '240px',
+                }}
+                listHeight={280}
+                dataSource={fieldsToSelect}
+                targetKeys={selectedFields}
+                render={(item) => item.text}
+                onChange={(nextTargetKeys) => {
+                  setSelectedFields(nextTargetKeys);
+                }}
+                titles={['Available Fields', 'Selected Fields']}
+                filterOption={(input, option) => option.text.toLowerCase().includes(input.toLowerCase())}
+              />
+            </Paper>
           </Grid>
         </Grid>
       </Collapse>

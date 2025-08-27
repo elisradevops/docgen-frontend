@@ -930,7 +930,9 @@ class DocGenDataStore {
       tfsCollectionUri: azureDevopsUrl,
       PAT: azuredevopsPat,
       teamProjectName: this.teamProjectName,
-      templateFile: this.selectedTemplate.url,
+      // For flows like Test-Reporter (Excel), there may be no selected template.
+      // Avoid accessing .url on null and let the API handle an empty template when appropriate.
+      templateFile: this.selectedTemplate?.url || '',
       uploadProperties: {
         bucketName: this.ProjectBucketName,
         fileName: tempFileName,
