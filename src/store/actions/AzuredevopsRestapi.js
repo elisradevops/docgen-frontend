@@ -41,6 +41,7 @@ export default class AzuredevopsRestapi {
     return this._wrap(async () => {
       let ticketDataProvider = await this.azureRestApi.getTicketsDataProvider();
       return ticketDataProvider.GetSharedQueries(teamProjectId, '', docType);
+      //Use My%20Queries for testing
     });
   }
 
