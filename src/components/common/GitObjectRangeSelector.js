@@ -50,6 +50,7 @@ const GitObjectRangeSelector = observer(
     const [targetGitRefOptions, setTargetGitRefOptions] = useState([]);
     const [sourceLoading, setSourceLoading] = useState(false);
     const [targetLoading, setTargetLoading] = useState(false);
+    // Sorting toggle is now internal to SmartAutocomplete
 
     const UpdateDocumentRequestObject = useCallback(() => {
       if (selectedRepo.text) {
@@ -131,6 +132,8 @@ const GitObjectRangeSelector = observer(
       },
       [store]
     );
+
+    // Sorting is handled inside SmartAutocomplete per instance using sortByLabel prop
 
     const processReference = useCallback((options, refValue, label, defaultValue) => {
       if (!refValue) return defaultValue;
@@ -289,12 +292,10 @@ const GitObjectRangeSelector = observer(
       try {
         setTargetLoading(true);
         const tags = await store.fetchGitObjectRefsByType(selectedRepo.text, 'tag');
-        // Sort with latest first by semver; fallback to natural numeric
-        const sorted = Array.isArray(tags)
-          ? [...tags].sort((a, b) => -compareTagNamesAsc(a?.name, b?.name))
-          : [];
-        setTargetGitRefOptions(sorted);
-        const chosen = sorted?.[0];
+        // Options remain in backend order; SmartAutocomplete handles instance sorting
+        setTargetGitRefOptions(tags);
+        // Choose the first tag from commit-history order (backend-sorted by latest commit)
+        const chosen = Array.isArray(tags) ? tags?.[0] : undefined;
         if (chosen) {
           setGitRefState((prev) => ({
             ...prev,
@@ -307,7 +308,7 @@ const GitObjectRangeSelector = observer(
       } finally {
         setTargetLoading(false);
       }
-    }, [compareTagNamesAsc, findGitObjectType, selectedRepo?.text, store]);
+    }, [findGitObjectType, selectedRepo?.text, store]);
 
     // Helper functions with useCallback
     const processGitData = useCallback(
@@ -360,6 +361,8 @@ const GitObjectRangeSelector = observer(
       }
     }, [dataToRead, selectedRepo]);
 
+    // No re-sorting needed here; SmartAutocomplete handles sorting per instance
+
     const isFromComplete = Boolean(gitRefState.source.gitObjType.key && gitRefState.source.gitObjRef.key);
     const isRangeComplete = Boolean(
       gitRefState.source.gitObjType.key &&
@@ -390,6 +393,7 @@ const GitObjectRangeSelector = observer(
             container
             spacing={1}
           >
+            {/* Sort toggle moved inside SmartAutocomplete */}
             {/* Source */}
             <Grid
               item
@@ -452,6 +456,7 @@ const GitObjectRangeSelector = observer(
                 options={sourceGitRefOptions.map((ref) => {
                   return { key: ref.value, text: ref.name };
                 })}
+                showSortToggle={gitRefState.source.gitObjType.key !== 'commit'}
                 renderOption={(props, option) => (
                   <Tooltip title={option.text} placement='right' arrow>
                     <li {...props}>{option.text}</li>
@@ -571,6 +576,7 @@ const GitObjectRangeSelector = observer(
                   return { key: ref.value, text: ref.name };
                 })}
                 value={gitRefState.target.gitObjRef}
+                showSortToggle={gitRefState.target.gitObjType.key !== 'commit'}
                 renderOption={(props, option) => (
                   <Tooltip title={option.text} placement='right' arrow>
                     <li {...props}>{option.text}</li>

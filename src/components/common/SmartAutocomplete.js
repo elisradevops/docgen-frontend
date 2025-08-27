@@ -7,9 +7,11 @@ import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CircularProgress from '@mui/material/CircularProgress';
 import { createFilterOptions } from '@mui/material/Autocomplete';
 import Highlighter from 'react-highlight-words';
+import { IconButton, Tooltip } from '@mui/material';
+import { FaHistory, FaSortAlphaDown, FaSortAlphaUpAlt } from 'react-icons/fa';
 
-const icon = <CheckBoxOutlineBlankIcon fontSize="small" />;
-const checkedIcon = <CheckBoxIcon fontSize="small" />;
+const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
+const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
 // Safe getter for nested keys like 'a.b.c'
 function get(obj, path) {
@@ -30,6 +32,7 @@ function get(obj, path) {
  * - Better search across multiple fields via searchKeys
  * - Optional checkbox rendering for multiple selection
  * - Debounced onSearch for remote filtering
+ * - Optional client-side sorting (by label or custom comparator)
  */
 export default function SmartAutocomplete({
   options = [],
@@ -56,9 +59,24 @@ export default function SmartAutocomplete({
   ListboxProps,
   highlightMatches = true,
   highlightStyle = { backgroundColor: 'rgba(255, 235, 59, 0.35)' },
+  // Sorting controls
+  sortByLabel = false,
+  sortDirection = 'asc', // 'asc' | 'desc'
+  sortComparator, // (a, b) => number
+  // Internal sort toggle UI
+  showSortToggle = false,
+  // 'default' | 'name-asc' | 'name-desc' ("name" maps to 'name-asc' for backward-compat)
+  initialSortMode = 'default',
+  // Tooltips per mode
+  sortToggleTooltips = { default: 'Commit history', 'name-asc': 'Name (A→Z)', 'name-desc': 'Name (Z→A)' },
+  // Optional custom icons per mode
+  sortToggleIcons,
+  onSortModeChange,
   ...autocompleteProps
 }) {
   const [inputValue, setInputValue] = useState('');
+  const normalizedInitialMode = initialSortMode === 'name' ? 'name-asc' : initialSortMode;
+  const [internalSortMode, setInternalSortMode] = useState(normalizedInitialMode);
 
   // Debounce external onSearch
   useEffect(() => {
@@ -80,9 +98,7 @@ export default function SmartAutocomplete({
   const effectiveFilterOptions = useMemo(() => {
     if (typeof filterOptionsProp === 'function') return filterOptionsProp;
     const keys =
-      (Array.isArray(searchKeys) && searchKeys.length > 0)
-        ? searchKeys
-        : [optionLabelKey, optionValueKey];
+      Array.isArray(searchKeys) && searchKeys.length > 0 ? searchKeys : [optionLabelKey, optionValueKey];
     return createFilterOptions({
       stringify: (option) => {
         // Always include the label text to ensure typing matches what users see
@@ -94,18 +110,54 @@ export default function SmartAutocomplete({
     });
   }, [filterOptionsProp, searchKeys, optionLabelKey, optionValueKey, effectiveGetOptionLabel]);
 
+  // Compute sorted options if requested
+  const displayOptions = useMemo(() => {
+    if (!Array.isArray(options)) return [];
+    let arr = options;
+    let cmp = null;
+    if (showSortToggle) {
+      // Internal toggle drives sorting
+      if (internalSortMode === 'name-asc' || internalSortMode === 'name-desc') {
+        const base = (a, b) =>
+          String(effectiveGetOptionLabel(a) ?? '').localeCompare(
+            String(effectiveGetOptionLabel(b) ?? ''),
+            undefined,
+            { numeric: true, sensitivity: 'base' }
+          );
+        const asc = internalSortMode === 'name-asc';
+        cmp = asc ? base : (a, b) => -base(a, b);
+      }
+    } else {
+      // Backward-compat props-based sorting
+      if (typeof sortComparator === 'function') {
+        cmp = sortComparator;
+      } else if (sortByLabel) {
+        const base = (a, b) =>
+          String(effectiveGetOptionLabel(a) ?? '').localeCompare(
+            String(effectiveGetOptionLabel(b) ?? ''),
+            undefined,
+            { numeric: true, sensitivity: 'base' }
+          );
+        cmp = sortDirection === 'desc' ? (a, b) => -base(a, b) : base;
+      }
+    }
+    if (!cmp) return arr;
+    return [...arr].sort(cmp);
+  }, [options, sortComparator, sortByLabel, sortDirection, effectiveGetOptionLabel, showSortToggle, internalSortMode]);
+
   const defaultRenderOption = (props, option, state) => {
     const labelText = String(effectiveGetOptionLabel(option) ?? '');
-    const content = highlightMatches && inputValue
-      ? (
-          <Highlighter
-            highlightStyle={highlightStyle}
-            searchWords={inputValue.trim().split(/\s+/).filter(Boolean)}
-            autoEscape
-            textToHighlight={labelText}
-          />
-        )
-      : labelText;
+    const content =
+      highlightMatches && inputValue ? (
+        <Highlighter
+          highlightStyle={highlightStyle}
+          searchWords={inputValue.trim().split(/\s+/).filter(Boolean)}
+          autoEscape
+          textToHighlight={labelText}
+        />
+      ) : (
+        labelText
+      );
 
     if (!multiple || !showCheckbox) {
       return (
@@ -135,9 +187,22 @@ export default function SmartAutocomplete({
     return defaultRenderOption(props, option, state);
   };
 
-  return (
+  const currentIcon = (() => {
+    if (sortToggleIcons && sortToggleIcons[internalSortMode]) return sortToggleIcons[internalSortMode];
+    if (internalSortMode === 'default') return <FaHistory size={16} />;
+    if (internalSortMode === 'name-desc') return <FaSortAlphaUpAlt size={16} />; // Z→A
+    return <FaSortAlphaDown size={16} />; // A→Z
+  })();
+
+  const cycleMode = () => {
+    const next = internalSortMode === 'default' ? 'name-asc' : internalSortMode === 'name-asc' ? 'name-desc' : 'default';
+    setInternalSortMode(next);
+    onSortModeChange && onSortModeChange(next);
+  };
+
+  const auto = (
     <Autocomplete
-      options={options}
+      options={displayOptions}
       value={value}
       multiple={multiple}
       loading={loading}
@@ -159,7 +224,19 @@ export default function SmartAutocomplete({
             ...params.InputProps,
             endAdornment: (
               <>
-                {loading ? <CircularProgress color="inherit" size={16} /> : null}
+                {loading ? (
+                  <CircularProgress
+                    color='inherit'
+                    size={16}
+                  />
+                ) : null}
+                {showSortToggle && (
+                  <Tooltip title={sortToggleTooltips?.[internalSortMode] ?? ''}>
+                    <IconButton size='small' onClick={cycleMode} edge='end' tabIndex={-1}>
+                      {currentIcon}
+                    </IconButton>
+                  </Tooltip>
+                )}
                 {params.InputProps.endAdornment}
               </>
             ),
@@ -171,4 +248,5 @@ export default function SmartAutocomplete({
       {...autocompleteProps}
     />
   );
+  return auto;
 }
