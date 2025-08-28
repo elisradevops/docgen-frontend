@@ -25,6 +25,12 @@ function get(obj, path) {
   return cur ?? '';
 }
 
+// Get the search term as a single string (no longer splitting into words)
+function getSearchTerm(input) {
+  if (!input || typeof input !== 'string') return '';
+  return input.trim().toLowerCase();
+}
+
 /**
  * SmartAutocomplete
  * A wrapper over MUI Autocomplete with:
@@ -99,15 +105,29 @@ export default function SmartAutocomplete({
     if (typeof filterOptionsProp === 'function') return filterOptionsProp;
     const keys =
       Array.isArray(searchKeys) && searchKeys.length > 0 ? searchKeys : [optionLabelKey, optionValueKey];
-    return createFilterOptions({
-      stringify: (option) => {
-        // Always include the label text to ensure typing matches what users see
+    
+    // Custom filter function for single substring matching
+    return (options, { inputValue, getOptionLabel }) => {
+      if (!inputValue || !inputValue.trim()) return options;
+      
+      const searchTerm = inputValue.trim().toLowerCase();
+      if (searchTerm.length === 0) return options;
+      
+      return options.filter(option => {
+        // Get all searchable text for this option
         const labelText = String(effectiveGetOptionLabel(option) ?? '');
-        const extra = keys.map((k) => String(get(option, k)));
-        return [labelText, ...extra].join(' ').trim();
-      },
-      trim: true,
-    });
+        const extraKeys = keys.filter(k => k !== optionLabelKey);
+        const extra = extraKeys.map((k) => String(get(option, k)));
+        const allText = [labelText, ...extra].filter(Boolean).join(' ').trim();
+        
+        // Normalize the text for matching
+        const normalizedText = allText.toLowerCase();
+        
+        // Single substring matching - treat entire input as one search term
+        // "est pro" will match "test project" as a substring
+        return normalizedText.includes(searchTerm);
+      });
+    };
   }, [filterOptionsProp, searchKeys, optionLabelKey, optionValueKey, effectiveGetOptionLabel]);
 
   // Compute sorted options if requested
@@ -147,12 +167,14 @@ export default function SmartAutocomplete({
 
   const defaultRenderOption = (props, option, state) => {
     const labelText = String(effectiveGetOptionLabel(option) ?? '');
+    const searchTerm = getSearchTerm(inputValue);
     const content =
-      highlightMatches && inputValue ? (
+      highlightMatches && inputValue && searchTerm.length > 0 ? (
         <Highlighter
           highlightStyle={highlightStyle}
-          searchWords={inputValue.trim().split(/\s+/).filter(Boolean)}
+          searchWords={[searchTerm]} // Single search term instead of multiple words
           autoEscape
+          caseSensitive={false}
           textToHighlight={labelText}
         />
       ) : (
@@ -206,6 +228,7 @@ export default function SmartAutocomplete({
       value={value}
       multiple={multiple}
       loading={loading}
+      disabled={loading} // Disable selection when loading
       disableClearable={disableClearable}
       filterOptions={effectiveFilterOptions}
       isOptionEqualToValue={effectiveIsOptionEqual}
@@ -213,7 +236,7 @@ export default function SmartAutocomplete({
       renderOption={wrappedRenderOption}
       inputValue={inputValue}
       onInputChange={(_e, v) => setInputValue(v)}
-      noOptionsText={noOptionsText}
+      noOptionsText={loading ? 'Loading...' : noOptionsText}
       ListboxProps={ListboxProps}
       renderInput={(params) => (
         <TextField
@@ -250,3 +273,25 @@ export default function SmartAutocomplete({
   );
   return auto;
 }
+
+// Static helper method for consistent highlighting in custom renderOption implementations
+SmartAutocomplete.renderHighlightedText = (text, inputValue, highlightStyle = { backgroundColor: 'rgba(255, 235, 59, 0.35)' }) => {
+  if (!inputValue || !inputValue.trim()) {
+    return text;
+  }
+  
+  const searchTerm = inputValue.trim().toLowerCase();
+  if (!searchTerm) {
+    return text;
+  }
+  
+  return (
+    <Highlighter
+      highlightStyle={highlightStyle}
+      searchWords={[searchTerm]}
+      autoEscape
+      caseSensitive={false}
+      textToHighlight={text}
+    />
+  );
+};

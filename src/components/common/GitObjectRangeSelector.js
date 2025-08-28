@@ -459,7 +459,7 @@ const GitObjectRangeSelector = observer(
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}
                     >
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>{option.text}</span>
+                        <span>{SmartAutocomplete.renderHighlightedText(option.text, state.inputValue)}</span>
                         {dateStr && (
                           <span style={{ fontSize: 12, color: '#666' }}>{`Committed ${dateStr}`}</span>
                         )}
@@ -591,7 +591,7 @@ const GitObjectRangeSelector = observer(
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}
                     >
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>{option.text}</span>
+                        <span>{SmartAutocomplete.renderHighlightedText(option.text, state.inputValue)}</span>
                         {dateStr && (
                           <span style={{ fontSize: 12, color: '#666' }}>{`Committed ${dateStr}`}</span>
                         )}

@@ -237,7 +237,9 @@ export const TemplateFileSelectDialog = ({
                         }}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span>{fileLabel}</span>
+                          <span>
+                            {SmartAutocomplete.renderHighlightedText(fileLabel, state.inputValue)}
+                          </span>
                           <span
                             style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center' }}
                           >
