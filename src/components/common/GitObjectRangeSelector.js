@@ -1,17 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PrimaryButton } from '@fluentui/react';
-import {
-  Grid,
-  Divider,
-  Typography,
-  Tooltip,
-  Button,
-  ButtonGroup,
-  Box,
-} from '@mui/material';
+import { Grid, Divider, Typography, Button, ButtonGroup, Box } from '@mui/material';
 import SmartAutocomplete from './SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
+
 const gitObjType = [
   { key: 'tag', text: 'Tags' },
   { key: 'branch', text: 'Branches' },
@@ -449,19 +442,31 @@ const GitObjectRangeSelector = observer(
             >
               <SmartAutocomplete
                 disableClearable
+                autoHighlight
                 openOnFocus
                 size='small'
                 loading={sourceLoading}
                 value={gitRefState.source.gitObjRef}
                 options={sourceGitRefOptions.map((ref) => {
-                  return { key: ref.value, text: ref.name };
+                  return { key: ref.value, text: ref.name, date: ref.date };
                 })}
                 showSortToggle={gitRefState.source.gitObjType.key !== 'commit'}
-                renderOption={(props, option) => (
-                  <Tooltip title={option.text} placement='right' arrow>
-                    <li {...props}>{option.text}</li>
-                  </Tooltip>
-                )}
+                renderOption={(props, option, state) => {
+                  const dateStr = option?.date ? new Date(option.date).toLocaleString() : null;
+                  return (
+                    <li
+                      {...props}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{option.text}</span>
+                        {dateStr && (
+                          <span style={{ fontSize: 12, color: '#666' }}>{`Committed ${dateStr}`}</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                }}
                 label='Ref'
                 onChange={async (event, newValue) => {
                   setGitRefState({
@@ -569,19 +574,31 @@ const GitObjectRangeSelector = observer(
             >
               <SmartAutocomplete
                 disableClearable
+                autoHighlight
                 openOnFocus
                 size='small'
                 loading={targetLoading}
                 options={targetGitRefOptions.map((ref) => {
-                  return { key: ref.value, text: ref.name };
+                  return { key: ref.value, text: ref.name, date: ref.date };
                 })}
                 value={gitRefState.target.gitObjRef}
                 showSortToggle={gitRefState.target.gitObjType.key !== 'commit'}
-                renderOption={(props, option) => (
-                  <Tooltip title={option.text} placement='right' arrow>
-                    <li {...props}>{option.text}</li>
-                  </Tooltip>
-                )}
+                renderOption={(props, option, state) => {
+                  const dateStr = option?.date ? new Date(option.date).toLocaleString() : null;
+                  return (
+                    <li
+                      {...props}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8 }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{option.text}</span>
+                        {dateStr && (
+                          <span style={{ fontSize: 12, color: '#666' }}>{`Committed ${dateStr}`}</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                }}
                 label='Ref'
                 onChange={async (event, newValue) => {
                   setGitRefState({
