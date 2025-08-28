@@ -125,7 +125,8 @@ export default function SmartAutocomplete({
         
         // Single substring matching - treat entire input as one search term
         // "est pro" will match "test project" as a substring
-        return normalizedText.includes(searchTerm);
+        // Must be case-insensitive substring match
+        return normalizedText.toLowerCase().includes(searchTerm.toLowerCase());
       });
     };
   }, [filterOptionsProp, searchKeys, optionLabelKey, optionValueKey, effectiveGetOptionLabel]);
@@ -170,13 +171,7 @@ export default function SmartAutocomplete({
     const searchTerm = getSearchTerm(inputValue);
     const content =
       highlightMatches && inputValue && searchTerm.length > 0 ? (
-        <Highlighter
-          highlightStyle={highlightStyle}
-          searchWords={[searchTerm]} // Single search term instead of multiple words
-          autoEscape
-          caseSensitive={false}
-          textToHighlight={labelText}
-        />
+        SmartAutocomplete.renderHighlightedText(labelText, inputValue, highlightStyle)
       ) : (
         labelText
       );
@@ -280,18 +275,30 @@ SmartAutocomplete.renderHighlightedText = (text, inputValue, highlightStyle = { 
     return text;
   }
   
-  const searchTerm = inputValue.trim().toLowerCase();
+  const searchTerm = inputValue.trim();
   if (!searchTerm) {
     return text;
   }
   
+  // Custom highlighting for true substring matching
+  const normalizedText = text.toLowerCase();
+  const normalizedSearchTerm = searchTerm.toLowerCase();
+  
+  const index = normalizedText.indexOf(normalizedSearchTerm);
+  if (index === -1) {
+    return text; // No match found
+  }
+  
+  // Split the text and highlight the matching substring
+  const beforeMatch = text.substring(0, index);
+  const match = text.substring(index, index + searchTerm.length);
+  const afterMatch = text.substring(index + searchTerm.length);
+  
   return (
-    <Highlighter
-      highlightStyle={highlightStyle}
-      searchWords={[searchTerm]}
-      autoEscape
-      caseSensitive={false}
-      textToHighlight={text}
-    />
+    <>
+      {beforeMatch}
+      <span style={highlightStyle}>{match}</span>
+      {afterMatch}
+    </>
   );
 };
