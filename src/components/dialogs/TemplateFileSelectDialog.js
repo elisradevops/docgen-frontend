@@ -19,8 +19,6 @@ import 'react-toastify/dist/ReactToastify.css';
 import logger from '../../utils/logger';
 import { makeKey, tryLocalStorageGet, tryLocalStorageSet } from '../../utils/storage';
 
-const validDefaultTemplates = ['STD', 'STR', 'SVD', 'Software Version Description'];
-
 export const TemplateFileSelectDialog = ({
   store,
   docType,
@@ -61,12 +59,20 @@ export const TemplateFileSelectDialog = ({
           let chosen = null;
 
           // 1) Prefer docType-specific default names inside 'shared'
-          const base = (n) => String(n || '').split('/').pop().replace('.dotx', '');
+          const base = (n) =>
+            String(n || '')
+              .split('/')
+              .pop()
+              .replace('.dotx', '');
           const dt = String(docType || '').toLowerCase();
           const preferNames =
-            dt === 'svd' ? ['Software Version Description', 'SVD'] :
-            dt === 'std' ? ['STD'] :
-            dt === 'str' ? ['STR'] : [];
+            dt === 'svd'
+              ? ['Software Version Description', 'SVD']
+              : dt === 'std'
+              ? ['STD']
+              : dt === 'str'
+              ? ['STR']
+              : [];
           chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
 
           // 2) Fallback: first shared
@@ -158,12 +164,23 @@ export const TemplateFileSelectDialog = ({
           {loadingTemplateFiles ? (
             <CircularProgress />
           ) : (
-            <Grid container spacing={2} alignItems='center' sx={{ justifyContent: 'center' }}>
-
+            <Grid
+              container
+              spacing={2}
+              alignItems='center'
+              sx={{ justifyContent: 'center' }}
+            >
               {/* Empty state */}
               {templateFiles.length === 0 ? (
-                <Grid item xs={12} sx={{ textAlign: 'center' }}>
-                  <Alert severity='info' sx={{ mb: 2 }}>
+                <Grid
+                  item
+                  xs={12}
+                  sx={{ textAlign: 'center' }}
+                >
+                  <Alert
+                    severity='info'
+                    sx={{ mb: 2 }}
+                  >
                     No templates found{selectedTeamProject ? ` for project "${selectedTeamProject}"` : ''}.
                   </Alert>
                   {selectedTeamProject ? (
@@ -220,10 +237,18 @@ export const TemplateFileSelectDialog = ({
                         }}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span>{fileLabel}</span>
-                          <span style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center' }}>
+                          <span>
+                            {SmartAutocomplete.renderHighlightedText(fileLabel, state.inputValue)}
+                          </span>
+                          <span
+                            style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center' }}
+                          >
                             {option.source === 'shared' && (
-                              <Chip size='small' label='Shared' sx={{ mr: 1 }} />
+                              <Chip
+                                size='small'
+                                label='Shared'
+                                sx={{ mr: 1 }}
+                              />
                             )}
                             {option.lastModified ? `Updated ${formatWhen(option.lastModified)}` : ''}
                           </span>
