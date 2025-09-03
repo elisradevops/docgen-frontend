@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PrimaryButton } from '@fluentui/react';
 import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import SmartAutocomplete from './SmartAutocomplete';
@@ -28,13 +28,9 @@ const PullRequestSelector = observer(
     });
     const [selectedPullRequests, setSelectedPullRequests] = useState([]);
 
-    useEffect(() => {
-      if (editingMode === false) {
-        UpdateDocumentRequestObject();
-      }
-    }, [selectedRepo, selectedPullRequests]);
+    const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 
-    function UpdateDocumentRequestObject() {
+    const UpdateDocumentRequestObject = useCallback(() => {
       let pullrequestIdList = undefined;
       pullrequestIdList = selectedPullRequests.map((data) => {
         return data.pullRequestId;
@@ -58,9 +54,26 @@ const PullRequestSelector = observer(
         },
         contentControlIndex
       );
-    }
+    }, [
+      selectedPullRequests,
+      addToDocumentRequestObject,
+      contentControlTitle,
+      skin,
+      contentHeadingLevel,
+      selectedRepo,
+      queriesRequest,
+      store.attachmentWikiUrl,
+      linkedWiOptions,
+      includeCommittedBy,
+      includeUnlinkedCommits,
+      contentControlIndex,
+    ]);
 
-    const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
+    useEffect(() => {
+      if (editingMode === false) {
+        UpdateDocumentRequestObject();
+      }
+    }, [selectedRepo, selectedPullRequests, UpdateDocumentRequestObject, editingMode]);
 
     return (
       <div>

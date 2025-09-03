@@ -1,10 +1,13 @@
 # stage1 as builder
-FROM node:14.18-alpine3.15 as builder
+FROM node:18-alpine as builder
 WORKDIR /react-ui
+# Avoid CRA eslint preflight mismatch and support webpack 4 under Node 18
+ENV SKIP_PREFLIGHT_CHECK=true
+ENV NODE_OPTIONS=--openssl-legacy-provider
 # copy the package.json and package-lock.json to install dependencies
 COPY package*.json ./
-# Install the dependencies and make the folder
-RUN npm ci
+# Install dependencies (prefer ci, fall back to install if lockfile is out of sync)
+RUN npm ci || npm install
 COPY . .
 # Build the project and copy the files
 RUN npm run build
