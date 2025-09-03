@@ -18,7 +18,7 @@ jobs:
       - name: 🟢 node
         uses: actions/setup-node@v2
         with:
-          node-version: 14
+          node-version: 18
           registry-url: https://registry.npmjs.org
       - name: "Automated Version Bump"
         uses: "phips28/gh-action-bump-version@master"

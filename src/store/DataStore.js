@@ -391,7 +391,9 @@ class DocGenDataStore {
       // Some servers may redirect to an HTML sign-in page; detect that early
       if (typeof data === 'string' && /(<!DOCTYPE|<html\b)/i.test(data)) {
         // Treat as an auth redirect; bubble up a synthetic 302 to map a clearer message
-        throw { status: 302, message: 'Received sign-in HTML instead of JSON (likely auth redirect).' };
+        const err = new Error('Received sign-in HTML instead of JSON (likely auth redirect).');
+        err.status = 302;
+        throw err;
       }
       if (data?.identity) {
         const { DisplayName: name, TeamFoundationId: userId } = data.identity;
