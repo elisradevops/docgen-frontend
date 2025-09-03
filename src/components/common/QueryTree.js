@@ -8,10 +8,12 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
   const [selectedQuery, setSelectedQuery] = useState(prevSelectedQuery);
   const [showQueryNotSelectedAlert, setShowQueryNotSelectedAlert] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
-  const [placeholder, setPlaceholder] = useState(noData);
+  const [placeholder, setPlaceholder] = useState('');
 
   useEffect(() => {
-    setIsDisabled(data?.length === 0);
+    const disabled = data?.length === 0;
+    setIsDisabled(disabled);
+    setPlaceholder(disabled ? noData : `Select a ${getTitle()} query`);
   }, [data]);
 
   //Reading the loaded selected favorite data
@@ -27,7 +29,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
       } else {
         // Query doesn't exist or is invalid in the current context
         toast.warn(
-          `Previously selected query ${prevSelectedQuery.title} with ID ${prevSelectedQuery.id} not found in available queries`
+          `Previously selected query ${prevSelectedQuery?.title ?? '(unknown title)'} with ID ${prevSelectedQuery?.id ?? '(unknown id)'} not found in available queries`
         );
         setSelectedQuery(undefined);
         onSelectedQuery(null);
@@ -70,10 +72,6 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
   };
 
   const noData = `No query for ${getTitle()} available`;
-
-  useEffect(() => {
-    !isDisabled ? setPlaceholder(`Select a ${getTitle()} query`) : setPlaceholder(noData);
-  }, [isDisabled]);
 
   const handleQuerySelect = (value, selectedQuery) => {
     if (selectedQuery.isValidQuery) {
