@@ -16,6 +16,7 @@ import SmartAutocomplete from '../common/SmartAutocomplete';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
 import SVDGuide from '../common/SVDGuide';
+import SRSGuide from '../common/SRSGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import ClearIcon from '@mui/icons-material/Clear';
 import { indigo } from '@mui/material/colors';
@@ -77,8 +78,13 @@ const StyledButton = styled(Button)(({ theme }) => ({
   },
 }));
 
+// Centralized tab identifiers to avoid collisions
+const TAB_DOCS = 'docs';
+const TAB_TEMPLATES = 'templates';
+const TAB_DEVELOPER = 'developer';
+
 const MainTabs = observer(({ store }) => {
-  const [selectedTab, setSelectedTab] = useState(99);
+  const [selectedTab, setSelectedTab] = useState(TAB_DOCS);
   const [cookies, setCookie, removeCookie] = useCookies(['azuredevopsUrl', 'azuredevopsPat']);
   const [selectedTeamProject, setSelectedTeamProject] = useState(defaultItem);
   const [projectClearable, setProjectClearable] = useState(false);
@@ -115,15 +121,15 @@ const MainTabs = observer(({ store }) => {
 
   useEffect(() => {
     if (store.documentTypes?.length > 0) {
-      setSelectedTab(0);
+      setSelectedTab(store.documentTypes[0]);
     }
   }, [store.documentTypes?.length]);
 
   // Derive syncing state from store loading flags
   const syncing =
-    selectedTab === 99
+    selectedTab === TAB_DOCS
       ? store.loadingState?.documentsLoadingState
-      : selectedTab === 100
+      : selectedTab === TAB_TEMPLATES
       ? store.loadingState?.templatesLoadingState
       : false;
 
@@ -137,6 +143,8 @@ const MainTabs = observer(({ store }) => {
         return <STRGuide />;
       case 'SVD':
         return <SVDGuide />;
+      case 'SRS':
+        return <SRSGuide />;
       default:
         return null;
     }
@@ -149,10 +157,10 @@ const MainTabs = observer(({ store }) => {
     }
 
     // Additionally refresh according to the active tab
-    if (selectedTab === 99) {
+    if (selectedTab === TAB_DOCS) {
       // Documents tab
       store.fetchDocuments();
-    } else if (selectedTab === 100) {
+    } else if (selectedTab === TAB_TEMPLATES) {
       // Templates tab
       store.fetchTemplatesListForDownload();
     }
@@ -167,7 +175,7 @@ const MainTabs = observer(({ store }) => {
             onChange={(event, newValue) => {
               setSelectedTab(newValue);
               // Check if the selected tab is the templates tab
-              setProjectClearable(newValue === 100);
+              setProjectClearable(newValue === TAB_TEMPLATES);
             }}
             aria-label='document tabs'
           >
@@ -175,17 +183,17 @@ const MainTabs = observer(({ store }) => {
               return (
                 <StyledTab
                   label={docType}
-                  value={key}
+                  value={docType}
                 />
               );
             })}
             <StyledTab
               label='Documents'
-              value={99}
+              value={TAB_DOCS}
             />
             <StyledTab
               label='Templates'
-              value={100}
+              value={TAB_TEMPLATES}
             />
           </StyledTabs>
           <Box
@@ -195,7 +203,10 @@ const MainTabs = observer(({ store }) => {
           >
             <StyledButton
               startIcon={<DeveloperModeIcon />}
-              onClick={() => setSelectedTab(4)}
+              onClick={() => {
+                setSelectedTab(TAB_DEVELOPER);
+                setProjectClearable(false);
+              }}
             >
               Developer
             </StyledButton>
@@ -218,7 +229,7 @@ const MainTabs = observer(({ store }) => {
               xs={12}
               sx={{ display: 'flex', justifyContent: 'flex-start', gap: '8px', alignItems: 'center' }}
             >
-                <SmartAutocomplete
+              <SmartAutocomplete
                 disableClearable
                 style={{ marginBlock: 8, width: 300 }}
                 autoHighlight
@@ -237,7 +248,7 @@ const MainTabs = observer(({ store }) => {
                   store.setSelectedTemplate(null);
                 }}
               />
-              {selectedTab !== 99 && selectedTab !== 100 ? (
+              {selectedTab !== TAB_DOCS && selectedTab !== TAB_TEMPLATES ? (
                 <FormattingSettingsDialog store={store} />
               ) : (
                 <Tooltip
@@ -282,7 +293,7 @@ const MainTabs = observer(({ store }) => {
 
         {store.documentTypes.map((docType, key) => {
           const hasGuide = generateGuide(docType) !== null;
-          return selectedTab === key ? (
+          return selectedTab === docType ? (
             <>
               <Grid
                 item
@@ -305,7 +316,7 @@ const MainTabs = observer(({ store }) => {
             </>
           ) : null;
         })}
-        {selectedTab === 4 ? (
+        {selectedTab === TAB_DEVELOPER ? (
           <Grid
             item
             xs={12}
@@ -313,7 +324,7 @@ const MainTabs = observer(({ store }) => {
             <DeveloperForm store={store} />{' '}
           </Grid>
         ) : null}
-        {selectedTab === 99 ? (
+        {selectedTab === TAB_DOCS ? (
           <Grid
             item
             xs={12}
@@ -324,7 +335,7 @@ const MainTabs = observer(({ store }) => {
             />
           </Grid>
         ) : null}
-        {selectedTab === 100 ? (
+        {selectedTab === TAB_TEMPLATES ? (
           <Grid
             item
             xs={12}

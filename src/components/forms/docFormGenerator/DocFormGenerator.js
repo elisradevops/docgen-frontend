@@ -10,6 +10,7 @@ import QueryContentSelector from '../../common/QueryContentSelector';
 import TraceTableSelector from '../../common/TraceTableSelector';
 import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
+import SRSSelector from '../../common/SRSSelector';
 import { Box, Collapse, Typography } from '@mui/material';
 import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 import { toast } from 'react-toastify';
@@ -233,6 +234,19 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             selectedTeamProject={selectedTeamProject}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}
+          />
+        );
+      case 'srs-skin':
+        return (
+          <SRSSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
+            store={store}
+            contentControlTitle={formControl.title}
+            type={formControl.type}
+            skin={formControl.skin}
+            addToDocumentRequestObject={store.addContentControlToDocument}
+            contentControlIndex={contentControlIndex}
+            sharedQueries={store.sharedQueries}
           />
         );
 
