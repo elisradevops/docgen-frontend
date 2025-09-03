@@ -16,6 +16,7 @@ import SmartAutocomplete from '../common/SmartAutocomplete';
 import STRGuide from '../common/STRGuide';
 import STDGuide from '../common/STDGuide';
 import SVDGuide from '../common/SVDGuide';
+import SRSGuide from '../common/SRSGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import ClearIcon from '@mui/icons-material/Clear';
 import { indigo } from '@mui/material/colors';
@@ -137,6 +138,8 @@ const MainTabs = observer(({ store }) => {
         return <STRGuide />;
       case 'SVD':
         return <SVDGuide />;
+      case 'SRS':
+        return <SRSGuide />;
       default:
         return null;
     }
@@ -218,7 +221,7 @@ const MainTabs = observer(({ store }) => {
               xs={12}
               sx={{ display: 'flex', justifyContent: 'flex-start', gap: '8px', alignItems: 'center' }}
             >
-                <SmartAutocomplete
+              <SmartAutocomplete
                 disableClearable
                 style={{ marginBlock: 8, width: 300 }}
                 autoHighlight

@@ -206,13 +206,57 @@ class DocGenDataStore {
     this.loadingState.contentControlsLoadingState = true;
     getBucketFileList('document-forms')
       .then(async (data = []) => {
-        await Promise.all(
-          data
-            .filter((file) => file.prefix !== undefined)
-            .forEach((file) => {
-              this.documentTypes.push(file.prefix.replace('/', ''));
-            })
+        // Collect docTypes from prefixes
+        const docTypes = (data || [])
+          .filter((file) => file && file.prefix != null)
+          .map((file) => {
+            return file.prefix.replace('/', '');
+          });
+
+        // Build a tabIndex map by inspecting each folder's request JSON
+        const metaList = await Promise.all(
+          docTypes.map(async (dt) => {
+            try {
+              const list = await getBucketFileList('document-forms', dt);
+              const jsonFiles = (list || []).filter(
+                (it) => it?.name && it.name.toLowerCase().endsWith('.json')
+              );
+              const norm = (s) => (s || '').toLowerCase().replace(/[\s_-]/g, '');
+              const dtNorm = norm(dt);
+              const pick =
+                jsonFiles.find((f) => f.name.toLowerCase().includes('-request.json')) ||
+                jsonFiles.find((f) => {
+                  const base = (f.name.split('/').pop() || '').replace(/\.json$/i, '');
+                  return norm(base) === dtNorm;
+                }) ||
+                jsonFiles[0];
+
+              let tabIndex = Number.POSITIVE_INFINITY;
+              if (pick && pick.name && pick.name.includes('/')) {
+                const [folderName, fileName] = pick.name.split('/');
+                try {
+                  const reqJson = await getJSONContentFromFile('document-forms', folderName, fileName);
+                  if (reqJson && typeof reqJson.tabIndex === 'number') {
+                    tabIndex = reqJson.tabIndex;
+                  }
+                } catch (e) {}
+              }
+              return { docType: dt, tabIndex };
+            } catch (e) {
+              return { docType: dt, tabIndex: Number.POSITIVE_INFINITY };
+            }
+          })
         );
+
+        // Map and sort documentTypes by tabIndex, then by name
+        this.docTypeMeta = this.docTypeMeta || {};
+        metaList.forEach((m) => (this.docTypeMeta[m.docType] = m));
+        this.documentTypes = docTypes.sort((a, b) => {
+          const ai = this.docTypeMeta[a]?.tabIndex ?? Number.POSITIVE_INFINITY;
+          const bi = this.docTypeMeta[b]?.tabIndex ?? Number.POSITIVE_INFINITY;
+          if (ai !== bi) return ai - bi;
+          return a.localeCompare(b);
+        });
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching bucket file list: ${err.message}`);
@@ -349,7 +393,6 @@ class DocGenDataStore {
         // Treat as an auth redirect; bubble up a synthetic 302 to map a clearer message
         throw { status: 302, message: 'Received sign-in HTML instead of JSON (likely auth redirect).' };
       }
-      logger.debug(`User details fetched. hasIdentity=${!!(data && data.identity)}`);
       if (data?.identity) {
         const { DisplayName: name, TeamFoundationId: userId } = data.identity;
         return { ok: true, name, userId };
@@ -422,7 +465,11 @@ class DocGenDataStore {
         const urlFromCookies = sanitizeCookie(cookies.getItem('azuredevopsUrl')).toLowerCase();
         const patFromCookies = sanitizeCookie(cookies.getItem('azuredevopsPat'));
         const looksLikeAzdoOrTfs = /dev\.azure\.com|visualstudio\.com|\/tfs/i.test(urlFromCookies);
-        if (status === 401 || status === 302 || (!status && isNetworkErr && looksLikeAzdoOrTfs && patFromCookies)) {
+        if (
+          status === 401 ||
+          status === 302 ||
+          (!status && isNetworkErr && looksLikeAzdoOrTfs && patFromCookies)
+        ) {
           // Dispatch global event; App/MainTabs listeners will clear cookies and show login
           window.dispatchEvent(new CustomEvent('auth-unauthorized'));
         }
@@ -925,7 +972,9 @@ class DocGenDataStore {
         .replace(/\.dotx?$/, '') || 'template';
     const tempFileName = this.isCustomTemplate
       ? `${templateName}-${this.getFormattedDate()}`
-      : `${this.teamProjectName}-${this.docType}-${this.contextName}-${this.getFormattedDate()}`;
+      : this.contextName
+      ? `${this.teamProjectName}-${this.docType}-${this.contextName}-${this.getFormattedDate()}`
+      : `${this.teamProjectName}-${this.docType}-${this.getFormattedDate()}`;
     return {
       tfsCollectionUri: azureDevopsUrl,
       PAT: azuredevopsPat,

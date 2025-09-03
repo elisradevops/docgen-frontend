@@ -46,6 +46,12 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
         return 'Requirement - Test case';
       case 'test-req':
         return 'Test case - Requirement';
+      case 'system-requirements':
+        return 'System Requirements';
+      case 'system-to-software':
+        return 'System -> Software (Direct Links)';
+      case 'software-to-system':
+        return 'Software -> System (Direct Links)';
       case 'system-overview':
         return 'System Overview';
       case 'known-bugs':
