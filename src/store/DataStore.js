@@ -971,7 +971,7 @@ class DocGenDataStore {
       this.selectedTemplate?.text
         ?.split('/')
         .pop()
-        .replace(/\.dotx?$/, '') || 'template';
+        .replace(/\.do[ct]x?$/i, '') || 'template';
     const tempFileName = this.isCustomTemplate
       ? `${templateName}-${this.getFormattedDate()}`
       : this.contextName
