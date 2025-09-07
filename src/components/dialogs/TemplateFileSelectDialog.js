@@ -63,7 +63,7 @@ export const TemplateFileSelectDialog = ({
             String(n || '')
               .split('/')
               .pop()
-              .replace('.dotx', '');
+              .replace(/\.do[ct]x?$/i, '');
           const dt = String(docType || '').toLowerCase();
           const preferNames =
             dt === 'svd'
@@ -225,7 +225,10 @@ export const TemplateFileSelectDialog = ({
                     },
                   }}
                   renderOption={(props, option, state) => {
-                    const fileLabel = option.text?.split('/').pop()?.replace('.dotx', '');
+                    const fileLabel = option.text
+                      ?.split('/')
+                      .pop()
+                      ?.replace(/\.do[ct]x?$/i, '');
                     return (
                       <li
                         {...props}
@@ -237,9 +240,7 @@ export const TemplateFileSelectDialog = ({
                         }}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span>
-                            {SmartAutocomplete.renderHighlightedText(fileLabel, state.inputValue)}
-                          </span>
+                          <span>{SmartAutocomplete.renderHighlightedText(fileLabel, state.inputValue)}</span>
                           <span
                             style={{ fontSize: 12, color: '#666', display: 'flex', alignItems: 'center' }}
                           >

@@ -98,12 +98,20 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         let chosen = null;
 
         // 1) Prefer docType-specific default names inside 'shared'
-        const base = (n) => String(n || '').split('/').pop().replace('.dotx', '');
+        const base = (n) =>
+          String(n || '')
+            .split('/')
+            .pop()
+            .replace(/\.do[ct]x?$/i, '');
         const dt = String(docType || '').toLowerCase();
         const preferNames =
-          dt === 'svd' ? ['Software Version Description', 'SVD'] :
-          dt === 'std' ? ['STD'] :
-          dt === 'str' ? ['STR'] : [];
+          dt === 'svd'
+            ? ['Software Version Description', 'SVD']
+            : dt === 'std'
+            ? ['STD']
+            : dt === 'str'
+            ? ['STR']
+            : [];
         chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
 
         // 2) Fallback: first shared

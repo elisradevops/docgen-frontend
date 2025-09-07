@@ -111,7 +111,7 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
         ? String(tplText)
             .split('/')
             .pop()
-            .replace(/\.dotx?$/i, '')
+            .replace(/\.do[ct]x?$/i, '')
         : '';
       return {
         key: favorite.id,
