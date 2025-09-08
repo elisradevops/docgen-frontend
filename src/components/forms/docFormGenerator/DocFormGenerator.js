@@ -12,6 +12,7 @@ import ChangeTableSelector from '../../common/ChangeTableSelector';
 import STRTableSelector from '../../common/STRTableSelector';
 import SRSSelector from '../../common/SRSSelector';
 import { Box, Collapse, Typography } from '@mui/material';
+import Tooltip from '@mui/material/Tooltip';
 import TemplateFileSelectDialog from '../../dialogs/TemplateFileSelectDialog';
 import { toast } from 'react-toastify';
 import logger from '../../../utils/logger';
@@ -150,8 +151,32 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       }
     };
     pickDefaultTemplate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docType, selectedTeamProject, store.selectedTemplate]);
+
+  // Pre-seed validation as invalid for all currently rendered content controls to avoid initial flicker
+  useEffect(() => {
+    try {
+      const indices = Array.isArray(docForm?.contentControls)
+        ? docForm.contentControls.map((_, idx) => idx)
+        : [];
+      indices.forEach((idx) => {
+        const fields = store?.validationStates?.[idx];
+        if (!fields || Object.keys(fields).length === 0) {
+          store.setValidationState(idx, 'init', {
+            isValid: false,
+            message: 'Please complete required selections',
+          });
+        }
+      });
+      return () => {
+        indices.forEach((idx) => {
+          try {
+            store.clearValidationForIndex(idx, 'init');
+          } catch {}
+        });
+      };
+    } catch {}
+  }, [docForm?.contentControls, store]);
 
   const generateFormControls = (formControl, contentControlIndex) => {
     switch (formControl.skin) {
@@ -277,6 +302,30 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
     }
   };
 
+  // Compute validation state for current content controls (non-memoized so MobX nested changes trigger updates)
+  let sendDisabled = false;
+  let validationMessage = '';
+  try {
+    const indices = new Set(
+      Array.isArray(docForm?.contentControls) ? docForm.contentControls.map((_, idx) => idx) : []
+    );
+    const states = store?.validationStates || {};
+    const issues = [];
+    Object.entries(states).forEach(([idx, fields]) => {
+      if (!indices.has(Number(idx))) return;
+      if (!fields) return;
+      for (const k of Object.keys(fields)) {
+        const entry = fields[k];
+        if (entry && entry.isValid === false) {
+          issues.push(entry.message || 'Invalid selection');
+          break; // one issue per index is enough
+        }
+      }
+    });
+    sendDisabled = issues.length > 0;
+    validationMessage = issues[0] || '';
+  } catch {}
+
   return (
     <Box sx={{ minHeight: '400px', width: '100%', overflow: 'hidden' }}>
       {loadingForm ? (
@@ -363,15 +412,23 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                   </Grid>
 
                   <Box sx={{ mt: 2 }}>
-                    <LoadingButton
-                      endIcon={<SendIcon />}
-                      loading={loading}
-                      loadingPosition='end'
-                      variant='contained'
-                      onClick={handleSendRequest}
+                    <Tooltip
+                      title={sendDisabled ? validationMessage || 'Please complete required selections' : ''}
+                      arrow
                     >
-                      Send Request
-                    </LoadingButton>
+                      <span>
+                        <LoadingButton
+                          endIcon={<SendIcon />}
+                          loading={loading}
+                          loadingPosition='end'
+                          variant='contained'
+                          onClick={handleSendRequest}
+                          disabled={sendDisabled || loading}
+                        >
+                          Send Request
+                        </LoadingButton>
+                      </span>
+                    </Tooltip>
                   </Box>
                 </Box>
               </Collapse>

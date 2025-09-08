@@ -119,11 +119,22 @@ const MainTabs = observer(({ store }) => {
     return () => window.removeEventListener('auth-unauthorized', onUnauthorized);
   }, []);
 
+  // Keep selected tab in sync with available document types
   useEffect(() => {
-    if (store.documentTypes?.length > 0) {
-      setSelectedTab(store.documentTypes[0]);
+    const types = store.documentTypes || [];
+    const isSpecial = [TAB_DOCS, TAB_TEMPLATES, TAB_DEVELOPER].includes(selectedTab);
+    if (types.length > 0) {
+      // Previous behavior: default to the first doc type when types are available
+      if (isSpecial || (!isSpecial && !types.includes(selectedTab))) {
+        setSelectedTab(types[0]);
+      }
+    } else {
+      // If no doc types visible and we were on a doc type, fall back to Docs tab
+      if (!isSpecial) {
+        setSelectedTab(TAB_DOCS);
+      }
     }
-  }, [store.documentTypes?.length]);
+  }, [store.documentTypes]);
 
   // Derive syncing state from store loading flags
   const syncing =
@@ -182,6 +193,7 @@ const MainTabs = observer(({ store }) => {
             {store.documentTypes.map((docType, key) => {
               return (
                 <StyledTab
+                  key={`doctype-tab-${docType}`}
                   label={docType}
                   value={docType}
                 />

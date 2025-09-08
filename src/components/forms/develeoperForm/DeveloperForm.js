@@ -7,6 +7,7 @@ import { Dropdown } from '@fluentui/react/lib/Dropdown';
 import { TextField } from '@fluentui/react/lib/TextField';
 
 import { PrimaryButton } from '@fluentui/react';
+import { Toggle } from '@fluentui/react/lib/Toggle';
 import Grid from '@mui/material/Grid';
 import SmartAutocomplete from '../../common/SmartAutocomplete';
 
@@ -36,6 +37,15 @@ const DeveloperForm = observer(({ store }) => {
           item
           xs={6}
         >
+          <Toggle
+            styles={{ root: { marginBlock: 8 } }}
+            label='Show debug doc types'
+            inlineLabel
+            checked={!!store.showDebugDocs}
+            onText='Shown'
+            offText='Hidden'
+            onChange={(_e, checked) => store.setShowDebugDocs(!!checked)}
+          />
           <TextField
             style={{ marginBlock: 8, width: 300 }}
             label='Enter Form Name '

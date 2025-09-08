@@ -30,6 +30,7 @@ class DocGenDataStore {
       documentTypeTitle: observable,
       documentTemplates: observable,
       documentTypes: observable,
+      showDebugDocs: observable,
       teamProject: observable,
       selectedTemplate: observable,
       contentControls: observable,
@@ -56,6 +57,8 @@ class DocGenDataStore {
       selectedFavorite: observable,
       attachmentWikiUrl: observable,
       isCustomTemplate: observable,
+      // validation state for UI components by contentControlIndex
+      validationStates: observable,
       // auth-related
       isAuthenticated: observable,
       lastAuthErrorStatus: observable,
@@ -102,6 +105,12 @@ class DocGenDataStore {
       saveFavorite: action,
       loadFavorite: action,
       setAttachmentWiki: action,
+      // validation actions
+      setValidationState: action,
+      clearValidationForIndex: action,
+      // debug-docs actions
+      setShowDebugDocs: action,
+      recomputeDocumentTypes: action,
     });
     makeLoggable(this);
     // Global 401 handler -> set flags and dispatch event for UI to react
@@ -178,6 +187,8 @@ class DocGenDataStore {
   selectedFavorite = null;
   attachmentWikiUrl = ''; //for setting the wiki url for attachments
   isCustomTemplate = false;
+  // Validation states keyed by contentControlIndex: { [index]: { [key]: { isValid: boolean, message: string } } }
+  validationStates = {};
   // auth-related state
   isAuthenticated = false;
   lastAuthErrorStatus = null; // e.g., 401 when PAT is invalid/expired
@@ -186,6 +197,11 @@ class DocGenDataStore {
     trimAdditionalSpacingInTables: false,
     //TODO:Add later more settings
   };
+
+  // Toggle for showing debug document types (hidden by default)
+  showDebugDocs = false;
+  // Metadata per document type (tabIndex, isDebug)
+  docTypeMeta = {};
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -199,6 +215,28 @@ class DocGenDataStore {
   setCredentials(orgUrl, pat) {
     const normalizedUrl = (orgUrl || '').endsWith('/') ? orgUrl : `${orgUrl || ''}/`;
     this.azureRestClient = new RestApi(normalizedUrl, pat);
+  }
+
+  // Toggle visibility of debug document types and recompute the visible list
+  setShowDebugDocs(value) {
+    this.showDebugDocs = !!value;
+    this.recomputeDocumentTypes();
+  }
+
+  // Recompute documentTypes from docTypeMeta, applying filtering and sorting
+  recomputeDocumentTypes() {
+    const allDocTypes = Object.keys(this.docTypeMeta || {});
+    const visible = allDocTypes.filter((dt) => {
+      const meta = this.docTypeMeta[dt] || {};
+      return this.showDebugDocs ? true : !meta.isDebug;
+    });
+    visible.sort((a, b) => {
+      const ai = this.docTypeMeta[a]?.tabIndex ?? Number.POSITIVE_INFINITY;
+      const bi = this.docTypeMeta[b]?.tabIndex ?? Number.POSITIVE_INFINITY;
+      if (ai !== bi) return ai - bi;
+      return a.localeCompare(b);
+    });
+    this.documentTypes = visible;
   }
 
   fetchDocFolders() {
@@ -232,6 +270,7 @@ class DocGenDataStore {
                 jsonFiles[0];
 
               let tabIndex = Number.POSITIVE_INFINITY;
+              let isDebug = false;
               if (pick && pick.name && pick.name.includes('/')) {
                 const [folderName, fileName] = pick.name.split('/');
                 try {
@@ -239,24 +278,22 @@ class DocGenDataStore {
                   if (reqJson && typeof reqJson.tabIndex === 'number') {
                     tabIndex = reqJson.tabIndex;
                   }
+                  if (reqJson && reqJson.isDebug === true) {
+                    isDebug = true;
+                  }
                 } catch (e) {}
               }
-              return { docType: dt, tabIndex };
+              return { docType: dt, tabIndex, isDebug };
             } catch (e) {
-              return { docType: dt, tabIndex: Number.POSITIVE_INFINITY };
+              return { docType: dt, tabIndex: Number.POSITIVE_INFINITY, isDebug: false };
             }
           })
         );
 
-        // Map and sort documentTypes by tabIndex, then by name
+        // Map meta and recompute filtered documentTypes by tabIndex (and hide debug by default)
         this.docTypeMeta = this.docTypeMeta || {};
         metaList.forEach((m) => (this.docTypeMeta[m.docType] = m));
-        this.documentTypes = docTypes.sort((a, b) => {
-          const ai = this.docTypeMeta[a]?.tabIndex ?? Number.POSITIVE_INFINITY;
-          const bi = this.docTypeMeta[b]?.tabIndex ?? Number.POSITIVE_INFINITY;
-          if (ai !== bi) return ai - bi;
-          return a.localeCompare(b);
-        });
+        this.recomputeDocumentTypes();
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching bucket file list: ${err.message}`);
@@ -502,6 +539,40 @@ class DocGenDataStore {
     // If template is not in shared folder, it means it is a custom template
     this.isCustomTemplate = templateObject?.text?.split('/')?.shift() !== 'shared';
     this.selectedTemplate = templateObject;
+  }
+
+  // Set or update validation state for a specific content control and key (e.g., 'baseType', 'gitRange')
+  setValidationState(index, key, state) {
+    const idx = String(index);
+    const current = this.validationStates || {};
+    const prev = current[idx] || {};
+    const nextIndexState = {
+      ...prev,
+      [String(key)]: {
+        isValid: !!state?.isValid,
+        message: state?.message || '',
+      },
+    };
+    this.validationStates = {
+      ...current,
+      [idx]: nextIndexState,
+    };
+  }
+
+  // Clear validation for an index; if key provided, clear only that key, else clear entire index
+  clearValidationForIndex(index, key) {
+    const idx = String(index);
+    const current = this.validationStates || {};
+    if (key && current[idx]) {
+      const newIndexState = { ...current[idx] };
+      delete newIndexState[String(key)];
+      const { [idx]: _, ...rest } = current;
+      const next = Object.keys(newIndexState).length > 0 ? { ...rest, [idx]: newIndexState } : { ...rest };
+      this.validationStates = next;
+    } else if (current[idx]) {
+      const { [idx]: _, ...rest } = current;
+      this.validationStates = { ...rest };
+    }
   }
 
   //for fetching shared quries
