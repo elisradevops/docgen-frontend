@@ -75,6 +75,27 @@ const PullRequestSelector = observer(
       }
     }, [selectedRepo, selectedPullRequests, UpdateDocumentRequestObject, editingMode]);
 
+    // Validation: repo and at least one PR must be selected
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+      if (!selectedRepo?.key) {
+        isValid = false;
+        message = 'Select a repository';
+      } else if (!Array.isArray(selectedPullRequests) || selectedPullRequests.length === 0) {
+        isValid = false;
+        message = 'Select at least one pull request';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'pullrequest', { isValid, message });
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'pullrequest');
+        } catch {}
+      };
+    }, [selectedRepo?.key, selectedPullRequests, store, contentControlIndex]);
+
     return (
       <div>
         <SmartAutocomplete

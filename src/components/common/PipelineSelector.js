@@ -80,6 +80,41 @@ const PipelineSelector = observer(
       UpdateDocumentRequestObject,
     ]);
 
+    // Validation: pipeline, start and end must be selected; end must be after start
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+      if (!selectedPipeline?.key) {
+        isValid = false;
+        message = 'Select a pipeline';
+      } else if (!selectedPipelineRunStart?.key) {
+        isValid = false;
+        message = 'Select start pipeline run';
+      } else if (!selectedPipelineRunEnd?.key) {
+        isValid = false;
+        message = 'Select end pipeline run';
+      } else if (Number(selectedPipelineRunEnd?.key) <= Number(selectedPipelineRunStart?.key)) {
+        isValid = false;
+        message = 'End run must be after start run';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'pipeline', { isValid, message });
+        // Clear any pre-seeded init invalid flag for this control
+        store.clearValidationForIndex(contentControlIndex, 'init');
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'pipeline');
+        } catch {}
+      };
+    }, [
+      selectedPipeline?.key,
+      selectedPipelineRunStart?.key,
+      selectedPipelineRunEnd?.key,
+      store,
+      contentControlIndex,
+    ]);
+
     const validatePipelineExists = useCallback(
       (selectedPipeline) => {
         if (

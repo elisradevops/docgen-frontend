@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import GitObjectRangeSelector from './GitObjectRangeSelector';
 import CommitDateSelector from './CommitDateSelector';
 import PipelineSelector from './PipelineSelector';
@@ -115,6 +115,23 @@ const ChangeTableSelector = observer(
           }))
         : setQueryTrees(defaultSelectedQueriesForChangeTableSelector);
     }, [sharedQueries.acquiredTrees]);
+
+    // Report base data type validation to store
+    // useLayoutEffect ensures we mark invalid before first paint to keep Send Request disabled by default
+    useLayoutEffect(() => {
+      const isValid = !!selectedType?.type;
+      const message = isValid ? '' : 'Select a base data type';
+      try {
+        store.setValidationState(contentControlIndex, 'baseType', { isValid, message });
+        // Clear any pre-seeded init invalid flag for this control
+        store.clearValidationForIndex(contentControlIndex, 'init');
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'baseType');
+        } catch {}
+      };
+    }, [selectedType, store, contentControlIndex]);
 
     //Reading the loaded selected favorite data
     useEffect(() => {

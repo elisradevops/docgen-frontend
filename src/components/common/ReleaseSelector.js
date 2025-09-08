@@ -212,6 +212,38 @@ const ReleaseSelector = observer(
       includeUnlinkedCommits,
     ]);
 
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+      if (!selectedReleaseDefinition?.key) {
+        isValid = false;
+        message = 'Select a release definition';
+      } else if (!selectedReleaseHistoryStart?.key) {
+        isValid = false;
+        message = 'Select start release';
+      } else if (!selectedReleaseHistoryEnd?.key) {
+        isValid = false;
+        message = 'Select end release';
+      } else if (Number(selectedReleaseHistoryEnd?.key) <= Number(selectedReleaseHistoryStart?.key)) {
+        isValid = false;
+        message = 'End release must be after start release';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'release', { isValid, message });
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'release');
+        } catch {}
+      };
+    }, [
+      selectedReleaseDefinition?.key,
+      selectedReleaseHistoryStart?.key,
+      selectedReleaseHistoryEnd?.key,
+      store,
+      contentControlIndex,
+    ]);
+
     return (
       <div>
         {/* <Autocomplete

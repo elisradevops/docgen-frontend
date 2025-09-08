@@ -364,6 +364,33 @@ const GitObjectRangeSelector = observer(
         gitRefState.target.gitObjRef.key
     );
 
+    // Validation: repo and full range must be selected
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+
+      if (!selectedRepo?.key) {
+        isValid = false;
+        message = 'Select a repository';
+      } else if (!gitRefState.source.gitObjType.key || !gitRefState.source.gitObjRef.key) {
+        isValid = false;
+        message = 'Complete From object type and reference';
+      } else if (!gitRefState.target.gitObjType.key || !gitRefState.target.gitObjRef.key) {
+        isValid = false;
+        message = 'Complete To object type and reference';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'gitRange', { isValid, message });
+        // Clear any pre-seeded init invalid flag for this control
+        store.clearValidationForIndex(contentControlIndex, 'init');
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'gitRange');
+        } catch {}
+      };
+    }, [selectedRepo?.key, gitRefState, store, contentControlIndex]);
+
     return (
       <div>
         <SmartAutocomplete

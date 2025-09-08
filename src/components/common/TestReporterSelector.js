@@ -261,6 +261,29 @@ const TestReporterSelector = observer(
       loadSavedData(store.selectedFavorite.dataToSave);
     }, [loadSavedData, store.selectedFavorite]);
 
+    // Validation: Both Test plan and at least one test suite must be selected
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+      if (!selectedTestPlan?.key) {
+        isValid = false;
+        message = 'Select a test plan';
+      } else if (!Array.isArray(selectedTestSuites) || selectedTestSuites.length === 0) {
+        isValid = false;
+        message = 'Select at least one test suite';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'testReporter', { isValid, message });
+        // Clear any pre-seeded init invalid flag for this control
+        store.clearValidationForIndex(contentControlIndex, 'init');
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'testReporter');
+        } catch {}
+      };
+    }, [selectedTestPlan?.key, selectedTestSuites, store, contentControlIndex]);
+
     useEffect(() => {
       const updateTestReporterRequestObject = () => {
         let testSuiteIdList = undefined;

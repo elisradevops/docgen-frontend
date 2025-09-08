@@ -159,6 +159,29 @@ const STRTableSelector = observer(
       editingMode,
       UpdateDocumentRequestObject,
     ]);
+    
+    // Validation: test plan required; if suite-specific, require at least one suite
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+      if (!selectedTestPlan?.key) {
+        isValid = false;
+        message = 'Select a test plan';
+      } else if (isSuiteSpecific && (!Array.isArray(selectedTestSuites) || selectedTestSuites.length === 0)) {
+        isValid = false;
+        message = 'Select at least one suite or disable suite-specific selection';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'strTable', { isValid, message });
+        // Clear any pre-seeded init invalid flag for this control
+        store.clearValidationForIndex(contentControlIndex, 'init');
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'strTable');
+        } catch {}
+      };
+    }, [selectedTestPlan?.key, isSuiteSpecific, selectedTestSuites, store, contentControlIndex]);
     // }, [editingMode]);
 
     useEffect(() => {

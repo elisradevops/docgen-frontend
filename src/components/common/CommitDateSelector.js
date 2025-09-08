@@ -112,6 +112,42 @@ const CommitDateSelector = observer(
       UpdateDocumentRequestObject,
     ]);
 
+    // Validation: repo and valid date range (end >= start)
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+      const repoChosen = !!selectedRepo?.key;
+      const startOk = selectedStartDate instanceof Date && !isNaN(selectedStartDate?.getTime?.());
+      const endOk = selectedEndDate instanceof Date && !isNaN(selectedEndDate?.getTime?.());
+      if (!repoChosen) {
+        isValid = false;
+        message = 'Select a repository';
+      } else if (!startOk) {
+        isValid = false;
+        message = 'Select a valid start date';
+      } else if (!endOk) {
+        isValid = false;
+        message = 'Select a valid end date';
+      } else if (selectedEndDate.getTime() < selectedStartDate.getTime()) {
+        isValid = false;
+        message = 'End date must be equal to or after start date';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'commitDate', { isValid, message });
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'commitDate');
+        } catch {}
+      };
+    }, [
+      selectedRepo?.key,
+      selectedStartDate,
+      selectedEndDate,
+      store,
+      contentControlIndex,
+    ]);
+
     //Reading the loaded selected favorite data
     useEffect(() => {
       async function fetchData() {

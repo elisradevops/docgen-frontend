@@ -159,8 +159,6 @@ const SRSSelector = observer(
       includeSoftwareToSystemRequirements,
     ]);
 
-    // Update document request object automatically (consistent with other selectors like TestContentSelector)
-    // In DocFormGenerator context, editingMode is always false, so we need to update regardless
     useEffect(() => {
       UpdateDocumentRequestObject();
     }, [
@@ -169,6 +167,37 @@ const SRSSelector = observer(
       includeSoftwareToSystemRequirements,
       queriesRequest,
       UpdateDocumentRequestObject,
+    ]);
+
+    useEffect(() => {
+      let isValid = true;
+      let message = '';
+      const chosen = [];
+      if (includeSystemRequirements && queriesRequest.systemRequirements) chosen.push('system');
+      if (includeSystemToSoftwareRequirements && queriesRequest.systemToSoftwareRequirements) chosen.push('sys->sw');
+      if (includeSoftwareToSystemRequirements && queriesRequest.softwareToSystemRequirements) chosen.push('sw->sys');
+      if (chosen.length === 0) {
+        isValid = false;
+        message = 'Select at least one query to include';
+      }
+      try {
+        store.setValidationState(contentControlIndex, 'srs', { isValid, message });
+        store.clearValidationForIndex(contentControlIndex, 'init');
+      } catch {}
+      return () => {
+        try {
+          store.clearValidationForIndex(contentControlIndex, 'srs');
+        } catch {}
+      };
+    }, [
+      includeSystemRequirements,
+      includeSystemToSoftwareRequirements,
+      includeSoftwareToSystemRequirements,
+      queriesRequest?.systemRequirements,
+      queriesRequest?.systemToSoftwareRequirements,
+      queriesRequest?.softwareToSystemRequirements,
+      store,
+      contentControlIndex,
     ]);
 
     return (
