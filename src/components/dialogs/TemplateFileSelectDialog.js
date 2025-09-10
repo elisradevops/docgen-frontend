@@ -206,10 +206,10 @@ export const TemplateFileSelectDialog = ({
                   autoHighlight
                   openOnFocus
                   value={selectedTemplate}
-                  optionValueKey='url'
                   options={templateFiles.map((template) => {
                     const [source, ...rest] = String(template.name || '').split('/');
                     return {
+                      key: template.url, // default equality key
                       url: template.url,
                       text: template.name,
                       source: source || 'shared',

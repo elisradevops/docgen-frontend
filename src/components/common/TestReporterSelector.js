@@ -425,7 +425,11 @@ const TestReporterSelector = observer(
                   <SmartAutocomplete
                     multiple
                     size='small'
-                    options={selectedTestPlan?.key ? store.testSuiteList : []}
+                    options={
+                      selectedTestPlan?.key
+                        ? (store.testSuiteList || []).map((s) => ({ ...s, key: s.id, text: `${s.name} - (${s.id})` }))
+                        : []
+                    }
                     loading={store.loadingState.testSuiteListLoading}
                     disableCloseOnSelect
                     autoHighlight
@@ -433,8 +437,6 @@ const TestReporterSelector = observer(
                       const parent = suiteById.get(option.parent);
                       return parent ? `Parent: ${parent.name}` : 'Top Level';
                     }}
-                    getOptionLabel={(option) => `${option.name} - (${option.id})`}
-                    optionValueKey='id'
                     label='Test Suites (include child suites)'
                     placeholder='Search suites...'
                     textFieldProps={{

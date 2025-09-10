@@ -1,44 +1,46 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import Checkbox from '@mui/material/Checkbox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CircularProgress from '@mui/material/CircularProgress';
-import { createFilterOptions } from '@mui/material/Autocomplete';
-import Highlighter from 'react-highlight-words';
 import { IconButton, Tooltip } from '@mui/material';
 import { FaHistory, FaSortAlphaDown, FaSortAlphaUpAlt } from 'react-icons/fa';
+import { getSearchTerm, createSubstringFilterFn, createLabelComparator, createAdaptiveListboxComponent } from '../../utils/smartAutocompleteHelpers';
 
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
-// Safe getter for nested keys like 'a.b.c'
-function get(obj, path) {
-  if (!obj || !path) return '';
-  const parts = Array.isArray(path) ? path : String(path).split('.');
-  let cur = obj;
-  for (const p of parts) {
-    if (cur == null) return '';
-    cur = cur[p];
-  }
-  return cur ?? '';
-}
-
-// Get the search term as a single string (no longer splitting into words)
-function getSearchTerm(input) {
-  if (!input || typeof input !== 'string') return '';
-  return input.trim().toLowerCase();
-}
-
 /**
- * SmartAutocomplete
- * A wrapper over MUI Autocomplete with:
- * - Consistent option labeling and equality via optionLabelKey/optionValueKey
- * - Better search across multiple fields via searchKeys
- * - Optional checkbox rendering for multiple selection
- * - Debounced onSearch for remote filtering
- * - Optional client-side sorting (by label or custom comparator)
+ * SmartAutocomplete – thin wrapper around MUI Autocomplete with consistent filtering,
+ * sorting, highlighting, and virtualization for large lists.
+ *
+ * Data shape (required):
+ *   options: Array<{ key: string|number, text: string, ...extras }>
+ *   value:   { key, text } | Array<{ key, text }>
+ *
+ * Common props:
+ * - searchKeys?: string[]            // extra fields to include in client filter
+ * - minCharsToSearch?: number        // gate filtering until N chars (default 0)
+ * - maxResults?: number              // cap filtered results
+ * - filterOptions?: (opts, ctx) => opts // override filtering entirely
+ * - sortByLabel?: boolean            // sort by label when no toggle is shown
+ * - sortDirection?: 'asc' | 'desc'
+ * - showSortToggle?: boolean         // internal toggle: default | name-asc | name-desc
+ * - clientDebounceMs?: number        // debounce client-side filtering
+ * - virtualize?: boolean             // force virtualization
+ * - virtualizeIfOver?: number        // auto-virtualize when filtered count >= threshold
+ * - virtualizeOnInput?: boolean      // auto-virtualize while typing (default true)
+ * - virtualizeMinInputLength?: number// threshold to enable virtualization on input (default 1)
+ *
+ * Minimal usage:
+ *   <SmartAutocomplete
+ *     options={[ { key: 1, text: 'Item A' }, { key: 2, text: 'Item B' } ]}
+ *     value={selected}
+ *     onChange={(_, v) => setSelected(v)}
+ *     label='Select an item'
+ *   />
  */
 export default function SmartAutocomplete({
   options = [],
@@ -49,11 +51,7 @@ export default function SmartAutocomplete({
   multiple = false,
   loading = false,
   disableClearable = false,
-  optionLabelKey = 'text',
-  optionValueKey = 'key',
-  // Custom label getter takes precedence over optionLabelKey
-  getOptionLabel: getOptionLabelProp,
-  isOptionEqualToValue: isOptionEqualToValueProp,
+  groupBy,
   searchKeys,
   showCheckbox = false,
   onSearch, // (term) => void, debounced
@@ -78,11 +76,48 @@ export default function SmartAutocomplete({
   // Optional custom icons per mode
   sortToggleIcons,
   onSortModeChange,
+  // Large-list controls
+  minCharsToSearch = 0,
+  maxResults,
+  // Client-side debounce for filtering (ms). 0 disables.
+  clientDebounceMs = 0,
+  // Virtualization controls
+  virtualize = false,
+  // Use a slightly taller default row height to match MUI option rows with checkboxes
+  rowHeight = 48,
+  overscanCount = 5,
+  maxVisibleRows = 8,
+  // Enable virtualization automatically if options.length >= this number (takes effect when provided)
+  virtualizeIfOver,
+  // Enable virtualization when user starts typing (based on input length)
+  virtualizeOnInput = true,
+  virtualizeMinInputLength = 1,
+  // Log to console when virtualization toggles (dev aid)
+  debugVirtualization = false,
   ...autocompleteProps
 }) {
   const [inputValue, setInputValue] = useState('');
+  const [filterTerm, setFilterTerm] = useState('');
+  const inputElRef = useRef(null);
   const normalizedInitialMode = initialSortMode === 'name' ? 'name-asc' : initialSortMode;
   const [internalSortMode, setInternalSortMode] = useState(normalizedInitialMode);
+
+  // Debounced filter term used for client-side filtering to reduce work on each keystroke
+  const [debouncedFilterTerm, setDebouncedFilterTerm] = useState('');
+  useEffect(() => {
+    if (!clientDebounceMs || clientDebounceMs <= 0) {
+      setDebouncedFilterTerm(filterTerm);
+      return;
+    }
+    const t = setTimeout(() => setDebouncedFilterTerm(filterTerm), clientDebounceMs);
+    return () => clearTimeout(t);
+  }, [filterTerm, clientDebounceMs]);
+
+  // Use the same source for filtering, highlighting, and minChars checks
+  const inputForFiltering = useMemo(
+    () => (clientDebounceMs && clientDebounceMs > 0 ? debouncedFilterTerm : filterTerm),
+    [clientDebounceMs, debouncedFilterTerm, filterTerm]
+  );
 
   // Debounce external onSearch
   useEffect(() => {
@@ -91,95 +126,72 @@ export default function SmartAutocomplete({
     return () => clearTimeout(t);
   }, [inputValue, onSearch, searchDebounceMs]);
 
-  const effectiveGetOptionLabel = useMemo(() => {
-    if (typeof getOptionLabelProp === 'function') return getOptionLabelProp;
-    return (option) => String(get(option, optionLabelKey) ?? '');
-  }, [getOptionLabelProp, optionLabelKey]);
+  // Standard label resolver for { key, text } options
+  const getOptionLabelFn = useMemo(() => (option) => String(option?.text ?? ''), []);
 
-  const effectiveIsOptionEqual = useMemo(() => {
-    if (typeof isOptionEqualToValueProp === 'function') return isOptionEqualToValueProp;
-    return (option, v) => get(option, optionValueKey) === get(v, optionValueKey);
-  }, [isOptionEqualToValueProp, optionValueKey]);
+  // Standard equality resolver for { key, text } options
+  const isOptionEqualFn = useMemo(() => (option, v) => option?.key === v?.key, []);
 
-  const effectiveFilterOptions = useMemo(() => {
-    if (typeof filterOptionsProp === 'function') return filterOptionsProp;
-    const keys =
-      Array.isArray(searchKeys) && searchKeys.length > 0 ? searchKeys : [optionLabelKey, optionValueKey];
-    
-    // Custom filter function for single substring matching
-    return (options, { inputValue, getOptionLabel }) => {
-      if (!inputValue || !inputValue.trim()) return options;
-      
-      const searchTerm = inputValue.trim().toLowerCase();
-      if (searchTerm.length === 0) return options;
-      
-      return options.filter(option => {
-        // Get all searchable text for this option
-        const labelText = String(effectiveGetOptionLabel(option) ?? '');
-        const extraKeys = keys.filter(k => k !== optionLabelKey);
-        const extra = extraKeys.map((k) => String(get(option, k)));
-        const allText = [labelText, ...extra].filter(Boolean).join(' ').trim();
-        
-        // Normalize the text for matching
-        const normalizedText = allText.toLowerCase();
-        
-        // Single substring matching - treat entire input as one search term
-        // "est pro" will match "test project" as a substring
-        // Must be case-insensitive substring match
-        return normalizedText.toLowerCase().includes(searchTerm.toLowerCase());
-      });
-    };
-  }, [filterOptionsProp, searchKeys, optionLabelKey, optionValueKey, effectiveGetOptionLabel]);
+  const hasCustomFilter = typeof filterOptionsProp === 'function';
+  const defaultFilterOptions = createSubstringFilterFn({
+    getLabel: getOptionLabelFn,
+    additionalKeys: Array.isArray(searchKeys) && searchKeys.length > 0 ? searchKeys : [],
+    minCharsToSearch,
+    maxResults,
+    inputForFiltering,
+  });
+  const effectiveFilterOptions = useMemo(
+    () => (hasCustomFilter ? filterOptionsProp : defaultFilterOptions),
+    [hasCustomFilter, filterOptionsProp, searchKeys, getOptionLabelFn, minCharsToSearch, maxResults, inputForFiltering]
+  );
 
   // Compute sorted options if requested
-  const displayOptions = useMemo(() => {
+  const optionsForDisplay = useMemo(() => {
     if (!Array.isArray(options)) return [];
-    let arr = options;
-    let cmp = null;
+    let comparator = null;
     if (showSortToggle) {
-      // Internal toggle drives sorting
       if (internalSortMode === 'name-asc' || internalSortMode === 'name-desc') {
-        const base = (a, b) =>
-          String(effectiveGetOptionLabel(a) ?? '').localeCompare(
-            String(effectiveGetOptionLabel(b) ?? ''),
-            undefined,
-            { numeric: true, sensitivity: 'base' }
-          );
-        const asc = internalSortMode === 'name-asc';
-        cmp = asc ? base : (a, b) => -base(a, b);
+        comparator = createLabelComparator(getOptionLabelFn, internalSortMode === 'name-asc' ? 'asc' : 'desc');
       }
     } else {
-      // Backward-compat props-based sorting
-      if (typeof sortComparator === 'function') {
-        cmp = sortComparator;
-      } else if (sortByLabel) {
-        const base = (a, b) =>
-          String(effectiveGetOptionLabel(a) ?? '').localeCompare(
-            String(effectiveGetOptionLabel(b) ?? ''),
-            undefined,
-            { numeric: true, sensitivity: 'base' }
-          );
-        cmp = sortDirection === 'desc' ? (a, b) => -base(a, b) : base;
-      }
+      const isCustomSortComparator = typeof sortComparator === 'function';
+      const defaultSortComparator = createLabelComparator(getOptionLabelFn, sortDirection === 'desc' ? 'desc' : 'asc');
+      comparator = isCustomSortComparator ? sortComparator : sortByLabel ? defaultSortComparator : null;
     }
-    if (!cmp) return arr;
-    return [...arr].sort(cmp);
-  }, [options, sortComparator, sortByLabel, sortDirection, effectiveGetOptionLabel, showSortToggle, internalSortMode]);
+    return comparator ? [...options].sort(comparator) : options;
+  }, [
+    options,
+    sortComparator,
+    sortByLabel,
+    sortDirection,
+    getOptionLabelFn,
+    showSortToggle,
+    internalSortMode,
+  ]);
 
   const defaultRenderOption = (props, option, state) => {
-    const labelText = String(effectiveGetOptionLabel(option) ?? '');
-    const searchTerm = getSearchTerm(inputValue);
+    const labelText = String(getOptionLabelFn(option) ?? '');
+    const searchTerm = getSearchTerm(inputForFiltering);
     const content =
-      highlightMatches && inputValue && searchTerm.length > 0 ? (
-        SmartAutocomplete.renderHighlightedText(labelText, inputValue, highlightStyle)
+      highlightMatches && inputForFiltering && searchTerm.length > 0 ? (
+        SmartAutocomplete.renderHighlightedText(labelText, inputForFiltering, highlightStyle)
       ) : (
         labelText
       );
 
+    // Enforce single-line rendering to keep row height consistent for virtualization
+    const textStyle = {
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      display: 'inline-block',
+      maxWidth: '100%',
+    };
+
     if (!multiple || !showCheckbox) {
       return (
         <li {...props}>
-          <span style={{ whiteSpace: 'pre-wrap' }}>{content}</span>
+          <span style={textStyle}>{content}</span>
         </li>
       );
     }
@@ -191,7 +203,7 @@ export default function SmartAutocomplete({
           style={{ marginRight: 8 }}
           checked={state.selected}
         />
-        <span style={{ whiteSpace: 'pre-wrap' }}>{content}</span>
+        <span style={textStyle}>{content}</span>
       </li>
     );
   };
@@ -199,7 +211,7 @@ export default function SmartAutocomplete({
   const wrappedRenderOption = (props, option, state) => {
     if (renderOptionProp) {
       // Inject inputValue for consumers that want to highlight
-      return renderOptionProp(props, option, { ...state, inputValue });
+      return renderOptionProp(props, option, { ...state, inputValue: inputForFiltering });
     }
     return defaultRenderOption(props, option, state);
   };
@@ -211,28 +223,120 @@ export default function SmartAutocomplete({
     return <FaSortAlphaDown size={16} />; // A→Z
   })();
 
+  // Memoized adaptive Listbox component (virtualizes when needed)
+  const VirtualizedListboxComponent = useMemo(
+    () =>
+      // Disable virtualization when grouping is active to ensure perfect alignment
+      createAdaptiveListboxComponent({
+        virtualize: groupBy ? false : virtualize,
+        virtualizeIfOver: groupBy ? undefined : virtualizeIfOver,
+        virtualizeOnInput: groupBy ? false : virtualizeOnInput,
+        virtualizeMinInputLength,
+        inputForFiltering,
+        rowHeight,
+        maxVisibleRows,
+        overscanCount,
+        debugVirtualization,
+      }),
+    [
+      groupBy,
+      virtualize,
+      virtualizeIfOver,
+      virtualizeOnInput,
+      virtualizeMinInputLength,
+      inputForFiltering,
+      rowHeight,
+      maxVisibleRows,
+      overscanCount,
+      debugVirtualization,
+    ]
+  );
+
   const cycleMode = () => {
-    const next = internalSortMode === 'default' ? 'name-asc' : internalSortMode === 'name-asc' ? 'name-desc' : 'default';
+    const next =
+      internalSortMode === 'default' ? 'name-asc' : internalSortMode === 'name-asc' ? 'name-desc' : 'default';
     setInternalSortMode(next);
     onSortModeChange && onSortModeChange(next);
   };
 
-  const auto = (
+  const belowMinChars = useMemo(
+    () => minCharsToSearch > 0 && inputForFiltering.trim().length < minCharsToSearch,
+    [minCharsToSearch, inputForFiltering]
+  );
+  const effectiveNoOptionsText = loading
+    ? 'Loading...'
+    : belowMinChars
+    ? `Type at least ${minCharsToSearch} character${minCharsToSearch > 1 ? 's' : ''} to search`
+    : noOptionsText;
+
+  // When grouping, disable sticky headers to avoid stacking and visual glitches
+  const mergedListboxProps = useMemo(() => {
+    if (!groupBy) return ListboxProps;
+    const groupSx = {
+      '& .MuiAutocomplete-groupLabel': { position: 'static', top: 'auto', background: 'transparent' },
+      '& .MuiAutocomplete-groupUl': { paddingTop: 0 },
+    };
+    const baseSx = (ListboxProps && ListboxProps.sx) || {};
+    return { ...ListboxProps, sx: { ...baseSx, ...groupSx } };
+  }, [groupBy, ListboxProps]);
+
+  // Compose with any user-supplied onClose so we can clear input when menu closes
+  const composedAutocompleteProps = useMemo(() => {
+    const userOnClose = autocompleteProps?.onClose;
+    const userOnOpen = autocompleteProps?.onOpen;
+    return {
+      ...autocompleteProps,
+      onClose: (event, reason) => {
+        // Keep selected item text visible when closed (single select). For multi, input stays empty.
+        if (!multiple && value && value.text != null) {
+          setInputValue(String(value.text));
+        } else {
+          setInputValue('');
+        }
+        // Ensure next open shows full list
+        setFilterTerm('');
+        if (typeof userOnClose === 'function') userOnClose(event, reason);
+      },
+      onOpen: (event) => {
+        // Show current selection in the input and select it
+        const label = !multiple && value && value.text != null ? String(value.text) : '';
+        setInputValue(label);
+        setFilterTerm(''); // full list until user types
+        // Select all text so typing replaces it
+        setTimeout(() => {
+          try {
+            const el = inputElRef.current;
+            if (el && typeof el.select === 'function') {
+              el.select();
+            }
+          } catch {}
+        }, 0);
+        if (typeof userOnOpen === 'function') userOnOpen(event);
+      },
+    };
+  }, [autocompleteProps]);
+
+  return (
     <Autocomplete
-      options={displayOptions}
+      options={optionsForDisplay}
       value={value}
       multiple={multiple}
       loading={loading}
       disabled={loading} // Disable selection when loading
       disableClearable={disableClearable}
       filterOptions={effectiveFilterOptions}
-      isOptionEqualToValue={effectiveIsOptionEqual}
-      getOptionLabel={effectiveGetOptionLabel}
+      isOptionEqualToValue={isOptionEqualFn}
+      getOptionLabel={getOptionLabelFn}
       renderOption={wrappedRenderOption}
+      ListboxComponent={VirtualizedListboxComponent}
+      groupBy={groupBy}
       inputValue={inputValue}
-      onInputChange={(_e, v) => setInputValue(v)}
-      noOptionsText={loading ? 'Loading...' : noOptionsText}
-      ListboxProps={ListboxProps}
+      onInputChange={(_e, v) => {
+        setInputValue(v);
+        setFilterTerm(v);
+      }}
+      noOptionsText={effectiveNoOptionsText}
+      ListboxProps={mergedListboxProps}
       renderInput={(params) => (
         <TextField
           {...params}
@@ -250,7 +354,12 @@ export default function SmartAutocomplete({
                 ) : null}
                 {showSortToggle && (
                   <Tooltip title={sortToggleTooltips?.[internalSortMode] ?? ''}>
-                    <IconButton size='small' onClick={cycleMode} edge='end' tabIndex={-1}>
+                    <IconButton
+                      size='small'
+                      onClick={cycleMode}
+                      edge='end'
+                      tabIndex={-1}
+                    >
                       {currentIcon}
                     </IconButton>
                   </Tooltip>
@@ -259,46 +368,59 @@ export default function SmartAutocomplete({
               </>
             ),
           }}
+          inputRef={(node) => {
+            // chain MUI's ref
+            try {
+              const r = params.inputProps?.ref;
+              if (typeof r === 'function') r(node);
+              else if (r && typeof r === 'object') r.current = node;
+            } catch {}
+            inputElRef.current = node;
+          }}
           {...textFieldProps}
         />
       )}
       onChange={onChange}
-      {...autocompleteProps}
+      {...composedAutocompleteProps}
     />
   );
-  return auto;
 }
 
 // Static helper method for consistent highlighting in custom renderOption implementations
-SmartAutocomplete.renderHighlightedText = (text, inputValue, highlightStyle = { backgroundColor: 'rgba(255, 235, 59, 0.35)' }) => {
-  if (!inputValue || !inputValue.trim()) {
-    return text;
+SmartAutocomplete.renderHighlightedText = (
+  text,
+  inputValue,
+  highlightStyle = { backgroundColor: 'rgba(255, 235, 59, 0.35)' }
+) => {
+  const raw = String(text ?? '');
+  const term = String(inputValue || '').trim();
+  if (!term) return raw;
+
+  const lowerRaw = raw.toLowerCase();
+  const lowerTerm = term.toLowerCase();
+  const parts = [];
+  let startIndex = 0;
+  let matchIndex = lowerRaw.indexOf(lowerTerm, startIndex);
+
+  // Highlight ALL occurrences, case-insensitive
+  while (matchIndex !== -1) {
+    if (matchIndex > startIndex) {
+      parts.push(raw.substring(startIndex, matchIndex));
+    }
+    const matchText = raw.substring(matchIndex, matchIndex + term.length);
+    parts.push(
+      <span
+        key={`hl-${matchIndex}`}
+        style={highlightStyle}
+      >
+        {matchText}
+      </span>
+    );
+    startIndex = matchIndex + term.length;
+    matchIndex = lowerRaw.indexOf(lowerTerm, startIndex);
   }
-  
-  const searchTerm = inputValue.trim();
-  if (!searchTerm) {
-    return text;
+  if (startIndex < raw.length) {
+    parts.push(raw.substring(startIndex));
   }
-  
-  // Custom highlighting for true substring matching
-  const normalizedText = text.toLowerCase();
-  const normalizedSearchTerm = searchTerm.toLowerCase();
-  
-  const index = normalizedText.indexOf(normalizedSearchTerm);
-  if (index === -1) {
-    return text; // No match found
-  }
-  
-  // Split the text and highlight the matching substring
-  const beforeMatch = text.substring(0, index);
-  const match = text.substring(index, index + searchTerm.length);
-  const afterMatch = text.substring(index + searchTerm.length);
-  
-  return (
-    <>
-      {beforeMatch}
-      <span style={highlightStyle}>{match}</span>
-      {afterMatch}
-    </>
-  );
+  return <>{parts}</>;
 };

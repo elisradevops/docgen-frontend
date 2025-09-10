@@ -252,7 +252,6 @@ const ReleaseSelector = observer(
         autoHighlight
         openOnFocus
         options={headingLevelOptions}
-        getOptionLabel={(option) => `${option.text}`}
         renderInput={(params) => (
           <TextField
             {...params}
