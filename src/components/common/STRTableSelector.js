@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // import { headingLevelOptions } from '../../store/data/dropDownOptions';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
@@ -202,6 +202,13 @@ const STRTableSelector = observer(
         setSelectedTestSuites([]);
       }
     }, [selectedTestPlan?.key]);
+
+    // Map suite id -> suite for readable grouping in the suites autocomplete
+    const suiteById = useMemo(() => {
+      const map = new Map();
+      (store.testSuiteList || []).forEach((s) => map.set(s.id, s));
+      return map;
+    }, [store.testSuiteList]);
 
     //For detailed steps execution
     useEffect(() => {
@@ -562,9 +569,19 @@ const STRTableSelector = observer(
               disableCloseOnSelect
               autoHighlight
               loading={store.loadingState.testSuiteListLoading}
-              groupBy={(option) => option.parent}
+              size='small'
+              groupBy={(option) => {
+                const parent = suiteById.get(option.parent);
+                return parent ? `Parent: ${parent.name}` : 'Top Level';
+              }}
               showCheckbox
-              label='With suite cases'
+              label='Test Suites (include child suites)'
+              placeholder='Search suites...'
+              textFieldProps={{
+                size: 'small',
+                helperText: selectedTestPlan?.key ? 'Descendants are auto-included' : 'Select a test plan first',
+              }}
+              disabled={!selectedTestPlan?.key}
               onChange={async (_event, newValue) => {
                 setSelectedTestSuites(newValue);
               }}
