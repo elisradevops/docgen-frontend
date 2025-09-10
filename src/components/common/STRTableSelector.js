@@ -230,7 +230,8 @@ const STRTableSelector = observer(
         if (dataToSave?.nonRecursiveTestSuiteIdList?.length > 0) {
           const validTestSuites = dataToSave.nonRecursiveTestSuiteIdList
             .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
-            .filter(Boolean);
+            .filter(Boolean)
+            .map((s) => ({ ...s, key: s.id, text: `${s.name} - (${s.id})` }));
 
           if (validTestSuites.length > 0) {
             setIsSuiteSpecific(true);
@@ -553,14 +554,16 @@ const STRTableSelector = observer(
             <SmartAutocomplete
               style={{ marginBlock: 8, width: 300 }}
               multiple
-              options={selectedTestPlan?.key ? store.testSuiteList : []}
+              options={
+                selectedTestPlan?.key
+                  ? (store.testSuiteList || []).map((s) => ({ ...s, key: s.id, text: `${s.name} - (${s.id})` }))
+                  : []
+              }
               disableCloseOnSelect
               autoHighlight
               loading={store.loadingState.testSuiteListLoading}
               groupBy={(option) => option.parent}
               showCheckbox
-              getOptionLabel={(option) => `${option.name} - (${option.id})`}
-              isOptionEqualToValue={(option, value) => option?.id === value?.id}
               label='With suite cases'
               onChange={async (_event, newValue) => {
                 setSelectedTestSuites(newValue);

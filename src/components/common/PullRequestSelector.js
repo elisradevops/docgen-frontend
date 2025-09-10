@@ -31,10 +31,10 @@ const PullRequestSelector = observer(
     const [contentHeadingLevel, setContentHeadingLevel] = useState(1);
 
     const UpdateDocumentRequestObject = useCallback(() => {
-      let pullrequestIdList = undefined;
-      pullrequestIdList = selectedPullRequests.map((data) => {
-        return data.pullRequestId;
-      });
+      // selectedPullRequests now stores simplified items: { key, text }
+      const pullrequestIdList = Array.isArray(selectedPullRequests)
+        ? selectedPullRequests.map((item) => item.key)
+        : [];
       addToDocumentRequestObject(
         {
           type: 'pr-change-description-table',
@@ -114,9 +114,7 @@ const PullRequestSelector = observer(
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
-          options={repoList.map((repo) => {
-            return { key: repo.id, text: repo.name };
-          })}
+          options={repoList.map((repo) => ({ key: repo.id, text: repo.name }))}
           label='Select a Repo'
           onChange={async (event, newValue) => {
             store.fetchRepoPullRequests(newValue.key);
@@ -128,12 +126,10 @@ const PullRequestSelector = observer(
           <SmartAutocomplete
             style={{ marginBlock: 8, width: 300 }}
             multiple
-            options={pullRequests}
+            options={pullRequests.map((pr) => ({ key: pr.pullRequestId, text: `${pr.title} - (${pr.pullRequestId})` }))}
             disableCloseOnSelect
             autoHighlight
             showCheckbox
-            getOptionLabel={(option) => `${option.title} - (${option.pullRequestId})`}
-            isOptionEqualToValue={(option, value) => option?.pullRequestId === value?.pullRequestId}
             label='selected pull requests'
             onChange={async (event, newValue) => {
               setSelectedPullRequests(newValue);

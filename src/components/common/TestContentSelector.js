@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
 import { PrimaryButton } from '@fluentui/react';
-import { Box, Radio, RadioGroup, FormLabel, Typography, Stack, Grid } from '@mui/material';
+import { Box, Radio, RadioGroup, FormLabel, Grid } from '@mui/material';
+
 import TraceAnalysisDialog from '../dialogs/TraceAnalysisDialog';
 import { observer } from 'mobx-react';
 import { validateQuery } from '../../utils/queryValidation';
@@ -11,6 +12,7 @@ import { toast } from 'react-toastify';
 import LinkedMomDialog from '../dialogs/LinkedMomDialog';
 import SettingsDisplay from './SettingsDisplay'; // Import the new SettingsDisplay component
 import SmartAutocomplete from './SmartAutocomplete';
+
 const defaultSelectedQueries = {
   traceAnalysisMode: 'none',
   reqTestQuery: null,
@@ -50,6 +52,7 @@ const TestContentSelector = observer(
     const [includeCustomerId, setIncludeCustomerId] = useState(false);
     const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
     const [flatSuiteTestCases, setFlatSuiteTestCases] = useState(false);
+
     const UpdateDocumentRequestObject = useCallback(() => {
       let testSuiteIdList = undefined;
       let nonRecursiveTestSuiteIdList = undefined;
@@ -170,7 +173,7 @@ const TestContentSelector = observer(
           let testPlanNameForFile = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
           store.setContextName(testPlanNameForFile);
         }
-        setSelectedTestPlan(value);
+        setSelectedTestPlan(value || { key: '', text: '' });
       },
       [store]
     );
@@ -435,13 +438,12 @@ const TestContentSelector = observer(
           {/*
         
         TODO: add this later if needed
-        <Autocomplete
+        <SmartAutocomplete
           disableClearable
           style={{ marginBlock: 8, width: 300 }}
           autoHighlight
           openOnFocus
           options={headingLevelOptions}
-          getOptionLabel={(option) => `${option.text}`}
           renderInput={(params) => (
             <TextField
               {...params}
@@ -452,6 +454,7 @@ const TestContentSelector = observer(
           onChange={async (event, newValue) => {
             setContentHeadingLevel(newValue.key);
           }}
+{{ ... }}
         /> */}
         </div>
         <div>
@@ -462,6 +465,11 @@ const TestContentSelector = observer(
             openOnFocus
             loading={store.loadingState.testPlanListLoading}
             options={store.testPlansList?.map((testplan) => ({ key: testplan.id, text: testplan.name }))}
+            minCharsToSearch={0}
+            maxResults={200}
+            clientDebounceMs={0}
+            virtualizeOnInput
+            virtualizeMinInputLength={1}
             label='Select a Test Plan'
             onChange={async (_event, newValue) => {
               await handleTestPlanChanged(newValue);
@@ -487,15 +495,17 @@ const TestContentSelector = observer(
             <SmartAutocomplete
               style={{ marginBlock: 8, width: 300 }}
               multiple
-              options={selectedTestPlan?.key ? store.testSuiteList : []}
+              options={
+                selectedTestPlan?.key
+                  ? (store.testSuiteList || []).map((s) => ({ ...s, key: s.id, text: `${s.name} - (${s.id})` }))
+                  : []
+              }
               disableCloseOnSelect
               autoHighlight
               loading={store.loadingState.testSuiteListLoading}
               value={selectedTestSuites}
               groupBy={(option) => option.parent}
               showCheckbox
-              getOptionLabel={(option) => `${option.name} - (${option.id})`}
-              isOptionEqualToValue={(option, value) => option?.id === value?.id}
               label='With suite cases'
               onChange={async (_event, newValue) => {
                 setSelectedTestSuites(newValue);
