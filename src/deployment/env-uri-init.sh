@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-placeholder="${BACKEND_URL_PLACEHOLDER_ContentControl:-}"
+placeholder="${BACKEND-URL-PLACEHOLDER-ContentControl:-}"
 
 if [ -z "$placeholder" ]; then
   echo "BACKEND_URL_PLACEHOLDER_ContentControl is not set; aborting." >&2
