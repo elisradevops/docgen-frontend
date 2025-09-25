@@ -1,7 +1,21 @@
-echo replace BACKEND-URL-PLACEHOLDER-ContentControl
-echo "$BACKEND_URL_PLACEHOLDER_ContentControl"
-find '/usr/share/nginx/html/static/js' -name '*.js' -exec sed -i 's,BACKEND-URL-PLACEHOLDER-ContentControl,'"$BACKEND_URL_PLACEHOLDER_ContentControl"',g' {} \;
+#!/bin/sh
+set -eu
 
-echo starting server
-nginx -g "daemon off;"
+placeholder="${BACKEND_URL_PLACEHOLDER_ContentControl:-}"
 
+if [ -z "$placeholder" ]; then
+  echo "BACKEND_URL_PLACEHOLDER_ContentControl is not set; aborting." >&2
+  exit 1
+fi
+
+echo "Replacing BACKEND-URL-PLACEHOLDER-ContentControl with $placeholder"
+
+escaped_placeholder=$(printf '%s\n' "$placeholder" | sed 's/[&|]/\\&/g')
+
+target_dir="/usr/share/nginx/html"
+
+find "$target_dir" -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' \) \
+  -exec sed -i "s|BACKEND-URL-PLACEHOLDER-ContentControl|$escaped_placeholder|g" {} +
+
+echo "Starting nginx"
+exec nginx -g "daemon off;"

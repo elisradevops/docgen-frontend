@@ -10,7 +10,7 @@ services:
     ports:
       - "80:80"
     environment:
-      BACKEND-URL-PLACEHOLDER-ContentControl: "http://dg-api-gate:30001"
+      BACKEND_URL_PLACEHOLDER_ContentControl: "http://dg-api-gate:30001"
   dg-init-job:
     image: elisradevops/docgen-initializer:latest
     depends_on:
