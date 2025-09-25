@@ -1,0 +1,38 @@
+/* Toast alignment + responsive width for react-toastify */
+
+/* Make the container shrink-to-fit the toast content and be responsive */
+.Toastify__toast-container {
+  width: auto !important; /* override default fixed width */
+  max-width: min(92vw, 680px);
+  padding: 0 8px; /* small side padding from viewport edges */
+}
+
+/* Ensure top-center container also shrinks to content */
+.Toastify__toast-container--top-center {
+  display: inline-block !important;
+}
+
+/* Allow each toast to size to its content but cap to viewport */
+.Toastify__toast {
+  width: auto;
+  max-width: min(92vw, 680px);
+  white-space: normal;          /* allow wrap */
+  word-break: break-word;       /* wrap long words */
+  overflow-wrap: anywhere;      /* robust wrapping for long tokens */
+}
+
+/* Ensure the icon and text are aligned vertically */
+.Toastify__toast-body {
+  display: flex;
+  align-items: center;
+}
+
+/* Add spacing between the icon and the text */
+.Toastify__toast-body > div:last-child {
+  margin-left: 8px;
+}
+
+/* Keep the close button vertically centered */
+.Toastify__close-button {
+  align-self: center;
+}
