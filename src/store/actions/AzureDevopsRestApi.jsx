@@ -58,7 +58,7 @@ export default class AzureDevopsRestApi {
         headers: this._headers(),
         //Add my Queries for debugging
         // params: { teamProjectId, docType, path: 'My Queries' },
-        params: { teamProjectId, docType },
+        params: { teamProjectId, docType, path: '' },
       });
       return res.data;
     });
