@@ -21,6 +21,7 @@ const ReleaseSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    workItemFilterOptions,
   }) => {
     const [releaseDefinitionHistory, setReleaseDefinitionHistory] = useState([]);
     const [selectedReleaseDefinition, setSelectedReleaseDefinition] = useState(defaultSelectedItem);
@@ -178,6 +179,7 @@ const ReleaseSelector = observer(
             linkedWiOptions: linkedWiOptions,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            workItemFilterOptions,
           },
         },
         contentControlIndex
@@ -195,6 +197,7 @@ const ReleaseSelector = observer(
       includeCommittedBy,
       includeUnlinkedCommits,
       contentControlIndex,
+      workItemFilterOptions,
     ]);
 
     useEffect(() => {

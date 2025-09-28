@@ -81,7 +81,7 @@ src/
 ## Backend Configuration
 
 - `src/store/constants.jsx` defines `jsonDocument_url`. In development it points to `http://localhost:30001`; in production it resolves to `http://<current-host>:30001`. Adjust this file if your backend lives elsewhere.
-- Container deployments can inject the backend URL by exporting `BACKEND_URL_PLACEHOLDER_ContentControl` before running `src/deployment/env-uri-init.sh`; the script rewrites static assets and starts nginx.
+- Container deployments can inject the backend URL by exporting `BACKEND-URL-PLACEHOLDER-ContentControl` before running `src/deployment/env-uri-init.sh`; the script rewrites static assets and starts nginx.
 - All Azure DevOps calls are proxied by the backend. Ensure custom headers `X-Ado-Org-Url` and `X-Ado-PAT` are forwarded as expected.
 
 ## Using the App
@@ -121,7 +121,7 @@ src/
    npm run build
    ```
 2. Serve the contents of `dist/` with your preferred static host (nginx, Azure Static Web Apps, etc.).
-3. If the backend URL differs, run `src/deployment/env-uri-init.sh` during container start to rewrite `BACKEND-URL-PLACEHOLDER-ContentControl` in the compiled JS bundle. The script requires `BACKEND_URL_PLACEHOLDER_ContentControl` to be set and exits otherwise.
+3. If the backend URL differs, run `src/deployment/env-uri-init.sh` during container start to rewrite `BACKEND-URL-PLACEHOLDER-ContentControl` in the compiled JS bundle. The script requires `BACKEND-URL-PLACEHOLDER-ContentControl` to be set and exits otherwise.
 4. Ensure the backend is reachable via HTTPS if the frontend is served securely; update `jsonDocument_url` or the runtime placeholder accordingly.
 
 ## Troubleshooting

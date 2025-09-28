@@ -22,6 +22,7 @@ const PipelineSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    workItemFilterOptions,
   }) => {
     const [pipelineRunHistory, setPipelineRunHistory] = useState([]);
     const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
@@ -47,6 +48,7 @@ const PipelineSelector = observer(
             linkedWiOptions: linkedWiOptions,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            workItemFilterOptions,
           },
         },
         contentControlIndex
@@ -64,6 +66,7 @@ const PipelineSelector = observer(
       contentControlIndex,
       includeCommittedBy,
       includeUnlinkedCommits,
+      workItemFilterOptions,
     ]);
 
     useEffect(() => {

@@ -53,6 +53,12 @@ const SVDGuide = () => {
         </ListItem>
         <ListItem>
           <ListItemText
+            primary='Filter by Work Item Type/State'
+            secondary='Enable the checkbox to activate filtering. By default all types and states are included. Use the multi-select pickers to narrow down the list, or the quick “Select all” / “Clear” actions to adjust selections.'
+          />
+        </ListItem>
+        <ListItem>
+          <ListItemText
             primary='Include Unlinked Commits'
             secondary='Append commits without linked work items as an additional appendix.'
           />

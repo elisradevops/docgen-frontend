@@ -22,6 +22,7 @@ const CommitDateSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    workItemFilterOptions,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
       key: '',
@@ -66,6 +67,7 @@ const CommitDateSelector = observer(
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
             linkedWiOptions: linkedWiOptions,
+            workItemFilterOptions,
           },
         },
         contentControlIndex
@@ -88,6 +90,7 @@ const CommitDateSelector = observer(
       store,
       linkedWiOptions,
       contentControlIndex,
+      workItemFilterOptions,
     ]);
 
     useEffect(() => {
@@ -106,6 +109,7 @@ const CommitDateSelector = observer(
       editingMode,
       store.attachmentWikiUrl,
       UpdateDocumentRequestObject,
+      workItemFilterOptions,
     ]);
 
     // Validation: repo and valid date range (end >= start)
