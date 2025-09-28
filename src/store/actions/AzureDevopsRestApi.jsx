@@ -57,8 +57,8 @@ export default class AzureDevopsRestApi {
       const res = await axios.get(`${C.jsonDocument_url}/azure/queries`, {
         headers: this._headers(),
         //Add my Queries for debugging
-        params: { teamProjectId, docType, path: 'My Queries' },
-        // params: { teamProjectId, docType },
+        // params: { teamProjectId, docType, path: 'My Queries' },
+        params: { teamProjectId, docType },
       });
       return res.data;
     });
