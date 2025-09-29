@@ -205,6 +205,16 @@ export default class AzureDevopsRestApi {
     });
   }
 
+  async getWorkItemTypeList(teamProjectId = '') {
+    return this._wrap(async () => {
+      const res = await axios.get(`${C.jsonDocument_url}/azure/work-item-types`, {
+        headers: this._headers(),
+        params: { teamProjectId },
+      });
+      return res.data;
+    });
+  }
+
   async GetRepoBranches(RepoId = '', teamProjectId = '') {
     return this.getGitRepoBranches(RepoId, teamProjectId);
   }
@@ -270,6 +280,16 @@ export default class AzureDevopsRestApi {
         err.status = 401;
         throw err;
       }
+      return res.data;
+    });
+  }
+
+  async getWorkItemTypes(teamProjectId = '') {
+    return this._wrap(async () => {
+      const res = await axios.get(`${C.jsonDocument_url}/azure/work-item-types`, {
+        headers: this._headers(),
+        params: { teamProjectId },
+      });
       return res.data;
     });
   }
