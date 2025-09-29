@@ -1,6 +1,6 @@
 {
   "name": "dg-ui",
-  "version": "0.91.2",
+  "version": "0.92.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
