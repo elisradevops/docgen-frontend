@@ -4,7 +4,7 @@ set -eu
 placeholder="${BACKEND-URL-PLACEHOLDER-ContentControl:-}"
 
 if [ -z "$placeholder" ]; then
-  echo "BACKEND_URL_PLACEHOLDER_ContentControl is not set; aborting." >&2
+  echo "BACKEND-URL-PLACEHOLDER-ContentControl is not set; aborting." >&2
   exit 1
 fi
 

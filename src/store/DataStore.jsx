@@ -48,6 +48,7 @@ class DocGenDataStore {
       pullRequestList: observable,
       gitRepoCommits: observable,
       linkTypes: observable,
+      workItemTypes: observable,
       userDetails: observable,
       documents: observable,
       docType: observable,
@@ -89,6 +90,7 @@ class DocGenDataStore {
       fetchReleaseDefinitionList: action,
       setReleaseDefinitionList: action,
       fetchReleaseDefinitionHistory: action,
+      fetchWorkItemTypeList: action,
       fetchTestPlans: action,
       setTestPlansList: action,
       fetchTestSuitesList: action,
@@ -167,6 +169,7 @@ class DocGenDataStore {
   pipelineList = []; //list of all project pipelines
   releaseDefinitionList = []; //list of all project release Definitions
   releaseDefinitionHistory = []; //release history of a specific Definition
+  workItemTypes = [];
   docType = '';
   contextName = '';
   loadingState = {
@@ -185,6 +188,7 @@ class DocGenDataStore {
     pipelineLoadingState: false,
     pullRequestLoadingState: false,
     releaseDefinitionLoadingState: false,
+    workItemTypesLoadingState: false,
   };
   favoriteList = [];
   selectedFavorite = null;
@@ -389,6 +393,10 @@ class DocGenDataStore {
       this.fetchGitRepoList();
       this.fetchPipelineList();
       this.fetchReleaseDefinitionList();
+      this.fetchWorkItemTypeList();
+    }
+    if (!teamProjectId) {
+      this.workItemTypes = [];
     }
   }
 
@@ -771,6 +779,43 @@ class DocGenDataStore {
       })
       .finally(() => {
         this.loadingState.releaseDefinitionLoadingState = false;
+      });
+  }
+
+  fetchWorkItemTypeList() {
+    if (!this.teamProject) {
+      this.workItemTypes = [];
+      return;
+    }
+
+    this.loadingState.workItemTypesLoadingState = true;
+    this.azureRestClient
+      .getWorkItemTypeList(this.teamProject)
+      .then((data) => {
+        const types = Array.isArray(data?.value) ? data.value : Array.isArray(data) ? data : [];
+        this.workItemTypes = types
+          .filter((type) => type && type.name)
+          .map((type) => ({
+            name: type.name,
+            color: type.color,
+            icon: type.icon,
+            states: Array.isArray(type.states)
+              ? type.states.map((state) => ({
+                  name: state?.name,
+                  color: state?.color,
+                  category: state?.category,
+                }))
+              : [],
+          }));
+      })
+      .catch((err) => {
+        logger.error(`Error occurred while fetching work item types: ${err.message}`);
+        logger.error('Error stack:');
+        logger.error(err.stack);
+        this.workItemTypes = [];
+      })
+      .finally(() => {
+        this.loadingState.workItemTypesLoadingState = false;
       });
   }
   //for setting release list

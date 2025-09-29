@@ -20,6 +20,7 @@ const PullRequestSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    workItemFilterOptions,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
       key: '',
@@ -49,6 +50,7 @@ const PullRequestSelector = observer(
             linkedWiOptions: linkedWiOptions,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            workItemFilterOptions,
           },
         },
         contentControlIndex
@@ -66,6 +68,7 @@ const PullRequestSelector = observer(
       includeCommittedBy,
       includeUnlinkedCommits,
       contentControlIndex,
+      workItemFilterOptions,
     ]);
 
     useEffect(() => {

@@ -17,6 +17,72 @@ import {
 const icon = <CheckBoxOutlineBlankIcon fontSize='small' />;
 const checkedIcon = <CheckBoxIcon fontSize='small' />;
 
+const normalizeWorkItemColor = (rawColor) => {
+  if (typeof rawColor !== 'string') return null;
+  const trimmed = rawColor.trim();
+  if (!trimmed) return null;
+  if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) {
+    return trimmed.length === 9 ? `#${trimmed.slice(1, 7)}` : trimmed;
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return `#${trimmed}`;
+  }
+  if (/^[0-9a-fA-F]{8}$/.test(trimmed)) {
+    return `#${trimmed.slice(0, 6)}`;
+  }
+  return trimmed;
+};
+
+const getWorkItemIconUrl = (iconValue) => {
+  if (!iconValue) return null;
+  if (typeof iconValue === 'string') return iconValue;
+  if (typeof iconValue === 'object') {
+    return iconValue.dataUrl || iconValue.url || iconValue.href || null;
+  }
+  return null;
+};
+
+const isSameOrigin = (url) => {
+  if (typeof url !== 'string') return false;
+  if (url.startsWith('data:')) return true;
+  try {
+    const absolute = new URL(url, typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+    if (typeof window === 'undefined') return false;
+    return absolute.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
+const getWorkItemIconColor = (option) => {
+  const directColor = normalizeWorkItemColor(option?.color);
+  if (directColor) return directColor;
+
+  const icon = option?.icon;
+  if (icon) {
+    const iconColor = normalizeWorkItemColor(icon.color || icon.foregroundColor);
+    if (iconColor) return iconColor;
+
+    const iconUrl = getWorkItemIconUrl(icon);
+    if (iconUrl) {
+      try {
+        const url = new URL(iconUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+        const colorParam = url.searchParams.get('color');
+        const normalizedFromUrl = normalizeWorkItemColor(colorParam || undefined);
+        if (normalizedFromUrl) return normalizedFromUrl;
+      } catch {
+        const match = /[?&]color=([^&]+)/i.exec(iconUrl);
+        if (match?.[1]) {
+          const normalizedFromRegex = normalizeWorkItemColor(match[1]);
+          if (normalizedFromRegex) return normalizedFromRegex;
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
 /**
  * SmartAutocomplete – thin wrapper around MUI Autocomplete with consistent filtering,
  * sorting, highlighting, and virtualization for large lists.
@@ -68,6 +134,7 @@ export default function SmartAutocomplete({
   ListboxProps,
   highlightMatches = true,
   highlightStyle = { backgroundColor: 'rgba(255, 235, 59, 0.35)' },
+  workItemVisualMode = false,
   // Sorting controls
   sortByLabel = false,
   sortDirection = 'asc', // 'asc' | 'desc'
@@ -180,6 +247,92 @@ export default function SmartAutocomplete({
     internalSortMode,
   ]);
 
+  const renderWorkItemVisual = (option, { size = 20, marginRight = 8 } = {}) => {
+    if (!workItemVisualMode) return null;
+    if (!option || typeof option !== 'object') return null;
+    const resolvedColor = getWorkItemIconColor(option) || '#f3f2f1';
+    const iconUrl = getWorkItemIconUrl(option.icon);
+    const canUseIcon = iconUrl && isSameOrigin(iconUrl);
+    if (!resolvedColor && !iconUrl) return null;
+
+    if (canUseIcon) {
+      const iconContainerStyle = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: size,
+        height: size,
+        marginRight,
+        flexShrink: 0,
+      };
+
+      const maskStyle = {
+        width: '100%',
+        height: '100%',
+        backgroundColor: resolvedColor || '#0078d4',
+        WebkitMaskImage: `url(${iconUrl})`,
+        maskImage: `url(${iconUrl})`,
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+      };
+
+      return (
+        <span aria-hidden='true' style={iconContainerStyle}>
+          <span style={maskStyle} />
+        </span>
+      );
+    }
+
+    if (resolvedColor) {
+      const dotSize = size * 0.5;
+      const dotStyle = {
+        width: dotSize,
+        height: dotSize,
+        borderRadius: '50%',
+        backgroundColor: resolvedColor,
+        display: 'inline-block',
+        marginRight,
+        flexShrink: 0,
+      };
+      return <span aria-hidden='true' style={dotStyle} />;
+    }
+
+    const wrapperStyle = {
+      width: size,
+      height: size,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight,
+      flexShrink: 0,
+    };
+
+    const fallbackContent = (() => {
+      const source = option?.text || option?.name || option?.icon?.id;
+      if (!source) return null;
+      return source.substring(0, 1).toUpperCase();
+    })();
+
+    return fallbackContent ? (
+      <span aria-hidden='true' style={wrapperStyle}>
+        <span
+          style={{
+            color: '#616161',
+            fontSize: size * 0.55,
+            fontWeight: 600,
+            lineHeight: 1,
+          }}
+        >
+          {fallbackContent}
+        </span>
+      </span>
+    ) : null;
+  };
+
   const defaultRenderOption = (props, option, state) => {
     const labelText = String(getOptionLabelFn(option) ?? '');
     const searchTerm = getSearchTerm(inputForFiltering);
@@ -193,18 +346,27 @@ export default function SmartAutocomplete({
       whiteSpace: 'nowrap',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
-      display: 'inline-block',
+      display: 'block',
       maxWidth: '100%',
+      flex: 1,
+      minWidth: 0,
     };
 
     const { key, ...liProps } = props || {};
+    const visual = workItemVisualMode ? renderWorkItemVisual(option) : null;
+    const optionContent = (
+      <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+        {visual}
+        <span style={textStyle}>{content}</span>
+      </div>
+    );
     if (!multiple || !showCheckbox) {
       return (
         <li
           key={key}
           {...liProps}
         >
-          <span style={textStyle}>{content}</span>
+          {optionContent}
         </li>
       );
     }
@@ -219,7 +381,7 @@ export default function SmartAutocomplete({
           style={{ marginRight: 8 }}
           checked={state.selected}
         />
-        <span style={textStyle}>{content}</span>
+        {optionContent}
       </li>
     );
   };
@@ -355,51 +517,68 @@ export default function SmartAutocomplete({
       }}
       noOptionsText={effectiveNoOptionsText}
       ListboxProps={mergedListboxProps}
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          label={label}
-          placeholder={placeholder}
-          InputProps={{
-            ...params.InputProps,
-            endAdornment: (
-              <>
-                {loading ? (
-                  <CircularProgress
-                    color='inherit'
-                    size={16}
-                  />
-                ) : null}
-                {showSortToggle && (
-                  <Tooltip title={sortToggleTooltips?.[internalSortMode] ?? ''}>
-                    <IconButton
-                      size='small'
-                      onClick={cycleMode}
-                      edge='end'
-                      tabIndex={-1}
-                    >
-                      {currentIcon}
-                    </IconButton>
-                  </Tooltip>
-                )}
-                {params.InputProps.endAdornment}
-              </>
-            ),
-          }}
-          inputRef={(node) => {
-            // chain MUI's ref
-            try {
-              const r = params.inputProps?.ref;
-              if (typeof r === 'function') r(node);
-              else if (r && typeof r === 'object') r.current = node;
-            } catch {
-              /* empty */
-            }
-            inputElRef.current = node;
-          }}
-          {...textFieldProps}
-        />
-      )}
+      renderInput={(params) => {
+        const singleSelectVisual =
+          workItemVisualMode && !multiple && value
+            ? renderWorkItemVisual(value, { size: 18, marginRight: 6 })
+            : null;
+        const baseInputProps = { ...(params.InputProps || {}) };
+        if (!multiple && singleSelectVisual) {
+          const existingStartAdornment = baseInputProps.startAdornment;
+          baseInputProps.startAdornment = (
+            <>
+              {singleSelectVisual}
+              {existingStartAdornment}
+            </>
+          );
+        }
+
+        return (
+          <TextField
+            {...params}
+            label={label}
+            placeholder={placeholder}
+            InputProps={{
+              ...baseInputProps,
+              endAdornment: (
+                <>
+                  {loading ? (
+                    <CircularProgress
+                      color='inherit'
+                      size={16}
+                    />
+                  ) : null}
+                  {showSortToggle && (
+                    <Tooltip title={sortToggleTooltips?.[internalSortMode] ?? ''}>
+                      <IconButton
+                        size='small'
+                        onClick={cycleMode}
+                        edge='end'
+                        tabIndex={-1}
+                      >
+                        {currentIcon}
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {baseInputProps.endAdornment}
+                </>
+              ),
+            }}
+            inputRef={(node) => {
+              // chain MUI's ref
+              try {
+                const r = params.inputProps?.ref;
+                if (typeof r === 'function') r(node);
+                else if (r && typeof r === 'object') r.current = node;
+              } catch {
+                /* empty */
+              }
+              inputElRef.current = node;
+            }}
+            {...textFieldProps}
+          />
+        );
+      }}
       onChange={onChange}
       {...composedAutocompleteProps}
     />

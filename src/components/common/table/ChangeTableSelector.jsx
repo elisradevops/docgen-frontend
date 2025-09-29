@@ -1,14 +1,14 @@
-import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import GitObjectRangeSelector from '../selectors/GitObjectRangeSelector';
 import CommitDateSelector from '../selectors/CommitDateSelector';
 import PipelineSelector from '../selectors/PipelineSelector';
 import ReleaseSelector from '../selectors/ReleaseSelector';
 import { observer } from 'mobx-react';
-import { Box, Checkbox, Collapse, FormControlLabel, Typography, Grid, Stack } from '@mui/material';
+import { Box, Checkbox, Collapse, FormControlLabel, Typography, Grid, Stack, Button } from '@mui/material';
 import SmartAutocomplete from '../SmartAutocomplete';
 import PullRequestSelector from '../selectors/PullRequestSelector';
 import QueryTree from '../QueryTree';
-import { toast } from 'react-toastify'; 
+import { toast } from 'react-toastify';
 import UploadAttachmentFileButton from '../UploadAttachmentFileButton';
 import LinkedWiSelectionDialog from '../../dialogs/LinkedWiSelectionDialog';
 import SettingsDisplay from '../SettingsDisplay';
@@ -50,7 +50,74 @@ const ChangeTableSelector = observer(
     const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
     const [includeCommittedBy, setIncludeCommittedBy] = useState(false);
     const [includeUnlinkedCommits, setIncludeUnlinkedCommits] = useState(false);
+    const [includeWorkItemFilter, setIncludeWorkItemFilter] = useState(false);
+    const [selectedWorkItemTypes, setSelectedWorkItemTypes] = useState([]);
+    const [selectedWorkItemStates, setSelectedWorkItemStates] = useState([]);
     const [linkedWiOptions, setLinkedWiOptions] = useState(defaultLinkedWiOptions);
+
+    const workItemTypeOptions = useMemo(
+      () =>
+        (store.workItemTypes || []).map((type) => ({
+          key: type.name,
+          text: type.name,
+          ...type,
+        })),
+      [store.workItemTypes]
+    );
+
+    const workItemStateOptions = useMemo(() => {
+      const stateMap = new Map();
+      selectedWorkItemTypes.forEach((type) => {
+        (type?.states || []).forEach((state) => {
+          const key = state?.name;
+          if (!key || stateMap.has(key)) return;
+          stateMap.set(key, {
+            key,
+            text: state.name,
+            ...state,
+          });
+        });
+      });
+      return Array.from(stateMap.values());
+    }, [selectedWorkItemTypes]);
+
+    useEffect(() => {
+      setSelectedWorkItemStates((prev) => {
+        const filtered = prev.filter((state) => {
+          const stateKey = state?.key || state?.name || state?.text;
+          return workItemStateOptions.some((option) => option.key === stateKey);
+        });
+        if (filtered.length === prev.length && filtered.every((item, index) => item === prev[index])) {
+          return prev;
+        }
+        return filtered;
+      });
+    }, [workItemStateOptions]);
+
+    const workItemFilterOptionsPayload = useMemo(() => {
+      if (!includeWorkItemFilter) {
+        return { isEnabled: false, workItemTypes: [], workItemStates: [] };
+      }
+      const normalizedTypes = Array.from(
+        new Set(
+          selectedWorkItemTypes
+            .map((type) => String(type?.key || type?.name || type?.text || '').toLowerCase())
+            .filter(Boolean)
+        )
+      );
+      const normalizedStates = Array.from(
+        new Set(
+          selectedWorkItemStates
+            .map((state) => String(state?.name || state?.text || state?.key || '').toLowerCase())
+            .filter(Boolean)
+        )
+      );
+      return {
+        isEnabled: includeWorkItemFilter,
+        workItemTypes: normalizedTypes,
+        workItemStates: normalizedStates,
+      };
+    }, [includeWorkItemFilter, selectedWorkItemStates, selectedWorkItemTypes]);
     const handleClearAttachment = useCallback(() => {
       store.setAttachmentWiki(undefined);
     }, [store]);
@@ -93,6 +160,84 @@ const ChangeTableSelector = observer(
       }
       setLinkedWiOptions(linkedWiOptions);
     }, []);
+
+    const processWorkItemFilterOptions = useCallback(
+      (workItemFilterOptions) => {
+        if (!workItemFilterOptions?.isEnabled) {
+          setIncludeWorkItemFilter(false);
+          setSelectedWorkItemTypes([]);
+          setSelectedWorkItemStates([]);
+          return;
+        }
+
+        setIncludeWorkItemFilter(true);
+
+        const typeSources = Array.isArray(workItemFilterOptions.workItemTypes)
+          ? workItemFilterOptions.workItemTypes
+          : workItemFilterOptions.workItemType
+          ? [workItemFilterOptions.workItemType]
+          : [];
+
+        const resolvedTypes = typeSources
+          .map((typeSource) => {
+            if (!typeSource) return null;
+            if (typeof typeSource === 'string') {
+              const match = workItemTypeOptions.find(
+                (option) => option.key?.toLowerCase() === typeSource.toLowerCase()
+              );
+              return match || null;
+            }
+            const matchedType = workItemTypeOptions.find(
+              (option) => option.key === typeSource.key || option.name === typeSource.name
+            );
+            if (matchedType) return matchedType;
+            return {
+              key: typeSource.name || typeSource.key,
+              text: typeSource.name || typeSource.key,
+              ...typeSource,
+              states: typeSource.states || [],
+            };
+          })
+          .filter(Boolean);
+        setSelectedWorkItemTypes(resolvedTypes);
+
+        const availableStates = resolvedTypes.flatMap((type) => type?.states || []);
+        const stateSources = Array.isArray(workItemFilterOptions.workItemStates)
+          ? workItemFilterOptions.workItemStates
+          : workItemFilterOptions.workItemState
+          ? [workItemFilterOptions.workItemState]
+          : [];
+
+        const resolvedStates = stateSources
+          .map((stateSource) => {
+            if (!stateSource) return null;
+            const targetStateName =
+              typeof stateSource === 'string'
+                ? stateSource
+                : stateSource.name || stateSource.text || stateSource.key;
+            if (!targetStateName) return null;
+            const targetStateLower = targetStateName.toLowerCase();
+            const matchedState = availableStates.find(
+              (state) => String(state?.name || '').toLowerCase() === targetStateLower
+            );
+            if (matchedState) {
+              return {
+                key: matchedState.name,
+                text: matchedState.name,
+                ...matchedState,
+              };
+            }
+            return {
+              key: targetStateName,
+              text: targetStateName,
+              name: targetStateName,
+            };
+          })
+          .filter(Boolean);
+        setSelectedWorkItemStates(resolvedStates);
+      },
+      [workItemTypeOptions]
+    );
 
     const processRangeTypeSelection = useCallback(({ rangeType }) => {
       if (!rangeType) {
@@ -159,6 +304,7 @@ const ChangeTableSelector = observer(
         processSystemOverviewData(dataToSave.systemOverviewQuery);
 
         processLinkedWiOptions(dataToSave.linkedWiOptions);
+        processWorkItemFilterOptions(dataToSave.workItemFilterOptions);
         setIncludeCommittedBy(dataToSave.includeCommittedBy || false);
         setIncludeUnlinkedCommits(dataToSave.includeUnlinkedCommits || false);
 
@@ -173,6 +319,7 @@ const ChangeTableSelector = observer(
       }
     }, [
       processLinkedWiOptions,
+      processWorkItemFilterOptions,
       processRangeTypeSelection,
       processSystemOverviewData,
       store.selectedFavorite,
@@ -213,14 +360,40 @@ const ChangeTableSelector = observer(
 
     const linkedWiSummary = generateIncludedLinkedWorkItemSelection();
 
+    const workItemFilterSummary = includeWorkItemFilter
+      ? [
+          selectedWorkItemTypes.length
+            ? selectedWorkItemTypes.length === workItemTypeOptions.length
+              ? 'Types: All'
+              : `Types (${selectedWorkItemTypes.length}): ${selectedWorkItemTypes
+                  .map((type) => type.text || type.name)
+                  .join(', ')}`
+            : 'Types: All',
+          selectedWorkItemStates.length
+            ? selectedWorkItemStates.length === workItemStateOptions.length
+              ? 'States: All'
+              : `States (${selectedWorkItemStates.length}): ${selectedWorkItemStates
+                  .map((state) => state.text || state.name)
+                  .join(', ')}`
+            : 'States: All',
+        ]
+      : [];
+
     const baseSummary = selectedType?.text
       ? `Base type: ${selectedType.text}`
       : 'Pick a base data type to configure the range.';
 
     return (
       <Stack spacing={1.5}>
-        <Grid container spacing={1.5} alignItems='stretch'>
-          <Grid size={{ xs: 12, lg: 8 }} sx={{ minWidth: 0 }}>
+        <Grid
+          container
+          spacing={1.5}
+          alignItems='stretch'
+        >
+          <Grid
+            size={{ xs: 12, lg: 8 }}
+            sx={{ minWidth: 0 }}
+          >
             <SectionCard
               title='Base Data'
               description='Pick the primary source that drives this change log.'
@@ -249,6 +422,7 @@ const ChangeTableSelector = observer(
                     linkedWiOptions={linkedWiOptions}
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
+                    workItemFilterOptions={workItemFilterOptionsPayload}
                   />
                 ) : null}
                 {selectedType?.type === 'date' ? (
@@ -265,6 +439,7 @@ const ChangeTableSelector = observer(
                     linkedWiOptions={linkedWiOptions}
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
+                    workItemFilterOptions={workItemFilterOptionsPayload}
                   />
                 ) : null}
                 {selectedType?.type === 'pipeline' ? (
@@ -280,6 +455,7 @@ const ChangeTableSelector = observer(
                     linkedWiOptions={linkedWiOptions}
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
+                    workItemFilterOptions={workItemFilterOptionsPayload}
                   />
                 ) : null}
                 {selectedType?.type === 'release' ? (
@@ -295,6 +471,7 @@ const ChangeTableSelector = observer(
                     linkedWiOptions={linkedWiOptions}
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
+                    workItemFilterOptions={workItemFilterOptionsPayload}
                   />
                 ) : null}
                 {selectedType?.type === 'pullrequest' ? (
@@ -312,15 +489,23 @@ const ChangeTableSelector = observer(
                     linkedWiOptions={linkedWiOptions}
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
+                    workItemFilterOptions={workItemFilterOptionsPayload}
                   />
                 ) : null}
 
                 <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 1 }}>
-                  <Typography variant='caption' color='text.secondary'>
+                  <Typography
+                    variant='caption'
+                    color='text.secondary'
+                  >
                     {baseSummary}
                   </Typography>
                 </Box>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} alignItems='flex-start'>
+                <Stack
+                  direction={{ xs: 'column', md: 'row' }}
+                  spacing={1.25}
+                  alignItems='flex-start'
+                >
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -344,12 +529,144 @@ const ChangeTableSelector = observer(
             </SectionCard>
           </Grid>
 
-          <Grid size={{ xs: 12, lg: 4 }} sx={{ minWidth: 0 }}>
-            <Stack spacing={1.5} sx={{ minHeight: '100%' }}>
-              <SectionCard title='Queries' compact>
+          <Grid
+            size={{ xs: 12, lg: 4 }}
+            sx={{ minWidth: 0 }}
+          >
+            <Stack
+              spacing={1.5}
+              sx={{ minHeight: '100%' }}
+            >
+              <SectionCard
+                title='Work item filters'
+                compact
+              >
+                <Stack spacing={1.25}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={includeWorkItemFilter}
+                        onChange={(_event, checked) => {
+                          setIncludeWorkItemFilter(checked);
+                          if (!checked) {
+                            setSelectedWorkItemTypes([]);
+                            setSelectedWorkItemStates([]);
+                          }
+                        }}
+                      />
+                    }
+                    label='Filter by work item type and state'
+                  />
+                  <Collapse
+                    in={includeWorkItemFilter}
+                    timeout='auto'
+                    unmountOnExit
+                  >
+                    <Stack spacing={1.25}>
+                      <Stack
+                        direction='row'
+                        spacing={1}
+                        flexWrap='wrap'
+                      >
+                        <Button
+                          size='small'
+                          onClick={() => {
+                            setSelectedWorkItemTypes([...workItemTypeOptions]);
+                          }}
+                          disabled={workItemTypeOptions.length === 0}
+                        >
+                          Select all types
+                        </Button>
+                        <Button
+                          size='small'
+                          onClick={() => {
+                            setSelectedWorkItemTypes([]);
+                            setSelectedWorkItemStates([]);
+                          }}
+                          disabled={selectedWorkItemTypes.length === 0 && selectedWorkItemStates.length === 0}
+                        >
+                          Clear selection
+                        </Button>
+                      </Stack>
+                      <SmartAutocomplete
+                        multiple
+                        showCheckbox
+                        autoHighlight
+                        openOnFocus
+                        options={workItemTypeOptions}
+                        value={selectedWorkItemTypes}
+                        loading={store.loadingState.workItemTypesLoadingState}
+                        label='Work item type'
+                        placeholder='Select a work item type'
+                        workItemVisualMode
+                        disableCloseOnSelect
+                        onChange={(_event, newValue) => {
+                          setSelectedWorkItemTypes(Array.isArray(newValue) ? newValue : []);
+                        }}
+                        noOptionsText='No work item types available'
+                      />
+                      <Stack
+                        direction='row'
+                        spacing={1}
+                        flexWrap='wrap'
+                      >
+                        <Button
+                          size='small'
+                          onClick={() => {
+                            setSelectedWorkItemStates([...workItemStateOptions]);
+                          }}
+                          disabled={workItemStateOptions.length === 0}
+                        >
+                          Select all states
+                        </Button>
+                        <Button
+                          size='small'
+                          onClick={() => setSelectedWorkItemStates([])}
+                          disabled={selectedWorkItemStates.length === 0}
+                        >
+                          Clear states
+                        </Button>
+                      </Stack>
+                      <SmartAutocomplete
+                        multiple
+                        showCheckbox
+                        autoHighlight
+                        openOnFocus
+                        options={workItemStateOptions}
+                        value={selectedWorkItemStates}
+                        label='Work item state'
+                        placeholder='Select a work item state'
+                        disabled={selectedWorkItemTypes.length === 0}
+                        workItemVisualMode
+                        disableCloseOnSelect
+                        onChange={(_event, newValue) =>
+                          setSelectedWorkItemStates(Array.isArray(newValue) ? newValue : [])
+                        }
+                        noOptionsText={
+                          selectedWorkItemTypes.length > 0
+                            ? 'No states available for the selected types'
+                            : 'Select at least one work item type first'
+                        }
+                      />
+                    </Stack>
+                  </Collapse>
+                  <SettingsDisplay
+                    title='Configured values'
+                    settings={workItemFilterSummary}
+                    emptyMessage='Work item filters disabled.'
+                    boxProps={{ p: 0, bgcolor: 'transparent' }}
+                  />
+                </Stack>
+              </SectionCard>
+              <SectionCard
+                title='Queries'
+                compact
+              >
                 <Stack spacing={1}>
                   <FormControlLabel
-                    disabled={!queryTrees.systemOverviewQueryTree || queryTrees.systemOverviewQueryTree?.length === 0}
+                    disabled={
+                      !queryTrees.systemOverviewQueryTree || queryTrees.systemOverviewQueryTree?.length === 0
+                    }
                     control={
                       <Checkbox
                         checked={includeSystemOverview}
@@ -361,7 +678,11 @@ const ChangeTableSelector = observer(
                     }
                     label='Include system overview'
                   />
-                  <Collapse in={includeSystemOverview} timeout='auto' unmountOnExit>
+                  <Collapse
+                    in={includeSystemOverview}
+                    timeout='auto'
+                    unmountOnExit
+                  >
                     {queryTrees.systemOverviewQueryTree?.length > 0 ? (
                       <QueryTree
                         data={queryTrees.systemOverviewQueryTree}
@@ -375,7 +696,9 @@ const ChangeTableSelector = observer(
                   <FormControlLabel
                     control={
                       <Checkbox
-                        disabled={!queryTrees.knownBugsQueryTree || queryTrees.knownBugsQueryTree?.length === 0}
+                        disabled={
+                          !queryTrees.knownBugsQueryTree || queryTrees.knownBugsQueryTree?.length === 0
+                        }
                         checked={includeKnownBugs}
                         onChange={(_event, checked) => {
                           setIncludeKnownBugs(checked);
@@ -385,7 +708,11 @@ const ChangeTableSelector = observer(
                     }
                     label='Include known possible bugs'
                   />
-                  <Collapse in={includeKnownBugs} timeout='auto' unmountOnExit>
+                  <Collapse
+                    in={includeKnownBugs}
+                    timeout='auto'
+                    unmountOnExit
+                  >
                     {queryTrees.knownBugsQueryTree?.length > 0 ? (
                       <QueryTree
                         data={queryTrees.knownBugsQueryTree}
@@ -399,7 +726,10 @@ const ChangeTableSelector = observer(
                 </Stack>
               </SectionCard>
 
-              <SectionCard title='Wiki File' compact>
+              <SectionCard
+                title='Wiki File'
+                compact
+              >
                 <UploadAttachmentFileButton
                   store={store}
                   onNewFileUpload={handleNewFileUploaded}
@@ -413,7 +743,10 @@ const ChangeTableSelector = observer(
                 title='Linked work items'
                 compact
                 actions={
-                  <LinkedWiSelectionDialog prevOptions={linkedWiOptions} setOptions={setLinkedWiOptions} />
+                  <LinkedWiSelectionDialog
+                    prevOptions={linkedWiOptions}
+                    setOptions={setLinkedWiOptions}
+                  />
                 }
               >
                 <Stack spacing={1.25}>
