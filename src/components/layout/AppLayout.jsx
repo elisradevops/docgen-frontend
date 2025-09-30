@@ -7,11 +7,12 @@ const AppLayout = ({ navigation, actions, children, maxWidth = 'xl' }) => {
   return (
     <Box
       sx={{
-        height: '100dvh',
+        height: '100vh', // Use vh instead of dvh for Edge 92 compatibility
         bgcolor: (theme) => theme.palette.background.default,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        position: 'relative', // Add for Edge 92 flex layout fix
       }}
     >
       <AppBar position='sticky' color='primary' elevation={0}>
@@ -45,9 +46,10 @@ const AppLayout = ({ navigation, actions, children, maxWidth = 'xl' }) => {
           display: 'flex',
           flexDirection: 'column',
           gap: { xs: 2, md: 3 },
-          flex: 1,
+          flex: '1 1 auto', // More explicit flex for Edge 92
           minHeight: 0,
           overflow: 'hidden',
+          position: 'relative', // Fix for Edge 92 flex children
         }}
       >
         {children}
@@ -60,6 +62,7 @@ const AppLayout = ({ navigation, actions, children, maxWidth = 'xl' }) => {
           borderTop: 1,
           borderColor: 'divider',
           bgcolor: (theme) => theme.palette.background.paper,
+          flexShrink: 0, // Prevent footer from shrinking in Edge 92
         }}
       >
         <Container maxWidth={maxWidth} sx={{ display: 'flex', justifyContent: 'center' }}>
