@@ -62,21 +62,24 @@ const StyledTabs = styled((props) => (
   },
 }));
 
-const StyledTab = styled((props) => <Tab disableRipple {...props} />)(
-  ({ theme }) => ({
-    textTransform: 'none',
-    fontWeight: theme.typography.fontWeightRegular,
-    fontSize: theme.typography.pxToRem(15),
-    marginRight: theme.spacing(1),
-    color: 'rgba(255, 255, 255, 0.7)',
-    '&.Mui-selected': {
-      color: '#fff',
-    },
-    '&.Mui-focusVisible': {
-      backgroundColor: 'rgba(100, 95, 228, 0.32)',
-    },
-  })
-);
+const StyledTab = styled((props) => (
+  <Tab
+    disableRipple
+    {...props}
+  />
+))(({ theme }) => ({
+  textTransform: 'none',
+  fontWeight: theme.typography.fontWeightRegular,
+  fontSize: theme.typography.pxToRem(15),
+  marginRight: theme.spacing(1),
+  color: 'rgba(255, 255, 255, 0.7)',
+  '&.Mui-selected': {
+    color: '#fff',
+  },
+  '&.Mui-focusVisible': {
+    backgroundColor: 'rgba(100, 95, 228, 0.32)',
+  },
+}));
 
 const StyledLogoutButton = styled(Button)(({ theme }) => ({
   color: theme.palette.getContrastText(theme.palette.error.main),
@@ -102,10 +105,7 @@ const TAB_DEVELOPER = 'developer';
 const MainTabs = observer(({ store }) => {
   const [selectedTab, setSelectedTab] = useState(TAB_DOCS);
   // eslint-disable-next-line no-unused-vars
-  const [cookies, setCookie, removeCookie] = useCookies([
-    'azureDevopsUrl',
-    'azureDevopsPat',
-  ]);
+  const [cookies, setCookie, removeCookie] = useCookies(['azureDevopsUrl', 'azureDevopsPat']);
   const [selectedTeamProject, setSelectedTeamProject] = useState(defaultItem);
   const [projectClearable, setProjectClearable] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -124,14 +124,10 @@ const MainTabs = observer(({ store }) => {
         const ok = await store.fetchUserDetails();
         if (!ok) {
           if (store.lastAuthErrorStatus === 401) {
-            toast.error(
-              'Session expired or invalid PAT. Please sign in again.'
-            );
+            toast.error('Session expired or invalid PAT. Please sign in again.');
             logout();
           } else if (store.lastAuthErrorStatus) {
-            toast.error(
-              `Authentication check failed (${store.lastAuthErrorStatus}).`
-            );
+            toast.error(`Authentication check failed (${store.lastAuthErrorStatus}).`);
           }
         }
       })();
@@ -145,17 +141,14 @@ const MainTabs = observer(({ store }) => {
       logout();
     };
     window.addEventListener('auth-unauthorized', onUnauthorized);
-    return () =>
-      window.removeEventListener('auth-unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth-unauthorized', onUnauthorized);
   }, [logout]);
 
   // Keep selected tab in sync with available document types
   // Note: Do not override manual selection of special tabs (Docs/Templates/Developer).
   useEffect(() => {
     const types = store.documentTypes || [];
-    const isSpecial = [TAB_DOCS, TAB_TEMPLATES, TAB_DEVELOPER].includes(
-      selectedTab
-    );
+    const isSpecial = [TAB_DOCS, TAB_TEMPLATES, TAB_DEVELOPER].includes(selectedTab);
     if (types.length > 0) {
       // If the current selection is not a special tab and not a valid doc type, default to the first doc type
       if (!isSpecial && !types.includes(selectedTab)) {
@@ -183,9 +176,7 @@ const MainTabs = observer(({ store }) => {
           setProjectClearable(false);
         }
       } else {
-        toast.error(
-          'Failed to load document type tabs. Please try refreshing.'
-        );
+        toast.error('Failed to load document type tabs. Please try refreshing.');
       }
       setTabsLoadedOnce(true);
     }
@@ -205,12 +196,8 @@ const MainTabs = observer(({ store }) => {
       ? store.loadingState?.templatesLoadingState
       : false;
 
-  const isProjectSelected = Boolean(
-    selectedTeamProject?.key && selectedTeamProject?.text
-  );
-  const isDocTypeTab =
-    Array.isArray(store.documentTypes) &&
-    store.documentTypes.includes(selectedTab);
+  const isProjectSelected = Boolean(selectedTeamProject?.key && selectedTeamProject?.text);
+  const isDocTypeTab = Array.isArray(store.documentTypes) && store.documentTypes.includes(selectedTab);
   const currentHasGuide = isDocTypeTab && generateGuide(selectedTab) !== null;
 
   function generateGuide(docType) {
@@ -264,8 +251,14 @@ const MainTabs = observer(({ store }) => {
           />
         );
       })}
-      <StyledTab label='Documents' value={TAB_DOCS} />
-      <StyledTab label='Templates' value={TAB_TEMPLATES} />
+      <StyledTab
+        label='Documents'
+        value={TAB_DOCS}
+      />
+      <StyledTab
+        label='Templates'
+        value={TAB_TEMPLATES}
+      />
     </StyledTabs>
   );
 
@@ -314,31 +307,29 @@ const MainTabs = observer(({ store }) => {
         }}
       >
         <SmartAutocomplete
-        disableClearable
-        sx={{ width: { xs: '100%', sm: 260, md: 300 } }}
-        autoHighlight
-        openOnFocus
-        loading={store.loadingState.teamProjectsLoadingState}
-        options={store.teamProjectsList.map((teamProject) => ({
-          key: teamProject.id,
-          text: teamProject.name,
-        }))}
-        label='Team Project'
-        placeholder={
-          store.loadingState.teamProjectsLoadingState
-            ? 'Loading projects…'
-            : 'Start typing to search'
-        }
-        value={selectedTeamProject?.key ? selectedTeamProject : null}
-        onChange={async (_e, newValue) => {
-          const nextValue = newValue || defaultItem;
-          setSelectedTeamProject(nextValue);
-          store.setTeamProject(nextValue.key || '', nextValue.text || '');
-          // Clear selected template so defaults can be re-evaluated for the new project
-          store.setSelectedTemplate(null);
-        }}
-      />
-      <Box
+          disableClearable
+          sx={{ width: { xs: '100%', sm: 260, md: 300 } }}
+          autoHighlight
+          openOnFocus
+          loading={store.loadingState.teamProjectsLoadingState}
+          options={store.teamProjectsList.map((teamProject) => ({
+            key: teamProject.id,
+            text: teamProject.name,
+          }))}
+          label='Team Project'
+          placeholder={
+            store.loadingState.teamProjectsLoadingState ? 'Loading projects…' : 'Start typing to search'
+          }
+          value={selectedTeamProject?.key ? selectedTeamProject : null}
+          onChange={async (_e, newValue) => {
+            const nextValue = newValue || defaultItem;
+            setSelectedTeamProject(nextValue);
+            store.setTeamProject(nextValue.key || '', nextValue.text || '');
+            // Clear selected template so defaults can be re-evaluated for the new project
+            store.setSelectedTemplate(null);
+          }}
+        />
+        <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -350,11 +341,7 @@ const MainTabs = observer(({ store }) => {
           ) : (
             <Tooltip
               title={
-                syncing
-                  ? 'Syncing…'
-                  : !isProjectSelected
-                  ? 'Select a TeamProject'
-                  : 'Refresh from Azure'
+                syncing ? 'Syncing…' : !isProjectSelected ? 'Select a TeamProject' : 'Refresh from Azure'
               }
               placement='top'
             >
@@ -437,9 +424,16 @@ const MainTabs = observer(({ store }) => {
                 borderColor: (theme) => alpha(theme.palette.primary.main, 0.25),
               }}
             >
-              <DocumentScannerOutlinedIcon color='primary' sx={{ fontSize: 30, mt: { xs: 0.25, sm: 0 } }} />
+              <DocumentScannerOutlinedIcon
+                color='primary'
+                sx={{ fontSize: 30, mt: { xs: 0.25, sm: 0 } }}
+              />
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant='subtitle1' sx={{ fontWeight: 600 }} color='primary.main'>
+                <Typography
+                  variant='subtitle1'
+                  sx={{ fontWeight: 600 }}
+                  color='primary.main'
+                >
                   Selected Template
                 </Typography>
                 <Typography
@@ -475,45 +469,54 @@ const MainTabs = observer(({ store }) => {
 
   const contextSummary = null;
 
-  const guideToggle =
-    currentHasGuide && (
-      <Tooltip
-        title={guideOpen ? 'Close Guide' : 'Open Guide'}
-        placement='left'
+  const guideToggle = currentHasGuide && (
+    <Tooltip
+      title={guideOpen ? 'Close Guide' : 'Open Guide'}
+      placement='left'
+    >
+      <Fab
+        onClick={() => setGuideOpen(!guideOpen)}
+        size='large'
+        color={guideOpen ? 'secondary' : 'warning'}
+        sx={{
+          position: 'fixed',
+          bottom: { xs: 32, md: 48 },
+          right: { xs: 28, md: 48 },
+          width: { xs: 72, md: 80 },
+          height: { xs: 72, md: 80 },
+          boxShadow: (theme) => theme.shadows[10],
+          borderRadius: '50%',
+          transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+          zIndex: 1000, // Ensure it's above footer in Edge 92
+          '& .MuiSvgIcon-root': {
+            fontSize: { xs: '2rem', md: '2.25rem' },
+          },
+          '&:hover': {
+            transform: 'translateY(-4px)',
+            boxShadow: (theme) => theme.shadows[16],
+          },
+        }}
       >
-        <Fab
-          onClick={() => setGuideOpen(!guideOpen)}
-          size='large'
-          color={guideOpen ? 'secondary' : 'warning'}
-          sx={{
-            position: 'fixed',
-            bottom: { xs: 32, md: 48 },
-            right: { xs: 28, md: 48 },
-            width: { xs: 72, md: 80 },
-            height: { xs: 72, md: 80 },
-            boxShadow: (theme) => theme.shadows[10],
-            borderRadius: '50%',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-            '& .MuiSvgIcon-root': {
-              fontSize: { xs: '2rem', md: '2.25rem' },
-            },
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: (theme) => theme.shadows[16],
-            },
-          }}
-        >
-          {guideOpen ? <CloseIcon /> : <MenuBookIcon />}
-        </Fab>
-      </Tooltip>
-    );
+        {guideOpen ? <CloseIcon /> : <MenuBookIcon />}
+      </Fab>
+    </Tooltip>
+  );
 
   const isDeveloperTab = selectedTab === TAB_DEVELOPER;
 
   return (
-    <AppLayout navigation={navigation} actions={headerActions}>
-      <Stack spacing={2} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <ActionBar start={contextSummary} end={filterControls} />
+    <AppLayout
+      navigation={navigation}
+      actions={headerActions}
+    >
+      <Stack
+        spacing={2}
+        sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
+      >
+        <ActionBar
+          start={contextSummary}
+          end={filterControls}
+        />
 
         <Box
           sx={{
@@ -536,7 +539,11 @@ const MainTabs = observer(({ store }) => {
           >
             {store.documentTypes.map((docType) => {
               return selectedTab === docType ? (
-                <Grid key={`doctype-content-${docType}`} size={12} sx={{ height: '100%' }}>
+                <Grid
+                  key={`doctype-content-${docType}`}
+                  size={12}
+                  sx={{ height: '100%' }}
+                >
                   <DocFormGenerator
                     docType={docType}
                     store={store}
@@ -557,7 +564,10 @@ const MainTabs = observer(({ store }) => {
               </Grid>
             ) : null}
             {selectedTab === TAB_DOCS ? (
-              <Grid size={12} sx={{ height: '100%' }}>
+              <Grid
+                size={12}
+                sx={{ height: '100%' }}
+              >
                 <DocumentsTab
                   store={store}
                   selectedTeamProject={selectedTeamProject}
@@ -565,7 +575,10 @@ const MainTabs = observer(({ store }) => {
               </Grid>
             ) : null}
             {selectedTab === TAB_TEMPLATES ? (
-              <Grid size={12} sx={{ height: '100%' }}>
+              <Grid
+                size={12}
+                sx={{ height: '100%' }}
+              >
                 <TemplatesTab
                   store={store}
                   selectedTeamProject={selectedTeamProject}
@@ -590,7 +603,10 @@ const MainTabs = observer(({ store }) => {
           },
         }}
       >
-        <Stack spacing={0} sx={{ width: '100%', height: '100%' }}>
+        <Stack
+          spacing={0}
+          sx={{ width: '100%', height: '100%' }}
+        >
           <Box
             sx={{
               display: 'flex',
@@ -604,12 +620,13 @@ const MainTabs = observer(({ store }) => {
             }}
           >
             <Box>
-              <Typography variant='subtitle2' color='text.secondary'>
+              <Typography
+                variant='subtitle2'
+                color='text.secondary'
+              >
                 Guide
               </Typography>
-              <Typography variant='h6'>
-                {friendlyTabName}
-              </Typography>
+              <Typography variant='h6'>{friendlyTabName}</Typography>
             </Box>
             <IconButton
               onClick={() => setGuideOpen(false)}
@@ -629,7 +646,10 @@ const MainTabs = observer(({ store }) => {
             {isDocTypeTab ? (
               generateGuide(selectedTab)
             ) : (
-              <Typography variant='body2' color='text.secondary'>
+              <Typography
+                variant='body2'
+                color='text.secondary'
+              >
                 Select a document tab to view contextual guidance.
               </Typography>
             )}
@@ -638,9 +658,7 @@ const MainTabs = observer(({ store }) => {
       </Drawer>
       {/* Initial tabs loading overlay */}
       <Backdrop
-        open={
-          !tabsLoadedOnce && !!store.loadingState?.contentControlsLoadingState
-        }
+        open={!tabsLoadedOnce && !!store.loadingState?.contentControlsLoadingState}
         sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
       >
         <Box

@@ -1,3 +1,7 @@
+// Comprehensive polyfills for older browsers (Edge 92 compatibility)
+import 'core-js/stable';
+import 'regenerator-runtime/runtime';
+
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import { CookiesProvider } from 'react-cookie';

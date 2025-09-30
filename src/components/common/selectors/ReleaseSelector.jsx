@@ -71,6 +71,24 @@ const ReleaseSelector = observer(
       []
     );
 
+    const updateContextName = useCallback(
+      (releaseDefinitionText, targetReleaseText) => {
+        if (!releaseDefinitionText) return;
+
+        let contextParts = [];
+        let convertedRelease = releaseDefinitionText.trim().replace(/\./g, '-').replace(/\s+/g, '_');
+        contextParts.push(`release-${convertedRelease}`);
+
+        if (targetReleaseText) {
+          let convertedTargetRelease = targetReleaseText.trim().replace(/\./g, '-').replace(/\s+/g, '_');
+          contextParts.push(convertedTargetRelease);
+        }
+
+        store.setContextName(contextParts.join('-'));
+      },
+      [store]
+    );
+
     const handleOnReleaseSelect = useCallback(
       async (value) => {
         // First validate the release definition exists in the release list
@@ -83,14 +101,11 @@ const ReleaseSelector = observer(
 
         const historyData = await store.fetchReleaseDefinitionHistory(value.key);
         setReleaseDefinitionHistory(historyData || []);
-        if (value.text) {
-          let convertedRelease = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
-          store.setContextName(`release-${convertedRelease}`);
-        }
+        updateContextName(value.text, selectedReleaseHistoryEnd.text);
         setSelectedReleaseDefinition(value);
         return historyData || [];
       },
-      [store]
+      [store, selectedReleaseHistoryEnd.text, updateContextName]
     );
 
     const validateReleaseExists = useCallback(
@@ -252,7 +267,11 @@ const ReleaseSelector = observer(
 
     return (
       <div>
-        <Grid container spacing={2} alignItems='flex-start'>
+        <Grid
+          container
+          spacing={2}
+          alignItems='flex-start'
+        >
           <Grid size={12}>
             <SmartAutocomplete
               disableClearable
@@ -308,6 +327,7 @@ const ReleaseSelector = observer(
                 label='Select end release'
                 onChange={async (event, newValue) => {
                   setSelectedReleaseHistoryEnd(newValue);
+                  updateContextName(selectedReleaseDefinition.text, newValue.text);
                 }}
                 value={selectedReleaseHistoryEnd}
               />

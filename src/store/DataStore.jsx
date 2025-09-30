@@ -1050,7 +1050,8 @@ class DocGenDataStore {
   }
 
   setAttachmentWiki(attachmentWikiUrl) {
-    const fixedUrl = attachmentWikiUrl?.replaceAll(' ', '%20') || undefined;
+    // Use replace with regex for Edge 92 compatibility (replaceAll not supported)
+    const fixedUrl = attachmentWikiUrl?.replace(/ /g, '%20') || undefined;
     this.attachmentWikiUrl = fixedUrl;
   }
 

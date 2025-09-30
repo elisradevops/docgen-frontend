@@ -16,6 +16,7 @@
     "@mui/x-date-pickers": "^8.11.2",
     "antd": "^5.27.3",
     "axios": "^1.12.1",
+    "core-js": "^3.45.1",
     "date-fns": "^4.1.0",
     "js-cookies": "^1.0.4",
     "js-file-download": "^0.4.12",
@@ -30,18 +31,34 @@
     "react-toastify": "^11.0.5",
     "react-virtuoso": "^4.8.0",
     "react-window": "^2.1.0",
+    "regenerator-runtime": "^0.14.1",
     "typescript": "^5.9.2",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.18.6",
+    "@babel/plugin-proposal-optional-chaining": "^7.21.0",
+    "@babel/plugin-transform-nullish-coalescing-operator": "^7.27.1",
+    "@babel/plugin-transform-optional-chaining": "^7.27.1",
+    "@babel/plugin-transform-runtime": "^7.28.3",
     "@eslint/js": "^9.33.0",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
+    "playwright": "^1.55.1",
+    "playwright-core": "^1.55.1",
+    "terser": "^5.44.0",
     "vite": "^7.1.2"
-  }
+  },
+  "browserslist": [
+    "Edge >= 92",
+    "Chrome >= 61",
+    "Firefox >= 60",
+    "Safari >= 12"
+  ]
 }

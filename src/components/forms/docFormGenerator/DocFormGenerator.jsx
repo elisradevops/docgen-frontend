@@ -30,6 +30,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       // Clear selected template when switching doc types so the correct default is chosen
       store.setSelectedTemplate(null);
       store.clearLoadedFavorite();
+      // Clear validation states when switching doc types (Edge 92 compatibility)
+      store.validationStates = {};
       setLoadingForm(true);
       store
         .fetchDocFormsTemplates(docType)
@@ -37,9 +39,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           setDocFormsControls(docFormsControls); // Set state after templates are fetched
           if (docFormsControls.length > 0) {
             const temp = docFormsControls.find((docForm) =>
-              docForm.documentTitle
-                .toLowerCase()
-                .includes(docType.toLowerCase())
+              docForm.documentTitle.toLowerCase().includes(docType.toLowerCase())
             );
             setDocForm(temp);
           }
@@ -78,21 +78,12 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       // Don't override if a template is already selected in the store
       if (store.selectedTemplate?.url) return;
       try {
-        const templates = await store.fetchTemplatesList(
-          docType,
-          selectedTeamProject
-        );
+        const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
         if (!Array.isArray(templates) || templates.length === 0) return;
 
         // Storage key aligned with Templates dialog (namespaced)
-        const storageKey = makeKey(
-          'template',
-          docType,
-          selectedTeamProject || 'shared'
-        );
-        const sharedTemplates = templates.filter((t) =>
-          String(t.name || '').startsWith('shared/')
-        );
+        const storageKey = makeKey('template', docType, selectedTeamProject || 'shared');
+        const sharedTemplates = templates.filter((t) => String(t.name || '').startsWith('shared/'));
         let chosen = null;
 
         // 1) Prefer docType-specific default names inside 'shared'
@@ -110,9 +101,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             : dt === 'str'
             ? ['STR']
             : [];
-        chosen =
-          sharedTemplates.find((t) => preferNames.includes(base(t.name))) ||
-          null;
+        chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
 
         // 2) Fallback: first shared
         if (!chosen) {
@@ -125,9 +114,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             const saved =
               tryLocalStorageGet(storageKey) ||
               // Legacy fallback (pre-namespace)
-              localStorage.getItem(
-                `template:${docType}:${selectedTeamProject || 'shared'}`
-              );
+              localStorage.getItem(`template:${docType}:${selectedTeamProject || 'shared'}`);
             if (saved) {
               chosen = templates.find((t) => t.url === saved) || null;
             }
@@ -151,9 +138,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           }
         }
       } catch (e) {
-        logger.error(
-          `Error while auto-selecting default template: ${e.message}`
-        );
+        logger.error(`Error while auto-selecting default template: ${e.message}`);
       }
     };
     pickDefaultTemplate();
@@ -304,9 +289,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       await store.sendRequestToDocGen();
       toast.success(`The request has been generated successfully!`);
     } catch (error) {
-      logger.error(
-        `Error occurred while generating document of type ${docType}: ${error.message}`
-      );
+      logger.error(`Error occurred while generating document of type ${docType}: ${error.message}`);
       logger.error('Error Stack:', error.stack);
       toast.error(`Failed to generate ${docType}: ${error.message}`, {
         autoClose: false,
@@ -316,33 +299,35 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
     }
   };
 
-  // Compute validation state for current content controls (non-memoized so MobX nested changes trigger updates)
-  let sendDisabled = false;
-  let validationMessage = '';
-  try {
-    const indices = new Set(
-      Array.isArray(docForm?.contentControls)
-        ? docForm.contentControls.map((_, idx) => idx)
-        : []
-    );
-    const states = store?.validationStates || {};
-    const issues = [];
-    Object.entries(states).forEach(([idx, fields]) => {
-      if (!indices.has(Number(idx))) return;
-      if (!fields) return;
-      for (const k of Object.keys(fields)) {
-        const entry = fields[k];
-        if (entry && entry.isValid === false) {
-          issues.push(entry.message || 'Invalid selection');
-          break; // one issue per index is enough
+  // Compute validation state for current content controls
+  // Use useMemo to ensure it re-computes when validation states change (Edge 92 compatibility)
+  const { sendDisabled, validationMessage } = React.useMemo(() => {
+    try {
+      const indices = new Set(
+        Array.isArray(docForm?.contentControls) ? docForm.contentControls.map((_, idx) => idx) : []
+      );
+      // Convert MobX observable to plain object for Edge 92 compatibility
+      const states = store?.validationStates ? JSON.parse(JSON.stringify(store.validationStates)) : {};
+      const issues = [];
+      Object.entries(states).forEach(([idx, fields]) => {
+        if (!indices.has(Number(idx))) return;
+        if (!fields) return;
+        for (const k of Object.keys(fields)) {
+          const entry = fields[k];
+          if (entry && entry.isValid === false) {
+            issues.push(entry.message || 'Invalid selection');
+            break; // one issue per index is enough
+          }
         }
-      }
-    });
-    sendDisabled = issues.length > 0;
-    validationMessage = issues[0] || '';
-  } catch {
-    /* empty */
-  }
+      });
+      return {
+        sendDisabled: issues.length > 0,
+        validationMessage: issues[0] || '',
+      };
+    } catch {
+      return { sendDisabled: false, validationMessage: '' };
+    }
+  }, [docForm?.contentControls, store?.validationStates]);
 
   // Decide which controls should span full width
   const isWideControl = (control) => {
@@ -367,11 +352,13 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   };
 
   const selectedTemplate = store.selectedTemplate;
-  const canRenderContent =
-    !!selectedTemplate || String(docType || '').toLowerCase() === 'test-reporter';
+  const canRenderContent = !!selectedTemplate || String(docType || '').toLowerCase() === 'test-reporter';
 
   return (
-    <Stack spacing={1.5} sx={{ width: '100%', height: '100%', minHeight: 0 }}>
+    <Stack
+      spacing={1.5}
+      sx={{ width: '100%', height: '100%', minHeight: 0 }}
+    >
       {loadingForm ? (
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <LoadingState
@@ -383,7 +370,10 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         </Box>
       ) : (
         selectedDocForm && (
-          <Stack spacing={1.5} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <Stack
+            spacing={1.5}
+            sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
+          >
             {canRenderContent ? (
               <Box
                 sx={{
@@ -403,12 +393,19 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     pb: 2,
                   }}
                 >
-                  <Grid container spacing={1.5} sx={{ width: '100%', m: 0 }}>
+                  <Grid
+                    container
+                    spacing={1.5}
+                    sx={{ width: '100%', m: 0 }}
+                  >
                     {docForm && docForm.contentControls
                       ? docForm.contentControls.map((contentControl, key) => {
                           const wide = isWideControl(contentControl);
                           return (
-                            <Grid size={wide ? 12 : 6} key={key}>
+                            <Grid
+                              size={wide ? 12 : 6}
+                              key={key}
+                            >
                               <Paper
                                 variant='outlined'
                                 sx={{
@@ -434,10 +431,11 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                 <Paper
                   variant='outlined'
                   className='footer-bar'
-                  style={{ '--footer-height': '72px' }}
                   sx={{
-                    position: 'sticky',
-                    bottom: { xs: 12, md: 16 },
+                    // Use flexShrink instead of sticky for Edge 92 compatibility
+                    flexShrink: 0,
+                    mt: 'auto', // Push to bottom
+                    mb: '10px', // Lift up by 1px
                     mx: 'auto',
                     maxWidth: 760,
                     width: '100%',
@@ -461,21 +459,13 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     sx={{ fontWeight: 500, flex: 1, minWidth: 0 }}
                   >
                     {sendDisabled
-                      ? validationMessage ||
-                        'Please complete required selections'
+                      ? validationMessage || 'Please complete required selections'
                       : selectedTemplate
-                      ? `Ready to generate using template: ${selectedTemplate?.text
-                          ?.split('/')
-                          ?.pop()}`
+                      ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
                       : 'Ready to generate'}
                   </Typography>
                   <Tooltip
-                    title={
-                      sendDisabled
-                        ? validationMessage ||
-                          'Please complete required selections'
-                        : ''
-                    }
+                    title={sendDisabled ? validationMessage || 'Please complete required selections' : ''}
                     arrow
                   >
                     <span>
