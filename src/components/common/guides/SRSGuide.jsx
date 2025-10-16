@@ -13,6 +13,7 @@ import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 
 const SRSGuide = () => {
+  const [openDisplayMode, setOpenDisplayMode] = useState(false);
   const [openTraceability, setOpenTraceability] = useState(false);
   const [openNotes, setOpenNotes] = useState(false);
 
@@ -22,6 +23,30 @@ const SRSGuide = () => {
         SRS Traceability Guide
       </Typography>
       <List disablePadding>
+        <ListItemButton onClick={() => setOpenDisplayMode((prev) => !prev)}>
+          <ListItemIcon>{openDisplayMode ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
+          <ListItemText
+            primary='Display Mode'
+            secondary='Choose how requirements are organized in the generated document.'
+          />
+        </ListItemButton>
+        <Collapse in={openDisplayMode} timeout='auto' unmountOnExit>
+          <List component='div' disablePadding>
+            <ListItem sx={{ pl: 6 }}>
+              <ListItemText
+                primary='Hierarchical'
+                secondary='Displays the full tree structure with all work item types including Features, Epics, and Requirements. This mode preserves the complete parent-child hierarchy from your Azure DevOps query, showing how requirements are organized under their parent Features and Epics.'
+              />
+            </ListItem>
+            <ListItem sx={{ pl: 6 }}>
+              <ListItemText
+                primary='Categorized'
+                secondary='Groups only Requirement work items by their type. This mode filters out Features and Epics, focusing exclusively on Requirements and organizing them into sections based on requirement types for a cleaner, more focused document.'
+              />
+            </ListItem>
+          </List>
+        </Collapse>
+
         <ListItem>
           <ListItemText
             primary='Include System Requirements'
