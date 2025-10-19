@@ -15,6 +15,7 @@ import { toast } from 'react-toastify';
 import logger from '../../../utils/logger';
 import { makeKey, tryLocalStorageGet, tryLocalStorageSet } from '../../../utils/storage';
 import LoadingState from '../../common/LoadingState';
+import TocReminderToast from '../../common/customToasts/TocReminderToast';
 
 const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
@@ -288,6 +289,32 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
     try {
       await store.sendRequestToDocGen();
       toast.success(`The request has been generated successfully!`);
+
+      // Check if we should show the TOC reminder
+      // Show reminder if: 1) a template is selected, and 2) it's a Word document file
+      const selectedTemplate = store.selectedTemplate;
+      if (selectedTemplate && selectedTemplate.url) {
+        const isWordDoc = /\.(docx?|dotx?)$/i.test(selectedTemplate.url);
+        if (isWordDoc) {
+          toast.info(
+            <TocReminderToast
+              icon='📋'
+              title='Remember to Update Tables of Contents'
+              description='Please update all tables in your document:'
+              items={['Table of Figures', 'Table of Tables', 'Table of Contents (chapters)']}
+              tip='Tip: In Word, press <strong>Ctrl+A</strong> then <strong>F9</strong> to update all fields'
+              tipIcon='💡'
+            />,
+            {
+              autoClose: 12000,
+              position: 'top-center',
+              style: {
+                minWidth: '450px',
+              },
+            }
+          );
+        }
+      }
     } catch (error) {
       logger.error(`Error occurred while generating document of type ${docType}: ${error.message}`);
       logger.error('Error Stack:', error.stack);
