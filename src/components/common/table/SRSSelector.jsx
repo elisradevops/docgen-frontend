@@ -1,4 +1,6 @@
-import { Box, Button, Checkbox, FormControlLabel, Collapse, Grid, Typography, Stack } from '@mui/material';
+import { Box, Button, Checkbox, FormControlLabel, Collapse, Grid, Typography, Stack, ToggleButtonGroup, ToggleButton, Tooltip } from '@mui/material';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import CategoryIcon from '@mui/icons-material/Category';
 import { observer } from 'mobx-react';
 import React, { useState, useEffect, useCallback } from 'react';
 import QueryTree from '../QueryTree';
@@ -31,6 +33,7 @@ const SRSSelector = observer(
     const [queriesRequest, setQueriesRequest] = useState(
       defaultSelectedQueriesForSRS
     );
+    const [displayMode, setDisplayMode] = useState('hierarchical');
 
     // Indicator checkboxes (first is always required if queries exist)
     const [includeSystemRequirements, setIncludeSystemRequirements] =
@@ -114,6 +117,10 @@ const SRSSelector = observer(
         setIncludeSoftwareToSystemRequirements(
           !!dataToSave.includeSoftwareToSystemRequirements
         );
+        // restore display mode
+        if (dataToSave.displayMode) {
+          setDisplayMode(dataToSave.displayMode);
+        }
       } catch {
         toast.error('Error processing favorite data');
         setQueriesRequest(defaultSelectedQueriesForSRS);
@@ -156,6 +163,7 @@ const SRSSelector = observer(
             includeSystemToSoftwareRequirements,
             includeSoftwareToSystemRequirements,
             selectedQueries: queriesRequest,
+            displayMode,
           },
         },
         contentControlIndex
@@ -171,6 +179,7 @@ const SRSSelector = observer(
       contentControlTitle,
       skin,
       contentControlIndex,
+      displayMode,
     ]);
 
     useEffect(() => {
@@ -180,6 +189,7 @@ const SRSSelector = observer(
       includeSystemRequirements,
       includeSystemToSoftwareRequirements,
       includeSoftwareToSystemRequirements,
+      displayMode,
       UpdateDocumentRequestObject,
     ]);
 
@@ -227,6 +237,116 @@ const SRSSelector = observer(
 
     return (
       <Stack spacing={1.5}>
+        <SectionCard
+          title='Display Mode'
+          description='Choose how to organize requirements in the document.'
+          compact
+        >
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Tooltip 
+              title="Displays the full tree structure with all work item types (Features, Epics, and Requirements) showing parent-child relationships"
+              placement="top"
+              arrow
+            >
+              <Box
+                onClick={() => setDisplayMode('hierarchical')}
+                sx={{
+                  flex: 1,
+                  p: 2,
+                  border: '2px solid',
+                  borderColor: displayMode === 'hierarchical' ? 'primary.main' : 'divider',
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'background.paper',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    borderColor: 'primary.main',
+                    backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'action.hover',
+                  },
+                }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <AccountTreeIcon 
+                    sx={{ 
+                      fontSize: 24,
+                      color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
+                    }} 
+                  />
+                  <Box>
+                    <Typography 
+                      variant='body2' 
+                      fontWeight={displayMode === 'hierarchical' ? 'bold' : 'medium'}
+                      color={displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.primary'}
+                    >
+                      Hierarchical
+                    </Typography>
+                    <Typography 
+                      variant='caption' 
+                      sx={{ 
+                        color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
+                        opacity: displayMode === 'hierarchical' ? 0.9 : 1,
+                      }}
+                    >
+                      Full tree structure
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+            </Tooltip>
+
+            <Tooltip 
+              title="Groups only Requirement work items by their type, filtering out Features and Epics for a focused document"
+              placement="top"
+              arrow
+            >
+              <Box
+                onClick={() => setDisplayMode('categorized')}
+                sx={{
+                  flex: 1,
+                  p: 2,
+                  border: '2px solid',
+                  borderColor: displayMode === 'categorized' ? 'primary.main' : 'divider',
+                  borderRadius: 1,
+                  cursor: 'pointer',
+                  backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'background.paper',
+                  transition: 'all 0.2s',
+                  '&:hover': {
+                    borderColor: 'primary.main',
+                    backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'action.hover',
+                  },
+                }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <CategoryIcon 
+                    sx={{ 
+                      fontSize: 24,
+                      color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
+                    }} 
+                  />
+                  <Box>
+                    <Typography 
+                      variant='body2' 
+                      fontWeight={displayMode === 'categorized' ? 'bold' : 'medium'}
+                      color={displayMode === 'categorized' ? 'primary.contrastText' : 'text.primary'}
+                    >
+                      Categorized
+                    </Typography>
+                    <Typography 
+                      variant='caption' 
+                      sx={{ 
+                        color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
+                        opacity: displayMode === 'categorized' ? 0.9 : 1,
+                      }}
+                    >
+                      By requirement type
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Box>
+            </Tooltip>
+          </Box>
+        </SectionCard>
+
         <SectionCard
           title='System Requirements'
           description='This query seeds the document and is required.'
