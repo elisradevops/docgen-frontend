@@ -111,7 +111,14 @@ const SharePointConflictDialog = ({ open, onClose, onProceed, conflicts, newFile
                       </ListItemIcon>
                       <ListItemText
                         primary={file.name}
-                        secondary={`Size: ${formatBytes(file.size)}${file.docType ? ` • DocType: ${file.docType}` : ''}`}
+                        secondary={
+                          file.sizeChanged
+                            ? `Size changed: ${formatBytes(file.existingSize || 0)} → ${formatBytes(file.size)}${file.docType ? ` • DocType: ${file.docType}` : ''}`
+                            : `Size: ${formatBytes(file.size)}${file.docType ? ` • DocType: ${file.docType}` : ''}`
+                        }
+                        secondaryTypographyProps={{
+                          color: file.sizeChanged ? 'warning.main' : 'text.secondary'
+                        }}
                       />
                     </ListItem>
                   </React.Fragment>

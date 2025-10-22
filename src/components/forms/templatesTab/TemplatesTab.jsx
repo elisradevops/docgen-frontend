@@ -176,7 +176,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
               tokenType: tokenData.tokenType,
             };
             
-            toast.info('Using cached authentication...');
+            // Silently use cached auth - no toast needed
             handleCredentialsSubmit(oauthToken);
             return;
           }
@@ -205,7 +205,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
               domain: creds.domain || '',
             };
             
-            toast.info('Using cached credentials...');
+            // Silently use cached credentials - no toast needed
             handleCredentialsSubmit(credentials);
             return;
           }
@@ -236,9 +236,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       
       setSpConfig(config);
       setShowConfigDialog(false);
-      toast.success('SharePoint configuration saved');
-      
-      // Now show credentials dialog
+      // Config saved - no toast needed, credentials dialog will show
       setShowCredentialsDialog(true);
     } catch (error) {
       toast.error(`Failed to save configuration: ${error.message}`);
@@ -269,11 +267,11 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       setSyncing(false);
       
       if (result.success) {
-        // Show warning for invalid docTypes
+        // Show warning for invalid docTypes (consolidated)
         if (result.invalidFiles && result.invalidFiles.length > 0) {
-          const invalidNames = result.invalidFiles.map(f => `${f.name} (${f.docType})`).join(', ');
           toast.warning(
-            `${result.invalidFiles.length} file(s) skipped due to invalid docType: ${invalidNames}. Valid types are: STD, STR, SVD, SRS`
+            `${result.invalidFiles.length} file(s) skipped due to invalid docType: ${result.invalidFiles.map(f => f.name).join(', ')}. Valid types are: STD, STR, SVD, SRS`,
+            { autoClose: 8000 }
           );
         }
         
@@ -322,12 +320,20 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       setSyncing(false);
       
       if (result.success) {
-        toast.success(
-          `Successfully synced ${result.syncedFiles.length} of ${result.totalFiles} templates`
-        );
-        if (result.failedFiles && result.failedFiles.length > 0) {
+        // Consolidate success and failure into one toast
+        const syncedCount = result.syncedFiles.length;
+        const failedCount = result.failedFiles?.length || 0;
+        const totalCount = result.totalFiles;
+        
+        if (failedCount > 0) {
           toast.warning(
-            `${result.failedFiles.length} files failed to sync. Check logs for details.`
+            `Synced ${syncedCount} of ${totalCount} templates. ${failedCount} file(s) failed - check logs for details.`,
+            { autoClose: 5000 }
+          );
+        } else {
+          toast.success(
+            `Successfully synced ${syncedCount} of ${totalCount} templates`,
+            { autoClose: 3000 }
           );
         }
         // Refresh templates list
