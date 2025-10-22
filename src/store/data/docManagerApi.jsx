@@ -275,76 +275,9 @@ export const deleteFile = async (file, projectName, bucketName) => {
  * SharePoint Integration API Functions
  */
 
-/**
- * Gets OAuth token for SharePoint Online
- */
-export const getOAuthToken = async (clientId, clientSecret, username, password, siteUrl, tenantId = 'common') => {
-  try {
-    const res = await axios.post(
-      `${C.jsonDocument_url}/oauth/token`,
-      { clientId, clientSecret, username, password, siteUrl, tenantId },
-      { headers, timeout: DEFAULT_TIMEOUT }
-    );
-    return res.data;
-  } catch (err) {
-    logger.error(`Error getting OAuth token: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
-  }
-};
-
-/**
- * Refreshes OAuth token
- */
-export const refreshOAuthToken = async (clientId, clientSecret, refreshToken, siteUrl, tenantId = 'common') => {
-  try {
-    const res = await axios.post(
-      `${C.jsonDocument_url}/oauth/refresh`,
-      { clientId, clientSecret, refreshToken, siteUrl, tenantId },
-      { headers, timeout: DEFAULT_TIMEOUT }
-    );
-    return res.data;
-  } catch (err) {
-    logger.error(`Error refreshing OAuth token: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
-  }
-};
-
-/**
- * Gets OAuth authorization URL for interactive login (supports MFA)
- */
-export const getOAuthAuthorizationUrl = async (siteUrl, redirectUri) => {
-  try {
-    const res = await axios.get(
-      `${C.jsonDocument_url}/oauth/authorize`,
-      { 
-        params: { siteUrl, redirectUri },
-        headers, 
-        timeout: DEFAULT_TIMEOUT 
-      }
-    );
-    return res.data;
-  } catch (err) {
-    logger.error(`Error getting authorization URL: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
-  }
-};
-
-/**
- * Exchanges OAuth authorization code for access token
- */
-export const exchangeOAuthCode = async (code, state, siteUrl, redirectUri) => {
-  try {
-    const res = await axios.post(
-      `${C.jsonDocument_url}/oauth/callback`,
-      { code, state, siteUrl, redirectUri },
-      { headers, timeout: DEFAULT_TIMEOUT }
-    );
-    return res.data;
-  } catch (err) {
-    logger.error(`Error exchanging OAuth code: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
-  }
-};
+// Note: OAuth is now handled entirely by frontend (SPA flow with PKCE)
+// See: src/utils/sharepointOAuth.js
+// Backend OAuth endpoints have been removed
 
 /**
  * Tests SharePoint connection

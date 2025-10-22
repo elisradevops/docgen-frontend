@@ -14,7 +14,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { toast } from 'react-toastify';
-import { getOAuthToken, getOAuthAuthorizationUrl, exchangeOAuthCode } from '../../store/data/docManagerApi';
+import { loginWithSharePointOAuth } from '../../utils/sharepointOAuth';
 
 const SharePointCredentialsDialog = ({ open, onClose, onSubmit, siteUrl }) => {
   const [username, setUsername] = useState('');
@@ -57,103 +57,24 @@ const SharePointCredentialsDialog = ({ open, onClose, onSubmit, siteUrl }) => {
     setLoading(true);
 
     try {
-      toast.info('Opening Microsoft login...');
+      // Use true SPA OAuth flow (frontend handles everything)
+      const token = await loginWithSharePointOAuth(siteUrl);
 
-      // Get authorization URL
-      const redirectUri = `${window.location.origin}/oauth-callback.html`;
-      const authResponse = await getOAuthAuthorizationUrl(siteUrl, redirectUri);
-
-      if (!authResponse.success) {
-        toast.error('Failed to initialize OAuth login');
-        return;
-      }
-
-      // Store state for verification
-      sessionStorage.setItem('oauth_state', authResponse.state);
-      sessionStorage.setItem('oauth_siteUrl', siteUrl);
-
-      // Open popup window
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-
-      const popup = window.open(
-        authResponse.authorizationUrl,
-        'Microsoft Login',
-        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+      // Cache the OAuth token for 1 hour
+      sessionStorage.setItem(
+        'sharepoint_oauth_token',
+        JSON.stringify({
+          ...token,
+          timestamp: Date.now(),
+        })
       );
 
-      // Listen for OAuth callback
-      const handleMessage = async (event) => {
-        // Verify origin
-        if (event.origin !== window.location.origin) return;
-
-        if (event.data.type === 'OAUTH_CALLBACK') {
-          window.removeEventListener('message', handleMessage);
-
-          const { code, state } = event.data;
-          const storedState = sessionStorage.getItem('oauth_state');
-          const storedSiteUrl = sessionStorage.getItem('oauth_siteUrl');
-
-          if (state !== storedState) {
-            toast.error('OAuth state mismatch. Please try again.');
-            setLoading(false);
-            return;
-          }
-
-          // Exchange code for token
-          try {
-            toast.info('Completing authentication...');
-
-            const tokenResponse = await exchangeOAuthCode(code, state, storedSiteUrl, redirectUri);
-
-            if (tokenResponse.success && tokenResponse.token) {
-              // Clean up OAuth state
-              sessionStorage.removeItem('oauth_state');
-              sessionStorage.removeItem('oauth_siteUrl');
-
-              // Pass OAuth token with proper structure
-              const oauthToken = {
-                accessToken: tokenResponse.token.accessToken,
-                expiresIn: tokenResponse.token.expiresIn,
-                tokenType: tokenResponse.token.tokenType,
-              };
-
-              // Cache the OAuth token for 1 hour
-              sessionStorage.setItem(
-                'sharepoint_oauth_token',
-                JSON.stringify({
-                  ...oauthToken,
-                  timestamp: Date.now(),
-                })
-              );
-
-              onSubmit(oauthToken);
-              toast.success('Successfully authenticated with Microsoft!');
-            } else {
-              toast.error('Failed to complete authentication');
-            }
-          } catch (error) {
-            toast.error(`Authentication failed: ${error.message}`);
-          } finally {
-            setLoading(false);
-          }
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-
-      // Check if popup was closed
-      const checkPopup = setInterval(() => {
-        if (popup && popup.closed) {
-          clearInterval(checkPopup);
-          window.removeEventListener('message', handleMessage);
-          setLoading(false);
-        }
-      }, 500);
+      // Success toast will be shown by parent component after sync completes
+      onSubmit(token);
+      onClose();
     } catch (error) {
-      toast.error(`OAuth login failed: ${error.message}`);
+      toast.error(`Authentication failed: ${error.message}`, { autoClose: 5000 });
+    } finally {
       setLoading(false);
     }
   };
@@ -169,65 +90,39 @@ const SharePointCredentialsDialog = ({ open, onClose, onSubmit, siteUrl }) => {
     try {
       // Check if this is SharePoint Online
       if (isSharePointOnline(siteUrl)) {
-        // Try password auth (may fail with MFA)
-        toast.info('Authenticating with SharePoint Online...');
-
-        const tokenResponse = await getOAuthToken(
-          null, // clientId - will use env variable
-          null, // clientSecret - will use env variable
-          username.trim(),
-          password,
-          siteUrl,
-          null // tenantId - will use env variable
+        // SharePoint Online requires OAuth - show error
+        toast.error(
+          'SharePoint Online requires OAuth authentication. Please use "Login with Microsoft" button.',
+          { autoClose: 6000 }
         );
-
-        if (tokenResponse.success && tokenResponse.token) {
-          // Save credentials to cache if requested
-          if (rememberCredentials) {
-            sessionStorage.setItem(
-              'sharepoint_credentials',
-              JSON.stringify({
-                username: username.trim(),
-                password: btoa(password),
-                domain: domain.trim(),
-                timestamp: Date.now(),
-              })
-            );
-          } else {
-            sessionStorage.removeItem('sharepoint_credentials');
-          }
-
-          // Pass OAuth token instead of credentials
-          onSubmit({ accessToken: tokenResponse.token.accessToken });
-          toast.success('Successfully authenticated with SharePoint Online!');
-        } else {
-          toast.error('Failed to get OAuth token. Try "Login with Microsoft" if MFA is required.');
-        }
-      } else {
-        // On-premise SharePoint - use NTLM credentials
-        const credentials = {
-          username: username.trim(),
-          password: password,
-          domain: domain.trim(),
-        };
-
-        // Save to sessionStorage if user wants to remember
-        if (rememberCredentials) {
-          sessionStorage.setItem(
-            'sharepoint_credentials',
-            JSON.stringify({
-              username: username.trim(),
-              password: btoa(password),
-              domain: domain.trim(),
-              timestamp: Date.now(),
-            })
-          );
-        } else {
-          sessionStorage.removeItem('sharepoint_credentials');
-        }
-
-        onSubmit(credentials);
+        setLoading(false);
+        return;
       }
+
+      // On-premise SharePoint - use NTLM credentials
+      const credentials = {
+        username: username.trim(),
+        password: password,
+        domain: domain.trim(),
+      };
+
+      // Save to sessionStorage if user wants to remember
+      if (rememberCredentials) {
+        sessionStorage.setItem(
+          'sharepoint_credentials',
+          JSON.stringify({
+            username: username.trim(),
+            password: btoa(password),
+            domain: domain.trim(),
+            timestamp: Date.now(),
+          })
+        );
+      } else {
+        sessionStorage.removeItem('sharepoint_credentials');
+      }
+
+      onSubmit(credentials);
+      onClose();
     } catch (error) {
       toast.error(`Authentication failed: ${error.message}`);
     } finally {
