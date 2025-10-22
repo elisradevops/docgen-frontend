@@ -1,12 +1,18 @@
 # stage1 as builder
-FROM node:18-alpine as builder
+FROM node:22-alpine as builder
 WORKDIR /react-ui
+
 # copy the package.json and package-lock.json to install dependencies
 COPY package*.json ./
+
 # Install dependencies (prefer ci, fall back to install if lockfile is out of sync)
 RUN npm ci || npm install
+
+# Copy application sources
 COPY . .
-# Build the project and copy the files
+
+# Build the project (no build-time env vars needed)
+# Azure AD config will be injected at runtime by nginx entrypoint
 RUN npm run build
 
 FROM nginx:alpine
