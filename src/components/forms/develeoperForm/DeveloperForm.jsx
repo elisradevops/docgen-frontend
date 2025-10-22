@@ -15,7 +15,9 @@ import {
   Paper,
   Typography,
   Divider,
+  Alert,
 } from '@mui/material';
+import SettingsIcon from '@mui/icons-material/Settings';
 import SmartAutocomplete from '../../common/SmartAutocomplete';
 
 import TestContentSelector from '../../common/table/TestContentSelector';
@@ -24,11 +26,13 @@ import TraceTableSelector from '../../common/selectors/TraceTableSelector';
 import ChangeTableSelector from '../../common/table/ChangeTableSelector';
 import fileDownload from 'js-file-download';
 import STRTableSelector from '../../common/table/STRTableSelector';
+import SharePointConfigManager from '../../dialogs/SharePointConfigManager';
 
 const DeveloperForm = observer(({ store }) => {
   const [contentControlTitle, setContentControlTitle] = useState(null);
   const [contentControlType, setContentControlType] = useState('');
   const [contentControlSkin, setContentControlSkin] = useState('');
+  const [showConfigManager, setShowConfigManager] = useState(false);
 
   const addToDocumentRequestObject = (contentControlObject) => {
     store.addContentControlToDocument(contentControlObject);
@@ -44,6 +48,42 @@ const DeveloperForm = observer(({ store }) => {
         pr: { xs: 0, md: 0.5 },
       }}
     >
+      {/* SharePoint Configuration Management Section */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, md: 3 },
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+      >
+        <Box>
+          <Typography variant='h6' component='h2'>
+            SharePoint Configuration Management
+          </Typography>
+          <Typography variant='body2' color='text.secondary'>
+            Manage SharePoint connections for template synchronization across all projects.
+          </Typography>
+        </Box>
+
+        <Divider sx={{ borderColor: (theme) => theme.palette.divider }} />
+
+        <Alert severity="info" sx={{ mb: 1 }}>
+          Configure SharePoint sources for each project. Users can sync templates from these configured locations.
+        </Alert>
+
+        <Box>
+          <Button
+            variant='contained'
+            startIcon={<SettingsIcon />}
+            onClick={() => setShowConfigManager(true)}
+          >
+            Manage SharePoint Configurations
+          </Button>
+        </Box>
+      </Paper>
+
       <Stack
         direction={{ xs: 'column', lg: 'row' }}
         spacing={3}
@@ -277,6 +317,14 @@ const DeveloperForm = observer(({ store }) => {
           </Box>
         </Paper>
       </Stack>
+
+      {/* SharePoint Configuration Manager Dialog */}
+      <SharePointConfigManager
+        open={showConfigManager}
+        onClose={() => setShowConfigManager(false)}
+        userId={store.userDetails?.name}
+        currentProject={store.teamProject}
+      />
     </Stack>
   );
 });
