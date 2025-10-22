@@ -270,3 +270,261 @@ export const deleteFile = async (file, projectName, bucketName) => {
     }
   }
 };
+
+/**
+ * SharePoint Integration API Functions
+ */
+
+/**
+ * Gets OAuth token for SharePoint Online
+ */
+export const getOAuthToken = async (clientId, clientSecret, username, password, siteUrl, tenantId = 'common') => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/oauth/token`,
+      { clientId, clientSecret, username, password, siteUrl, tenantId },
+      { headers, timeout: DEFAULT_TIMEOUT }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting OAuth token: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Refreshes OAuth token
+ */
+export const refreshOAuthToken = async (clientId, clientSecret, refreshToken, siteUrl, tenantId = 'common') => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/oauth/refresh`,
+      { clientId, clientSecret, refreshToken, siteUrl, tenantId },
+      { headers, timeout: DEFAULT_TIMEOUT }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error refreshing OAuth token: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Gets OAuth authorization URL for interactive login (supports MFA)
+ */
+export const getOAuthAuthorizationUrl = async (siteUrl, redirectUri) => {
+  try {
+    const res = await axios.get(
+      `${C.jsonDocument_url}/oauth/authorize`,
+      { 
+        params: { siteUrl, redirectUri },
+        headers, 
+        timeout: DEFAULT_TIMEOUT 
+      }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting authorization URL: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Exchanges OAuth authorization code for access token
+ */
+export const exchangeOAuthCode = async (code, state, siteUrl, redirectUri) => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/oauth/callback`,
+      { code, state, siteUrl, redirectUri },
+      { headers, timeout: DEFAULT_TIMEOUT }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error exchanging OAuth code: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Tests SharePoint connection
+ * Supports both NTLM credentials and OAuth tokens
+ */
+export const testSharePointConnection = async (siteUrl, library, folder, auth) => {
+  try {
+    const body = { siteUrl, library, folder };
+    // Check if auth is OAuth token or credentials
+    if (auth.accessToken) {
+      body.oauthToken = auth;
+    } else {
+      body.credentials = auth;
+    }
+    
+    const res = await axios.post(
+      `${C.jsonDocument_url}/sharepoint/test-connection`,
+      body,
+      { headers, timeout: DEFAULT_TIMEOUT }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error testing SharePoint connection: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Lists template files from SharePoint folder
+ * Supports both NTLM credentials and OAuth tokens
+ */
+export const listSharePointFiles = async (siteUrl, library, folder, auth) => {
+  try {
+    const body = { siteUrl, library, folder };
+    if (auth.accessToken) {
+      body.oauthToken = auth;
+    } else {
+      body.credentials = auth;
+    }
+    
+    const res = await axios.post(
+      `${C.jsonDocument_url}/sharepoint/list-files`,
+      body,
+      { headers, timeout: 30000 } // 30 second timeout for listing files
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error listing SharePoint files: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Checks for conflicts with existing MinIO files
+ * Supports both NTLM credentials and OAuth tokens
+ */
+export const checkSharePointConflicts = async (siteUrl, library, folder, auth, bucketName, projectName, docType) => {
+  try {
+    const body = { siteUrl, library, folder, bucketName, projectName, docType };
+    if (auth.accessToken) {
+      body.oauthToken = auth;
+    } else {
+      body.credentials = auth;
+    }
+    
+    const res = await axios.post(
+      `${C.jsonDocument_url}/sharepoint/check-conflicts`,
+      body,
+      { headers, timeout: 60000 } // 60 second timeout
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error checking SharePoint conflicts: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Syncs templates from SharePoint to MinIO
+ * Supports both NTLM credentials and OAuth tokens
+ */
+export const syncSharePointTemplates = async (siteUrl, library, folder, auth, bucketName, projectName, docType, skipFiles = []) => {
+  try {
+    const body = { siteUrl, library, folder, bucketName, projectName, docType, skipFiles };
+    if (auth.accessToken) {
+      body.oauthToken = auth;
+    } else {
+      body.credentials = auth;
+    }
+    
+    const res = await axios.post(
+      `${C.jsonDocument_url}/sharepoint/sync-templates`,
+      body,
+      { headers, timeout: 300000 } // 5 minute timeout for sync
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error syncing SharePoint templates: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Saves SharePoint configuration
+ */
+export const saveSharePointConfig = async (userId, projectName, siteUrl, library, folder, displayName) => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/sharepoint/config`,
+      { userId, projectName, siteUrl, library, folder, displayName },
+      { headers, timeout: DEFAULT_TIMEOUT }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error saving SharePoint config: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Gets SharePoint configuration
+ */
+export const getSharePointConfig = async (userId, projectName) => {
+  try {
+    const params = {};
+    if (projectName) params.projectName = projectName;
+    
+    const res = await axios.get(`${C.jsonDocument_url}/sharepoint/config`, {
+      params,
+      headers: {
+        ...headers.headers,
+        'X-User-Id': userId || '',
+      },
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    if (err.response?.status === 404) {
+      return { success: false, config: null };
+    }
+    logger.error(`Error getting SharePoint config: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Gets all SharePoint configurations for a user
+ */
+export const getAllSharePointConfigs = async (userId) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/sharepoint/configs/all`, {
+      headers: {
+        ...headers.headers,
+        'X-User-Id': userId || '',
+      },
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting SharePoint configs: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Deletes SharePoint configuration for a project
+ */
+export const deleteSharePointConfig = async (userId, projectName) => {
+  try {
+    const res = await axios.delete(`${C.jsonDocument_url}/sharepoint/config`, {
+      params: { projectName },
+      headers: {
+        ...headers.headers,
+        'X-User-Id': userId || '',
+      },
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error deleting SharePoint config: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
