@@ -26,12 +26,10 @@ function App({ store }) {
     const normalizedInputUrl = normalizeUrl(selectedUrl);
     const result = await store.testCredentials(normalizedInputUrl, selectedPat);
     if (!result.ok) {
-      const msg =
-        result.status === 401
-          ? 'Invalid or expired PAT. Please create/copy a new PAT and try again.'
-          : `Login failed${result.status ? ` (${result.status})` : ''}. ${result.message || ''}`;
-      toast.error(msg);
-      return; // Block login
+      // Throw error so SettingPage can catch and display it
+      const error = new Error(result.message || 'Authentication failed');
+      error.status = result.status;
+      throw error;
     }
 
     // Persist cookies only after validation succeeds
