@@ -320,22 +320,37 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       setSyncing(false);
       
       if (result.success) {
-        // Consolidate success and failure into one toast
+        // Build a clear message about what happened
         const syncedCount = result.syncedFiles.length;
         const failedCount = result.failedFiles?.length || 0;
-        const totalCount = result.totalFiles;
+        const identicalCount = result.identicalFiles?.length || 0;
+        
+        // Build message parts
+        const parts = [];
+        if (syncedCount > 0) {
+          parts.push(`${syncedCount} synced`);
+        }
+        if (identicalCount > 0) {
+          parts.push(`${identicalCount} skipped (already up-to-date)`);
+        }
+        if (failedCount > 0) {
+          parts.push(`${failedCount} failed`);
+        }
+        
+        const message = parts.length > 0 
+          ? `Templates: ${parts.join(', ')}`
+          : 'No templates to sync';
         
         if (failedCount > 0) {
-          toast.warning(
-            `Synced ${syncedCount} of ${totalCount} templates. ${failedCount} file(s) failed - check logs for details.`,
-            { autoClose: 5000 }
-          );
+          toast.warning(message, { autoClose: 5000 });
+        } else if (syncedCount > 0) {
+          toast.success(message, { autoClose: 3000 });
+        } else if (identicalCount > 0) {
+          toast.info(message, { autoClose: 3000 });
         } else {
-          toast.success(
-            `Successfully synced ${syncedCount} of ${totalCount} templates`,
-            { autoClose: 3000 }
-          );
+          toast.info(message, { autoClose: 3000 });
         }
+        
         // Refresh templates list
         store.fetchTemplatesListForDownload();
       }
