@@ -16,6 +16,7 @@ import {
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import React, { useEffect, useState } from 'react';
 import QueryTree from '../common/QueryTree';
+import OverlayLoader from '../common/OverlayLoader';
 import { observer } from 'mobx-react';
 
 const defaultSelectedQueries = {
@@ -110,6 +111,7 @@ const OpenPcrDialog = observer(({ store, sharedQueries, prevOpenPcrRequest, onOp
           label='From Query'
           control={<Radio />}
           disabled={
+            store.fetchLoadingState().sharedQueriesLoadingState ||
             !queryTrees.OpenPcrToTestTree ||
             !queryTrees.TestToOpenPcrTree ||
             !(queryTrees.OpenPcrToTestTree.length > 0 || queryTrees.TestToOpenPcrTree.length > 0)
@@ -169,54 +171,53 @@ const OpenPcrDialog = observer(({ store, sharedQueries, prevOpenPcrRequest, onOp
         }}
       >
         <DialogTitle>Open PCR Selection</DialogTitle>
-        <DialogContent>
-          <Grid
-            container
-            spacing={2}
-            alignContent='center'
-            sx={{ justifyContent: 'center' }}
-          >
-            <Grid size={12}>{openPCRSToggles}</Grid>
-            <Grid size={12}>
-              <Collapse
-                in={openPcrRequest?.openPcrMode === 'query'}
-                timeout='auto'
-                unmountOnExit
-              >
-                {includeSpecialColumnsToggle}
-                <Box>
-                  {queryTrees.TestToOpenPcrTree?.length > 0 && (
-                    <>
-                      <Typography variant='subtitle1'>Select a Test Case to Open PCR Query</Typography>
-                      <div>
-                        <QueryTree
-                          data={queryTrees.TestToOpenPcrTree}
-                          prevSelectedQuery={openPcrRequest.testToOpenPcrQuery}
-                          onSelectedQuery={onTestToOpenPCRQuerySelected}
-                          queryType='test-OpenPcr'
-                          isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                        />
-                      </div>
-                    </>
-                  )}
-                  {queryTrees.OpenPcrToTestTree?.length > 0 && (
-                    <>
-                      <Typography variant='subtitle1'>Select a Open PCR to Test Case Query</Typography>
-                      <div>
-                        <QueryTree
-                          data={queryTrees.OpenPcrToTestTree}
-                          prevSelectedQuery={openPcrRequest.OpenPcrToTestQuery}
-                          onSelectedQuery={onOpenPcrToTestQuerySelected}
-                          queryType='openPcr-test'
-                          isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                        />
-                      </div>
-                    </>
-                  )}
-                </Box>
+        <DialogContent aria-busy={store.fetchLoadingState().sharedQueriesLoadingState || undefined}>
+          <Box sx={{ position: 'relative' }}>
+            <OverlayLoader
+              loading={store.fetchLoadingState().sharedQueriesLoadingState}
+              text='Loading queries...'
+            />
+            <Grid
+              container
+              spacing={2}
+              alignContent='center'
+              sx={{ justifyContent: 'center' }}
+            >
+              <Grid size={12}>{openPCRSToggles}</Grid>
+              <Grid size={12}>
+                <Collapse
+                  in={openPcrRequest?.openPcrMode === 'query'}
+                  timeout='auto'
+                  unmountOnExit
+                >
+                  {includeSpecialColumnsToggle}
+                  <Box>
+                    <Typography variant='subtitle1'>Select a Test Case to Open PCR Query</Typography>
+                    <div>
+                      <QueryTree
+                        data={queryTrees.TestToOpenPcrTree}
+                        prevSelectedQuery={openPcrRequest.testToOpenPcrQuery}
+                        onSelectedQuery={onTestToOpenPCRQuerySelected}
+                        queryType='test-OpenPcr'
+                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                      />
+                    </div>
+
+                    <Typography variant='subtitle1'>Select a Open PCR to Test Case Query</Typography>
+                    <div>
+                      <QueryTree
+                        data={queryTrees.OpenPcrToTestTree}
+                        prevSelectedQuery={openPcrRequest.OpenPcrToTestQuery}
+                        onSelectedQuery={onOpenPcrToTestQuerySelected}
+                        queryType='openPcr-test'
+                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                      />
+                    </div>
+                  </Box>
               </Collapse>
+              </Grid>
             </Grid>
-          </Grid>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>OK</Button>

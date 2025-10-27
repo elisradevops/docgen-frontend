@@ -16,6 +16,7 @@ import {
 import StairsIcon from '@mui/icons-material/Stairs';
 import React, { useState } from 'react';
 import QueryTree from '../common/QueryTree';
+import OverlayLoader from '../common/OverlayLoader';
 
 const DetailedStepsSettingsDialog = ({
   store,
@@ -181,7 +182,11 @@ const DetailedStepsSettingsDialog = ({
             value='query'
             label='Queries'
             control={<Radio />}
-            disabled={queryTrees.testReqTree === null || !queryTrees.testReqTree.length > 0}
+            disabled={
+              store.fetchLoadingState().sharedQueriesLoadingState ||
+              queryTrees.testReqTree === null ||
+              !queryTrees.testReqTree.length > 0
+            }
           />
         </RadioGroup>
       </div>
@@ -310,15 +315,21 @@ const DetailedStepsSettingsDialog = ({
         }}
       >
         <DialogTitle>Step Execution Settings</DialogTitle>
-        <DialogContent>
-          <Grid
-            container
-            spacing={2}
-            alignContent='center'
-            sx={{ justifyContent: 'center' }}
-          >
-            <Grid size={12}>{detailedStepsExecutionElements}</Grid>
-          </Grid>
+        <DialogContent aria-busy={store.fetchLoadingState().sharedQueriesLoadingState || undefined}>
+          <Box sx={{ position: 'relative' }}>
+            <OverlayLoader
+              loading={store.fetchLoadingState().sharedQueriesLoadingState}
+              text='Loading queries...'
+            />
+            <Grid
+              container
+              spacing={2}
+              alignContent='center'
+              sx={{ justifyContent: 'center' }}
+            >
+              <Grid size={12}>{detailedStepsExecutionElements}</Grid>
+            </Grid>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>OK</Button>

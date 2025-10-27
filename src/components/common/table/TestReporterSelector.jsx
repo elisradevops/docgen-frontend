@@ -86,11 +86,11 @@ const TestReporterSelector = observer(
       // If the mode is not 'linked' (i.e., it's 'none' or 'query')
       if (linkedQueryRequest.linkedQueryMode !== 'linked') {
         // Remove any selected fields that are specific to the 'linked' mode
-        // Also ensure field and field.key are valid before calling endsWith
         setSelectedFields((currentFields) =>
-          currentFields.filter(
-            (field) => field && typeof field.key === 'string' && !field.key.endsWith('@linked')
-          )
+          (currentFields || []).filter((field) => {
+            const key = typeof field === 'string' ? field : field?.key;
+            return !(typeof key === 'string' && key.endsWith('@linked'));
+          })
         );
       }
     }, [linkedQueryRequest.linkedQueryMode]);
@@ -104,9 +104,7 @@ const TestReporterSelector = observer(
       const { acquiredTrees } = toJS(store.sharedQueries);
       acquiredTrees !== null
         ? setQueryTrees(() => ({
-            testAssociatedTree: acquiredTrees.testAssociatedTree?.testAssociatedTree
-              ? [acquiredTrees.testAssociatedTree.testAssociatedTree]
-              : [],
+            testAssociatedTree: acquiredTrees.testAssociatedTree ? [acquiredTrees.testAssociatedTree] : [],
           }))
         : setQueryTrees({ testAssociatedTree: [] });
     }, [store.sharedQueries, store.sharedQueries.acquiredTrees]);
@@ -153,14 +151,26 @@ const TestReporterSelector = observer(
     const processTestSuiteSelections = useCallback(
       (dataToSave) => {
         const testSuiteList = store.getTestSuiteList;
-        if (dataToSave?.nonRecursiveTestSuiteIdList?.length > 0) {
+        const makeOption = (s) => (s ? { ...s, key: s.id, text: `${s.name} - (${s.id})` } : null);
+
+        if (Array.isArray(dataToSave?.nonRecursiveTestSuiteIdList) && dataToSave.nonRecursiveTestSuiteIdList.length > 0) {
           const validTestSuites = dataToSave.nonRecursiveTestSuiteIdList
             .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
+            .filter(Boolean)
+            .map(makeOption)
             .filter(Boolean);
 
-          if (validTestSuites.length > 0) {
-            setSelectedTestSuites(validTestSuites);
-          }
+          setSelectedTestSuites(validTestSuites);
+        } else if (Array.isArray(dataToSave?.testSuiteArray) && dataToSave.testSuiteArray.length > 0) {
+          // Fallback: if only recursive list is present, map those (UI shows non-recursive selection only)
+          const fromRecursive = dataToSave.testSuiteArray
+            .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
+            .filter(Boolean)
+            .map(makeOption)
+            .filter(Boolean);
+          // Deduplicate by key
+          const byKey = new Map(fromRecursive.map((s) => [s.key, s]));
+          setSelectedTestSuites(Array.from(byKey.values()));
         } else {
           setSelectedTestSuites([]);
         }
@@ -219,7 +229,7 @@ const TestReporterSelector = observer(
           store.sharedQueries?.acquiredTrees?.testAssociatedTree
         ) {
           const validTestAssociatedQuery = validateQuery(
-            [store.sharedQueries.acquiredTrees?.testAssociatedTree?.testAssociatedTree],
+            [store.sharedQueries.acquiredTrees.testAssociatedTree],
             linkedQueryRequest.testAssociatedQuery
           );
           if (!validTestAssociatedQuery && linkedQueryRequest.testAssociatedQuery) {
@@ -236,8 +246,24 @@ const TestReporterSelector = observer(
 
     const loadSavedData = useCallback(
       async (dataToSave) => {
+        // 1) Apply test plan and fetch its suites
         await processTestPlanSelection(dataToSave);
+
+        // 2) Wait until suites for the selected plan are loaded, then apply saved suite selections
+        const start = Date.now();
+        const timeoutMs = 7000;
+        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+        while (
+          store.loadingState?.testSuiteListLoading ||
+          !Array.isArray(store.testSuiteList) ||
+          store.testSuiteList.length === 0
+        ) {
+          if (Date.now() - start > timeoutMs) break;
+          await sleep(50);
+        }
         processTestSuiteSelections(dataToSave);
+
+        // 3) Restore selected fields, filters and queries
         processSavedFields(dataToSave);
         processFilters(dataToSave);
         processSavedQueries(dataToSave.linkedQueryRequest);
@@ -394,14 +420,28 @@ const TestReporterSelector = observer(
     // ].filter(Boolean);
 
     return (
-      <Collapse in={selectedTeamProject?.key !== ''} timeout='auto' unmountOnExit>
-        <Stack spacing={1.5} sx={{ my: 1 }}>
+      <Collapse
+        in={selectedTeamProject?.key !== ''}
+        timeout='auto'
+        unmountOnExit
+      >
+        <Stack
+          spacing={1.5}
+          sx={{ my: 1 }}
+        >
           <SectionCard
             title='Scope'
             description='Choose the test plan and suites to include in this report.'
           >
-            <Grid container spacing={1.25} alignItems='flex-start'>
-              <Grid size={{ xs: 12, md: 5 }} sx={{ minWidth: 0 }}>
+            <Grid
+              container
+              spacing={1.25}
+              alignItems='flex-start'
+            >
+              <Grid
+                size={{ xs: 12, md: 5 }}
+                sx={{ minWidth: 0 }}
+              >
                 <SmartAutocomplete
                   size='small'
                   disableClearable
@@ -425,7 +465,10 @@ const TestReporterSelector = observer(
                   value={selectedTestPlan}
                 />
               </Grid>
-              <Grid size={{ xs: 12, md: 7 }} sx={{ minWidth: 0 }}>
+              <Grid
+                size={{ xs: 12, md: 7 }}
+                sx={{ minWidth: 0 }}
+              >
                 <SmartAutocomplete
                   multiple
                   size='small'
@@ -469,8 +512,14 @@ const TestReporterSelector = observer(
             description='Limit runs and highlight failures before exporting.'
           >
             <Stack spacing={1.5}>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={{ xs: 1.25, md: 2 }}>
-                <Stack spacing={0.75} sx={{ flex: 1 }}>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={{ xs: 1.25, md: 2 }}
+              >
+                <Stack
+                  spacing={0.75}
+                  sx={{ flex: 1 }}
+                >
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -507,8 +556,16 @@ const TestReporterSelector = observer(
                     }
                     label='Only include executed test cases'
                   />
-                  <Collapse in={enableRunTestCaseFilter} timeout='auto' unmountOnExit>
-                    <Typography variant='caption' color='text.secondary' sx={{ pl: 4 }}>
+                  <Collapse
+                    in={enableRunTestCaseFilter}
+                    timeout='auto'
+                    unmountOnExit
+                  >
+                    <Typography
+                      variant='caption'
+                      color='text.secondary'
+                      sx={{ pl: 4 }}
+                    >
                       Unexecuted test cases are filtered out of the export.
                     </Typography>
                   </Collapse>
@@ -524,18 +581,35 @@ const TestReporterSelector = observer(
                     }
                     label='Only include executed steps'
                   />
-                  <Collapse in={enableRunStepStatusFilter} timeout='auto' unmountOnExit>
-                    <Typography variant='caption' color='text.secondary' sx={{ pl: 4 }}>
+                  <Collapse
+                    in={enableRunStepStatusFilter}
+                    timeout='auto'
+                    unmountOnExit
+                  >
+                    <Typography
+                      variant='caption'
+                      color='text.secondary'
+                      sx={{ pl: 4 }}
+                    >
                       Steps without execution results are skipped.
                     </Typography>
                   </Collapse>
                 </Stack>
 
-                <Stack spacing={0.75} sx={{ flex: 1 }}>
-                  <Typography id='error-filter-mode-label' variant='subtitle2'>
+                <Stack
+                  spacing={0.75}
+                  sx={{ flex: 1 }}
+                >
+                  <Typography
+                    id='error-filter-mode-label'
+                    variant='subtitle2'
+                  >
                     Error filter mode
                   </Typography>
-                  <Typography variant='caption' color='text.secondary'>
+                  <Typography
+                    variant='caption'
+                    color='text.secondary'
+                  >
                     Keep only the runs that failed at the selected level.
                   </Typography>
                   <RadioGroup
@@ -547,7 +621,11 @@ const TestReporterSelector = observer(
                       setErrorFilterMode(event.target.value);
                     }}
                   >
-                    <FormControlLabel value='none' label='None' control={<Radio size='small' />} />
+                    <FormControlLabel
+                      value='none'
+                      label='None'
+                      control={<Radio size='small' />}
+                    />
                     <FormControlLabel
                       value='onlyTestCaseResult'
                       label='Test case level'
@@ -572,13 +650,21 @@ const TestReporterSelector = observer(
           <SectionCard
             title='Linked items'
             description='Choose how related work items should be pulled in.'
+            loading={store.fetchLoadingState().sharedQueriesLoadingState}
+            loadingText='Loading queries...'
           >
             <Stack spacing={1.25}>
               <Stack spacing={0.75}>
-                <Typography id='linked-item-query-group-label' variant='subtitle2'>
+                <Typography
+                  id='linked-item-query-group-label'
+                  variant='subtitle2'
+                >
                   Linked item mode
                 </Typography>
-                <Typography variant='caption' color='text.secondary'>
+                <Typography
+                  variant='caption'
+                  color='text.secondary'
+                >
                   Include linked work items directly or drive them from a query.
                 </Typography>
                 <RadioGroup
@@ -590,19 +676,33 @@ const TestReporterSelector = observer(
                     handleLinkedQueryChange(event.target.value);
                   }}
                 >
-                  <FormControlLabel value='none' label='None' control={<Radio size='small' />} />
-                  <FormControlLabel value='linked' label='Linked' control={<Radio size='small' />} />
+                  <FormControlLabel
+                    value='none'
+                    label='None'
+                    control={<Radio size='small' />}
+                  />
+                  <FormControlLabel
+                    value='linked'
+                    label='Linked'
+                    control={<Radio size='small' />}
+                  />
                   <FormControlLabel
                     value='query'
                     label='Query'
                     control={<Radio size='small' />}
                     disabled={
-                      !queryTrees.testAssociatedTree || queryTrees.testAssociatedTree.length === 0
+                      store.fetchLoadingState().sharedQueriesLoadingState ||
+                      !queryTrees.testAssociatedTree ||
+                      queryTrees.testAssociatedTree.length === 0
                     }
                   />
                 </RadioGroup>
               </Stack>
-              <Collapse in={linkedQueryRequest.linkedQueryMode === 'query'} timeout='auto' unmountOnExit>
+              <Collapse
+                in={linkedQueryRequest.linkedQueryMode === 'query'}
+                timeout='auto'
+                unmountOnExit
+              >
                 <Box sx={{ mt: 1 }}>
                   <QueryTree
                     data={queryTrees.testAssociatedTree}
@@ -621,7 +721,10 @@ const TestReporterSelector = observer(
             description='Pick which fields appear in the exported spreadsheet.'
           >
             <Stack spacing={1.25}>
-              <Typography variant='body2' color='text.secondary'>
+              <Typography
+                variant='body2'
+                color='text.secondary'
+              >
                 {selectedFields.length
                   ? `${selectedFields.length} field${selectedFields.length === 1 ? '' : 's'} selected`
                   : 'No fields selected yet. Move fields to the list on the right.'}
@@ -646,9 +749,7 @@ const TestReporterSelector = observer(
                   setSelectedFields(nextTargetKeys);
                 }}
                 titles={['Available fields', 'Selected fields']}
-                filterOption={(input, option) =>
-                  option.text.toLowerCase().includes(input.toLowerCase())
-                }
+                filterOption={(input, option) => option.text.toLowerCase().includes(input.toLowerCase())}
               />
             </Stack>
           </SectionCard>

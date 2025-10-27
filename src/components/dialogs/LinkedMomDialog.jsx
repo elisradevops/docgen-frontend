@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { CiLink } from 'react-icons/ci';
 import QueryTree from '../common/QueryTree';
+import OverlayLoader from '../common/OverlayLoader';
 
 const defaultSelectedQueries = {
   linkedMomMode: 'none',
@@ -76,7 +77,11 @@ const LinkedMomDialog = observer(({ store, sharedQueries, prevLinkedMomRequest, 
           value='query'
           label='By Query'
           control={<Radio />}
-          disabled={!queryTrees?.linkedMomTree || !(queryTrees?.linkedMomTree?.length > 0)}
+          disabled={
+            store.fetchLoadingState().sharedQueriesLoadingState ||
+            !queryTrees?.linkedMomTree ||
+            !(queryTrees?.linkedMomTree?.length > 0)
+          }
         />
       </RadioGroup>
     </Box>
@@ -122,28 +127,29 @@ const LinkedMomDialog = observer(({ store, sharedQueries, prevLinkedMomRequest, 
           Linked MOM
         </Button>
       </Tooltip>
-      <Dialog
-        open={openDialog}
-        onClose={handleClose}
-      >
+      <Dialog open={openDialog} onClose={handleClose}>
         <DialogTitle>Linked MOM Selection</DialogTitle>
-        <DialogContent>
-          <Grid
-            container
-            spacing={2}
-            alignItems='center'
-            justifyContent='center'
-          >
-            <Grid size={12}>{linkedMomToggles}</Grid>
-            <Grid size={12}>
-              <Collapse
-                in={linkedMomRequest.linkedMomMode === 'query'}
-                timeout='auto'
-                unmountOnExit
-              >
-                <Box>
-                  <Typography variant='subtitle1'>Select a Query</Typography>
-                  {queryTrees.linkedMomTree?.length > 0 && (
+        <DialogContent aria-busy={store.fetchLoadingState().sharedQueriesLoadingState || undefined}>
+          <Box sx={{ position: 'relative' }}>
+            <OverlayLoader
+              loading={store.fetchLoadingState().sharedQueriesLoadingState}
+              text='Loading queries...'
+            />
+            <Grid
+              container
+              spacing={2}
+              alignItems='center'
+              justifyContent='center'
+            >
+              <Grid size={12}>{linkedMomToggles}</Grid>
+              <Grid size={12}>
+                <Collapse
+                  in={linkedMomRequest.linkedMomMode === 'query'}
+                  timeout='auto'
+                  unmountOnExit
+                >
+                  <Box>
+                    <Typography variant='subtitle1'>Select a Query</Typography>
                     <QueryTree
                       data={queryTrees.linkedMomTree}
                       prevSelectedQuery={linkedMomRequest.linkedMomQuery}
@@ -151,11 +157,11 @@ const LinkedMomDialog = observer(({ store, sharedQueries, prevLinkedMomRequest, 
                       queryType='linked-mom'
                       isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
                     />
-                  )}
-                </Box>
-              </Collapse>
+                  </Box>
+                </Collapse>
+              </Grid>
             </Grid>
-          </Grid>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>OK</Button>

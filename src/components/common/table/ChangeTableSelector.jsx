@@ -661,11 +661,16 @@ const ChangeTableSelector = observer(
               <SectionCard
                 title='Queries'
                 compact
+                loading={store.fetchLoadingState().sharedQueriesLoadingState}
+                loadingText='Loading queries...'
               >
                 <Stack spacing={1}>
+                  
                   <FormControlLabel
                     disabled={
-                      !queryTrees.systemOverviewQueryTree || queryTrees.systemOverviewQueryTree?.length === 0
+                      store.fetchLoadingState().sharedQueriesLoadingState ||
+                      !queryTrees.systemOverviewQueryTree ||
+                      queryTrees.systemOverviewQueryTree?.length === 0
                     }
                     control={
                       <Checkbox
@@ -683,21 +688,21 @@ const ChangeTableSelector = observer(
                     timeout='auto'
                     unmountOnExit
                   >
-                    {queryTrees.systemOverviewQueryTree?.length > 0 ? (
-                      <QueryTree
-                        data={queryTrees.systemOverviewQueryTree}
-                        prevSelectedQuery={queriesRequest?.sysOverviewQuery}
-                        onSelectedQuery={onSelectedSystemOverviewQuery}
-                        queryType='system-overview'
-                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                      />
-                    ) : null}
+                    <QueryTree
+                      data={queryTrees.systemOverviewQueryTree}
+                      prevSelectedQuery={queriesRequest?.sysOverviewQuery}
+                      onSelectedQuery={onSelectedSystemOverviewQuery}
+                      queryType='system-overview'
+                      isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                    />
                   </Collapse>
                   <FormControlLabel
                     control={
                       <Checkbox
                         disabled={
-                          !queryTrees.knownBugsQueryTree || queryTrees.knownBugsQueryTree?.length === 0
+                          store.fetchLoadingState().sharedQueriesLoadingState ||
+                          !queryTrees.knownBugsQueryTree ||
+                          queryTrees.knownBugsQueryTree?.length === 0
                         }
                         checked={includeKnownBugs}
                         onChange={(_event, checked) => {
@@ -713,15 +718,13 @@ const ChangeTableSelector = observer(
                     timeout='auto'
                     unmountOnExit
                   >
-                    {queryTrees.knownBugsQueryTree?.length > 0 ? (
-                      <QueryTree
-                        data={queryTrees.knownBugsQueryTree}
-                        prevSelectedQuery={queriesRequest?.knownBugsQuery}
-                        onSelectedQuery={onSelectedKnownBugsQuery}
-                        queryType='known-bugs'
-                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                      />
-                    ) : null}
+                    <QueryTree
+                      data={queryTrees.knownBugsQueryTree}
+                      prevSelectedQuery={queriesRequest?.knownBugsQuery}
+                      onSelectedQuery={onSelectedKnownBugsQuery}
+                      queryType='known-bugs'
+                      isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                    />
                   </Collapse>
                 </Stack>
               </SectionCard>
