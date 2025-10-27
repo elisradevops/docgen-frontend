@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { Box, Paper, Typography, Stack, Divider, Switch, FormControlLabel } from '@mui/material';
+import OverlayLoader from '../common/OverlayLoader';
 
 const SectionCard = ({
   title,
@@ -11,6 +12,8 @@ const SectionCard = ({
   onToggle,
   children,
   compact = false,
+  loading = false,
+  loadingText = 'Loading...'
 }) => {
   const hasMeta = title || description || actions || enableToggle;
   return (
@@ -23,7 +26,10 @@ const SectionCard = ({
         flexDirection: 'column',
         gap: compact ? 1 : 1.5,
         opacity: enableToggle && !enabled ? 0.65 : 1,
+        position: 'relative',
+        overflow: 'hidden',
       }}
+      aria-busy={loading || undefined}
     >
       {hasMeta ? (
         <Stack
@@ -60,6 +66,8 @@ const SectionCard = ({
       ) : null}
       {hasMeta ? <Divider /> : null}
       <Box sx={{ opacity: enableToggle && !enabled ? 0.5 : 1 }}>{children}</Box>
+
+      <OverlayLoader loading={loading} text={loadingText} />
     </Paper>
   );
 };
@@ -73,6 +81,8 @@ SectionCard.propTypes = {
   onToggle: PropTypes.func,
   children: PropTypes.node.isRequired,
   compact: PropTypes.bool,
+  loading: PropTypes.bool,
+  loadingText: PropTypes.node,
 };
 
 export default SectionCard;

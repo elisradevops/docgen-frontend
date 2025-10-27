@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { TreeSelect } from 'antd';
-import { Alert } from '@mui/material';
+import { Alert, TextField } from '@mui/material';
 import { toast } from 'react-toastify';
 import { validateQuery } from '../../utils/queryValidation';
 
@@ -98,17 +98,16 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
     onSelectedQuery(null);
   };
 
+  const hasData = Array.isArray(data) && data.length > 0;
+
   return (
     <div>
       {showQueryNotSelectedAlert && (
-        <Alert
-          sx={{ width: 300, my: 1 }}
-          severity='info'
-        >
+        <Alert sx={{ width: 300, my: 1 }} severity='info'>
           Please select a valid query:
         </Alert>
       )}
-      {data?.length > 0 && (
+      {hasData ? (
         <TreeSelect
           showSearch
           onClear={handleOnClear}
@@ -125,6 +124,16 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
           onSelect={handleQuerySelect}
           allowClear
           loading={isLoading}
+        />
+      ) : (
+        // Render a disabled field so users get a clear affordance even when no data exists
+        <TextField
+          size='small'
+          value=''
+          disabled
+          placeholder={placeholder}
+          sx={{ width: 300, my: 1 }}
+          inputProps={{ 'aria-label': getTitle() }}
         />
       )}
     </div>

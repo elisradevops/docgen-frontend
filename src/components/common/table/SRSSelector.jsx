@@ -353,6 +353,8 @@ const SRSSelector = observer(
           enableToggle='Include'
           enabled={includeSystemRequirements}
           onToggle={(_event, checked) => setIncludeSystemRequirements(checked)}
+          loading={loading}
+          loadingText='Loading queries...'
         >
           {includeSystemRequirements ? (
             <Stack spacing={1}>
@@ -381,12 +383,14 @@ const SRSSelector = observer(
           title='Trace analysis'
           description='Optionally include cross-level requirement mappings.'
           compact
+          loading={loading}
+          loadingText='Loading queries...'
         >
           <Grid container spacing={1.5}>
             <Grid size={{ xs: 12, md: 6 }}>
               <Stack spacing={1}>
                 <FormControlLabel
-                  disabled={!queryTrees.systemToSoftwareRequirementsTree?.length}
+                  disabled={loading || !queryTrees.systemToSoftwareRequirementsTree?.length}
                   control={
                     <Checkbox
                       checked={includeSystemToSoftwareRequirements}
@@ -417,7 +421,7 @@ const SRSSelector = observer(
             <Grid size={{ xs: 12, md: 6 }}>
               <Stack spacing={1}>
                 <FormControlLabel
-                  disabled={!queryTrees.softwareToSystemRequirementsTree?.length}
+                  disabled={loading || !queryTrees.softwareToSystemRequirementsTree?.length}
                   control={
                     <Checkbox
                       checked={includeSoftwareToSystemRequirements}

@@ -17,6 +17,7 @@ import {
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import React, { useEffect, useState } from 'react';
 import QueryTree from '../common/QueryTree';
+import OverlayLoader from '../common/OverlayLoader';
 import { observer } from 'mobx-react';
 
 const defaultSelectedQueries = {
@@ -113,6 +114,7 @@ const TraceAnalysisDialog = observer(
             label='Queries'
             control={<Radio />}
             disabled={
+              store.fetchLoadingState().sharedQueriesLoadingState ||
               !queryTrees.reqTestTree ||
               !queryTrees.testReqTree ||
               !(queryTrees.reqTestTree.length > 0 || queryTrees.testReqTree.length > 0)
@@ -178,25 +180,29 @@ const TraceAnalysisDialog = observer(
           }}
         >
           <DialogTitle>Trace Analysis Selection</DialogTitle>
-          <DialogContent>
-            <Grid
-              container
-              spacing={2}
-              alignContent='center'
-              sx={{ justifyContent: 'center' }}
-            >
-              <Grid size={12}>{traceAnalysisToggles}</Grid>
-              <Grid size={12}>
-                <Collapse
-                  in={traceAnalysisRequest?.traceAnalysisMode === 'query'}
-                  timeout='auto'
-                  unmountOnExit
-                >
-                  {includeSpecialColumnsToggle}
-                  <Box>
-                    <Typography variant='subtitle1'>Select a Requirement to Test Case Query</Typography>
-                    <div>
-                      {queryTrees.reqTestTree?.length > 0 && (
+          <DialogContent aria-busy={store.fetchLoadingState().sharedQueriesLoadingState || undefined}>
+            <Box sx={{ position: 'relative' }}>
+              <OverlayLoader
+                loading={store.fetchLoadingState().sharedQueriesLoadingState}
+                text='Loading queries...'
+              />
+              <Grid
+                container
+                spacing={2}
+                alignContent='center'
+                sx={{ justifyContent: 'center' }}
+              >
+                <Grid size={12}>{traceAnalysisToggles}</Grid>
+                <Grid size={12}>
+                  <Collapse
+                    in={traceAnalysisRequest?.traceAnalysisMode === 'query'}
+                    timeout='auto'
+                    unmountOnExit
+                  >
+                    {includeSpecialColumnsToggle}
+                    <Box>
+                      <Typography variant='subtitle1'>Select a Requirement to Test Case Query</Typography>
+                      <div>
                         <QueryTree
                           data={queryTrees.reqTestTree}
                           prevSelectedQuery={traceAnalysisRequest.reqTestQuery}
@@ -204,11 +210,9 @@ const TraceAnalysisDialog = observer(
                           queryType='req-test'
                           isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
                         />
-                      )}
-                    </div>
-                    <Typography variant='subtitle1'>Select a Test Case to Requirement Query</Typography>
-                    <div>
-                      {queryTrees.testReqTree?.length > 0 && (
+                      </div>
+                      <Typography variant='subtitle1'>Select a Test Case to Requirement Query</Typography>
+                      <div>
                         <QueryTree
                           data={queryTrees.testReqTree}
                           prevSelectedQuery={traceAnalysisRequest.testReqQuery}
@@ -216,12 +220,12 @@ const TraceAnalysisDialog = observer(
                           queryType='test-req'
                           isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
                         />
-                      )}
-                    </div>
-                  </Box>
-                </Collapse>
+                      </div>
+                    </Box>
+                  </Collapse>
+                </Grid>
               </Grid>
-            </Grid>
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleClose}>OK</Button>

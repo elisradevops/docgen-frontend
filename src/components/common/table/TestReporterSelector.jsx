@@ -86,11 +86,11 @@ const TestReporterSelector = observer(
       // If the mode is not 'linked' (i.e., it's 'none' or 'query')
       if (linkedQueryRequest.linkedQueryMode !== 'linked') {
         // Remove any selected fields that are specific to the 'linked' mode
-        // Also ensure field and field.key are valid before calling endsWith
         setSelectedFields((currentFields) =>
-          currentFields.filter(
-            (field) => field && typeof field.key === 'string' && !field.key.endsWith('@linked')
-          )
+          (currentFields || []).filter((field) => {
+            const key = typeof field === 'string' ? field : field?.key;
+            return !(typeof key === 'string' && key.endsWith('@linked'));
+          })
         );
       }
     }, [linkedQueryRequest.linkedQueryMode]);
@@ -151,14 +151,26 @@ const TestReporterSelector = observer(
     const processTestSuiteSelections = useCallback(
       (dataToSave) => {
         const testSuiteList = store.getTestSuiteList;
-        if (dataToSave?.nonRecursiveTestSuiteIdList?.length > 0) {
+        const makeOption = (s) => (s ? { ...s, key: s.id, text: `${s.name} - (${s.id})` } : null);
+
+        if (Array.isArray(dataToSave?.nonRecursiveTestSuiteIdList) && dataToSave.nonRecursiveTestSuiteIdList.length > 0) {
           const validTestSuites = dataToSave.nonRecursiveTestSuiteIdList
             .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
+            .filter(Boolean)
+            .map(makeOption)
             .filter(Boolean);
 
-          if (validTestSuites.length > 0) {
-            setSelectedTestSuites(validTestSuites);
-          }
+          setSelectedTestSuites(validTestSuites);
+        } else if (Array.isArray(dataToSave?.testSuiteArray) && dataToSave.testSuiteArray.length > 0) {
+          // Fallback: if only recursive list is present, map those (UI shows non-recursive selection only)
+          const fromRecursive = dataToSave.testSuiteArray
+            .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
+            .filter(Boolean)
+            .map(makeOption)
+            .filter(Boolean);
+          // Deduplicate by key
+          const byKey = new Map(fromRecursive.map((s) => [s.key, s]));
+          setSelectedTestSuites(Array.from(byKey.values()));
         } else {
           setSelectedTestSuites([]);
         }
@@ -217,7 +229,7 @@ const TestReporterSelector = observer(
           store.sharedQueries?.acquiredTrees?.testAssociatedTree
         ) {
           const validTestAssociatedQuery = validateQuery(
-            [store.sharedQueries.acquiredTrees?.testAssociatedTree?.testAssociatedTree],
+            [store.sharedQueries.acquiredTrees.testAssociatedTree],
             linkedQueryRequest.testAssociatedQuery
           );
           if (!validTestAssociatedQuery && linkedQueryRequest.testAssociatedQuery) {
@@ -234,8 +246,24 @@ const TestReporterSelector = observer(
 
     const loadSavedData = useCallback(
       async (dataToSave) => {
+        // 1) Apply test plan and fetch its suites
         await processTestPlanSelection(dataToSave);
+
+        // 2) Wait until suites for the selected plan are loaded, then apply saved suite selections
+        const start = Date.now();
+        const timeoutMs = 7000;
+        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+        while (
+          store.loadingState?.testSuiteListLoading ||
+          !Array.isArray(store.testSuiteList) ||
+          store.testSuiteList.length === 0
+        ) {
+          if (Date.now() - start > timeoutMs) break;
+          await sleep(50);
+        }
         processTestSuiteSelections(dataToSave);
+
+        // 3) Restore selected fields, filters and queries
         processSavedFields(dataToSave);
         processFilters(dataToSave);
         processSavedQueries(dataToSave.linkedQueryRequest);
@@ -622,6 +650,8 @@ const TestReporterSelector = observer(
           <SectionCard
             title='Linked items'
             description='Choose how related work items should be pulled in.'
+            loading={store.fetchLoadingState().sharedQueriesLoadingState}
+            loadingText='Loading queries...'
           >
             <Stack spacing={1.25}>
               <Stack spacing={0.75}>
@@ -660,7 +690,11 @@ const TestReporterSelector = observer(
                     value='query'
                     label='Query'
                     control={<Radio size='small' />}
-                    disabled={!queryTrees.testAssociatedTree || queryTrees.testAssociatedTree.length === 0}
+                    disabled={
+                      store.fetchLoadingState().sharedQueriesLoadingState ||
+                      !queryTrees.testAssociatedTree ||
+                      queryTrees.testAssociatedTree.length === 0
+                    }
                   />
                 </RadioGroup>
               </Stack>
