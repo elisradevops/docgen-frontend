@@ -74,6 +74,7 @@ export function createAdaptiveListboxComponent({
   rowHeight,
   maxVisibleRows,
   overscanCount,
+  debugVirtualization = false,
 }) {
   if (!virtualize && typeof virtualizeIfOver !== 'number' && !virtualizeOnInput) return undefined;
 
@@ -86,6 +87,19 @@ export function createAdaptiveListboxComponent({
     const enableOnTyping = !!virtualizeOnInput && typingLen >= virtualizeMinInputLength;
     const bigEnough = itemCount > maxVisibleRows + 2;
     const enable = bigEnough && (!!virtualize || itemCount >= threshold || enableOnTyping);
+    if (debugVirtualization) {
+      // Helpful trace when toggling virtualization during filtering
+      // eslint-disable-next-line no-console
+      console.debug('[SmartAutocomplete] virtualization', {
+        itemCount,
+        bigEnough,
+        virtualize,
+        threshold,
+        enableOnTyping,
+        inputLen: typingLen,
+        enable,
+      });
+    }
 
     if (!enable) {
       return (

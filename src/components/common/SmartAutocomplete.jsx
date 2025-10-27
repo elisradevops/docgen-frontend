@@ -157,12 +157,15 @@ export default function SmartAutocomplete({
   virtualize = false,
   // Use a slightly taller default row height to match MUI option rows with checkboxes
   rowHeight = 48,
-  overScanCount = 5,
+  // Note: "overScanCount" kept for backward-compat; use "overscanCount" going forward
+  overscanCount: overscanCountProp,
+  overScanCount: overScanCountLegacy = 5,
   maxVisibleRows = 8,
   // Enable virtualization automatically if options.length >= this number (takes effect when provided)
   virtualizeIfOver,
   // Enable virtualization when user starts typing (based on input length)
-  virtualizeOnInput = true,
+  // Default off for stability; can be enabled per-instance
+  virtualizeOnInput = false,
   virtualizeMinInputLength = 1,
   // Log to console when virtualization toggles (dev aid)
   debugVirtualization = false,
@@ -402,6 +405,9 @@ export default function SmartAutocomplete({
   })();
 
   // Memoized adaptive Listbox component (virtualizes when needed)
+  // Prefer the correctly cased prop (overscanCount); fall back to legacy overScanCount
+  const effectiveOverscanCount =
+    typeof overscanCountProp === 'number' ? overscanCountProp : overScanCountLegacy;
   const VirtualizedListboxComponent = useMemo(
     () =>
       // Disable virtualization when grouping is active to ensure perfect alignment
@@ -413,7 +419,7 @@ export default function SmartAutocomplete({
         inputForFiltering,
         rowHeight,
         maxVisibleRows,
-        overScanCount,
+        overscanCount: effectiveOverscanCount,
         debugVirtualization,
       }),
     [
@@ -425,7 +431,7 @@ export default function SmartAutocomplete({
       inputForFiltering,
       rowHeight,
       maxVisibleRows,
-      overScanCount,
+      effectiveOverscanCount,
       debugVirtualization,
     ]
   );
