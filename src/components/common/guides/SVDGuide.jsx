@@ -64,6 +64,13 @@ const SVDGuide = () => {
           />
         </ListItem>
 
+        <ListItem>
+          <ListItemText
+            primary='Comparison Mode'
+            secondary={'Choose how releases are compared in the selected range. Consecutive (fast): compares only adjacent releases and is recommended when artifacts/services exist in most releases. All pairs (slow): compares every possible pair; use when artifacts/services appear only in non-adjacent releases and you want net changes across skipped versions. Note: All pairs can be much slower and may show repeated changes across multiple pairs.'}
+          />
+        </ListItem>
+
         <ListItemButton onClick={() => setOpenBaseData((prev) => !prev)}>
           <ListItemIcon>{openBaseData ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText

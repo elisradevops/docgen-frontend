@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SmartAutocomplete from '../SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
-import { Grid, Button } from '@mui/material';
+import { Grid, Button, FormLabel, RadioGroup, Radio, FormControlLabel, Typography, Stack, Tooltip, IconButton, Box } from '@mui/material';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
 const defaultSelectedItem = {
   key: '',
   text: '',
@@ -28,6 +29,7 @@ const ReleaseSelector = observer(
     const [selectedReleaseHistoryStart, setSelectedReleaseHistoryStart] = useState(defaultSelectedItem);
     const [selectedReleaseHistoryEnd, setSelectedReleaseHistoryEnd] = useState(defaultSelectedItem);
     const [endPointReleaseHistory, setEndPointRunHistory] = useState([]);
+    const [compareMode, setCompareMode] = useState('consecutive');
 
     const handleStartPointReleaseSelect = useCallback(
       (value, releaseDefinitionHistoryData = null) => {
@@ -195,6 +197,7 @@ const ReleaseSelector = observer(
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
             workItemFilterOptions,
+            compareMode,
           },
         },
         contentControlIndex
@@ -213,6 +216,7 @@ const ReleaseSelector = observer(
       includeUnlinkedCommits,
       contentControlIndex,
       workItemFilterOptions,
+      compareMode,
     ]);
 
     useEffect(() => {
@@ -331,8 +335,39 @@ const ReleaseSelector = observer(
                 }}
                 value={selectedReleaseHistoryEnd}
               />
+
             </Grid>
           ) : null}
+        </Grid>
+
+        <Grid container spacing={2} alignItems='flex-start' sx={{ mt: 0.5 }}>
+          <Grid size={12}>
+            <Stack spacing={1.25} sx={{ width: '100%' }}>
+              <FormLabel sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                Comparison mode
+                <Tooltip
+                  placement='right'
+                  arrow
+                  componentsProps={{ tooltip: { sx: { maxWidth: 560 } } }}
+                  title={
+                    <Box sx={{ fontSize: '0.95rem', lineHeight: 1.6, width: 520 }}>
+                      <b>Consecutive (fast):</b> Compares only adjacent releases. Best when artifacts/services exist in most releases.
+                      <br />
+                      <b>All pairs (slow):</b> Compares every pair. Use for non-adjacent presence; slower and may repeat changes.
+                    </Box>
+                  }
+                >
+                  <IconButton size='small' aria-label='Comparison mode help'>
+                    <InfoOutlined fontSize='inherit' />
+                  </IconButton>
+                </Tooltip>
+              </FormLabel>
+              <RadioGroup row value={compareMode} onChange={(e) => setCompareMode(e.target.value)} name='compare-mode'>
+                <FormControlLabel value='consecutive' control={<Radio />} label='Consecutive (fast)' />
+                <FormControlLabel value='allPairs' control={<Radio />} label='All pairs (slow)' />
+              </RadioGroup>
+            </Stack>
+          </Grid>
         </Grid>
 
         {editingMode ? (
