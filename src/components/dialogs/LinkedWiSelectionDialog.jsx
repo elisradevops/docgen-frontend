@@ -11,13 +11,14 @@ import {
   Grid,
   Radio,
   RadioGroup,
+  Tooltip,
+  FormControl,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
-import LinkIcon from '@mui/icons-material/Link';
 import { observer } from 'mobx-react';
 import { CiLink } from 'react-icons/ci';
 const defaultLinkedWiOptions = { isEnabled: false, linkedWiTypes: 'both', linkedWiRelationship: 'both' };
-const LinkedWiSelectionDialog = observer(({ prevOptions, setOptions }) => {
+const LinkedWiSelectionDialog = observer(({ prevOptions, setOptions, buttonLabel = 'Per-change linked work items', buttonVariant = 'outlined', buttonSize = 'small', tooltipTitle = 'Configure per-change linked work items' }) => {
   const [openDialog, setOpenDialog] = useState(false);
   const [options, setOptionsState] = useState(prevOptions);
   const handleClickOpen = () => {
@@ -33,87 +34,87 @@ const LinkedWiSelectionDialog = observer(({ prevOptions, setOptions }) => {
   };
 
   const linkedWiTypesElements = (
-    <div>
-      <FormLabel id='linked-item-type'>Linked Work Item Types to Fetch</FormLabel>
+    <FormControl component='fieldset' disabled={!options.isEnabled} sx={{ minWidth: 0 }}>
+      <FormLabel id='linked-item-type'>Item types</FormLabel>
       <RadioGroup
-        defaultValue={'none'}
         name='linked-item-type'
-        value={prevOptions?.linkedWiTypes}
+        value={options.linkedWiTypes}
         onChange={(event) => {
-          setOptions((prev) => ({ ...prev, linkedWiTypes: event.target.value }));
+          const value = event.target.value;
+          setOptionsState((prev) => ({ ...prev, linkedWiTypes: value }));
+          setOptions((prev) => ({ ...prev, linkedWiTypes: value }));
         }}
       >
         <FormControlLabel
           value='both'
           label='Both'
-          control={<Radio />}
+          control={<Radio size='small' />}
         />
         <FormControlLabel
           value='reqOnly'
           label='Requirement Only'
-          control={<Radio />}
+          control={<Radio size='small' />}
         />
         <FormControlLabel
           value='featureOnly'
           label='Feature Only'
-          control={<Radio />}
+          control={<Radio size='small' />}
         />
       </RadioGroup>
-    </div>
+    </FormControl>
   );
 
   const linkedWiRelationshipElements = (
-    <div>
+    <FormControl component='fieldset' disabled={!options.isEnabled} sx={{ minWidth: 0 }}>
       <FormLabel id='linked-item-relationship'>Relationship</FormLabel>
       <RadioGroup
-        defaultValue={'Affects'}
         name='linked-item-relationship'
         value={options.linkedWiRelationship}
         onChange={(event) => {
-          setOptions((prev) => ({ ...prev, linkedWiRelationship: event.target.value }));
+          const value = event.target.value;
+          setOptionsState((prev) => ({ ...prev, linkedWiRelationship: value }));
+          setOptions((prev) => ({ ...prev, linkedWiRelationship: value }));
         }}
       >
         <FormControlLabel
           value='both'
           label='Both'
-          control={<Radio />}
+          control={<Radio size='small' />}
         />
         <FormControlLabel
           value='affectsOnly'
           label='Affects Only'
-          control={<Radio />}
+          control={<Radio size='small' />}
         />
         <FormControlLabel
           value='coversOnly'
           label='Covers Only'
-          control={<Radio />}
+          control={<Radio size='small' />}
         />
       </RadioGroup>
-    </div>
+    </FormControl>
   );
 
   return (
     <>
-      <Button
-        variant='outlined'
-        color='secondary'
-        onClick={handleClickOpen}
-        startIcon={<CiLink />}
-      >
-        Linked Work Item Selection
-      </Button>
+      <Tooltip title={tooltipTitle} arrow>
+        <Button
+          variant={buttonVariant}
+          size={buttonSize}
+          color='secondary'
+          onClick={handleClickOpen}
+          startIcon={<CiLink />}
+        >
+          {buttonLabel}
+        </Button>
+      </Tooltip>
       <Dialog
         open={openDialog}
         onClose={handleClose}
       >
-        <DialogTitle>Linked Work Item Selection</DialogTitle>
-        <DialogContent>
-          <Grid
-            container
-            spacing={2}
-            alignItems={'center'}
-            sx={{ justifyContent: 'center' }}
-          >
+        <DialogTitle>Linked work items (per change)</DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={2} alignItems={'flex-start'}>
             <Grid size={12}>
               <FormControlLabel
                 control={
@@ -121,35 +122,23 @@ const LinkedWiSelectionDialog = observer(({ prevOptions, setOptions }) => {
                     checked={options.isEnabled}
                     onChange={(event, checked) => {
                       if (!checked) {
+                        setOptionsState(defaultLinkedWiOptions);
                         setOptions(defaultLinkedWiOptions);
                       } else {
+                        setOptionsState((prev) => ({ ...prev, isEnabled: true }));
                         setOptions((prev) => ({ ...prev, isEnabled: true }));
                       }
                     }}
                   />
                 }
-                label='Include Linked WI'
+                label='Enable per-change linked items'
               />
             </Grid>
             <Grid size={12}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  ml: 3,
-                  visibility: `${!options.isEnabled ? 'collapse' : 'visible'}`,
-                }}
-              >
-                <Grid
-                  container
-                  spacing={1}
-                  alignContent={'center'}
-                  justifyContent={'center'}
-                >
-                  <Grid size={8}>{linkedWiTypesElements}</Grid>
-                  <Grid size={4}>{linkedWiRelationshipElements}</Grid>
-                </Grid>
-              </Box>
+              <Grid container spacing={2} alignItems={'flex-start'}>
+                <Grid size={6}>{linkedWiTypesElements}</Grid>
+                <Grid size={6}>{linkedWiRelationshipElements}</Grid>
+              </Grid>
             </Grid>
           </Grid>
         </DialogContent>

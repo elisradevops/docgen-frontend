@@ -334,22 +334,22 @@ const ChangeTableSelector = observer(
       if (linkedWiOptions?.isEnabled) {
         if (linkedWiOptions.linkedWiTypes !== 'both') {
           settings.push(
-            `Include ${
+            `Per change: include ${
               linkedWiOptions.linkedWiTypes !== 'reqOnly' ? 'Feature Only' : 'Requirement Only'
-            } linked items`
+            }`
           );
         } else {
-          settings.push('Include both Feature and Requirement linked items');
+          settings.push('Per change: include both Feature and Requirement');
         }
 
         if (linkedWiOptions?.linkedWiRelationship !== 'both') {
           settings.push(
-            `Include ${
+            `Per change: include ${
               linkedWiOptions.linkedWiRelationship !== 'affectsOnly' ? 'Affects Only' : 'Covers Only'
-            } Related items`
+            } related items`
           );
         } else {
-          settings.push('Include both Affects and Covers related items');
+          settings.push('Per change: include both Affects and Covers related items');
         }
       }
 
@@ -561,7 +561,7 @@ const ChangeTableSelector = observer(
                         }}
                       />
                     }
-                    label='Filter by work item type and state'
+                    label='Filter changes by work item type and state'
                   />
                   <Collapse
                     in={includeWorkItemFilter}
@@ -750,11 +750,16 @@ const ChangeTableSelector = observer(
 
               <SectionCard
                 title='Linked work items'
+                description='Fetch linked Requirements/Features for each included change.'
                 compact
                 actions={
                   <LinkedWiSelectionDialog
                     prevOptions={linkedWiOptions}
                     setOptions={setLinkedWiOptions}
+                    buttonLabel='Configure'
+                    buttonVariant='text'
+                    buttonSize='small'
+                    tooltipTitle='Configure per-change linked work items'
                   />
                 }
               >
@@ -762,7 +767,7 @@ const ChangeTableSelector = observer(
                   <SettingsDisplay
                     title='Configured values'
                     settings={linkedWiSummary}
-                    emptyMessage='No linked work item settings enabled.'
+                    emptyMessage='Per-change linked work items disabled.'
                     boxProps={{ p: 0, bgcolor: 'transparent' }}
                   />
                 </Stack>
