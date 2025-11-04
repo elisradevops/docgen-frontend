@@ -54,6 +54,7 @@ const ChangeTableSelector = observer(
     const [selectedWorkItemTypes, setSelectedWorkItemTypes] = useState([]);
     const [selectedWorkItemStates, setSelectedWorkItemStates] = useState([]);
     const [linkedWiOptions, setLinkedWiOptions] = useState(defaultLinkedWiOptions);
+    const [isRestoring, setIsRestoring] = useState(false);
 
     const workItemTypeOptions = useMemo(
       () =>
@@ -291,31 +292,28 @@ const ChangeTableSelector = observer(
       };
     }, [selectedType, store, contentControlIndex]);
 
-    //Reading the loaded selected favorite data
+    // Reading the loaded selected favorite data
     useEffect(() => {
-      // Early return if no favorite selected
       const selectedFavorite = store.selectedFavorite;
-      if (!selectedFavorite?.dataToSave) return;
+      if (!selectedFavorite?.dataToSave) {
+        setIsRestoring(false);
+        return;
+      }
 
       const { dataToSave } = selectedFavorite;
-
+      setIsRestoring(true);
       try {
-        // Extract and process system overview query data
         processSystemOverviewData(dataToSave.systemOverviewQuery);
-
         processLinkedWiOptions(dataToSave.linkedWiOptions);
         processWorkItemFilterOptions(dataToSave.workItemFilterOptions);
         setIncludeCommittedBy(dataToSave.includeCommittedBy || false);
         setIncludeUnlinkedCommits(dataToSave.includeUnlinkedCommits || false);
-
-        // Process range type selection
         processRangeTypeSelection(dataToSave);
-
-        // Set the loaded data
         setLoadedData(dataToSave);
       } catch (error) {
         toast.error(`Error processing favorite data: ${error?.message ?? 'Unknown error'}`);
         setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
+        setIsRestoring(false);
       }
     }, [
       processLinkedWiOptions,
@@ -323,7 +321,7 @@ const ChangeTableSelector = observer(
       processRangeTypeSelection,
       processSystemOverviewData,
       store.selectedFavorite,
-    ]); // Only depend on the selected favorite
+    ]);
 
     const handleNewFileUploaded = (fileObject) => {
       if (fileObject) {
@@ -423,6 +421,8 @@ const ChangeTableSelector = observer(
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
                     workItemFilterOptions={workItemFilterOptionsPayload}
+                    isRestoring={isRestoring}
+                    onRestored={() => setIsRestoring(false)}
                   />
                 ) : null}
                 {selectedType?.type === 'date' ? (
@@ -440,6 +440,8 @@ const ChangeTableSelector = observer(
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
                     workItemFilterOptions={workItemFilterOptionsPayload}
+                    isRestoring={isRestoring}
+                    onRestored={() => setIsRestoring(false)}
                   />
                 ) : null}
                 {selectedType?.type === 'pipeline' ? (
@@ -456,6 +458,8 @@ const ChangeTableSelector = observer(
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
                     workItemFilterOptions={workItemFilterOptionsPayload}
+                    isRestoring={isRestoring}
+                    onRestored={() => setIsRestoring(false)}
                   />
                 ) : null}
                 {selectedType?.type === 'release' ? (
@@ -472,6 +476,8 @@ const ChangeTableSelector = observer(
                     includeCommittedBy={includeCommittedBy}
                     includeUnlinkedCommits={includeUnlinkedCommits}
                     workItemFilterOptions={workItemFilterOptionsPayload}
+                    isRestoring={isRestoring}
+                    onRestored={() => setIsRestoring(false)}
                   />
                 ) : null}
                 {selectedType?.type === 'pullrequest' ? (

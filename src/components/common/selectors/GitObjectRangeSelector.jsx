@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Grid, Divider, Typography, Button, ButtonGroup, Box } from '@mui/material';
 import SmartAutocomplete from '../SmartAutocomplete';
 import { observer } from 'mobx-react';
@@ -34,6 +34,8 @@ const GitObjectRangeSelector = observer(
     includeCommittedBy,
     includeUnlinkedCommits,
     workItemFilterOptions,
+    isRestoring,
+    onRestored,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState(defaultItem);
 
@@ -44,6 +46,7 @@ const GitObjectRangeSelector = observer(
     const [sourceLoading, setSourceLoading] = useState(false);
     const [targetLoading, setTargetLoading] = useState(false);
     // Sorting toggle is now internal to SmartAutocomplete
+    const restoreTokenRef = useRef(null);
 
     const UpdateDocumentRequestObject = useCallback(() => {
       if (selectedRepo.text) {
@@ -289,6 +292,7 @@ const GitObjectRangeSelector = observer(
     useEffect(() => {
       if (
         editingMode === false &&
+        !isRestoring &&
         selectedRepo?.key &&
         gitRefState.source.gitObjType.key &&
         gitRefState.source.gitObjRef.key &&
@@ -297,14 +301,25 @@ const GitObjectRangeSelector = observer(
       ) {
         UpdateDocumentRequestObject();
       }
-    }, [selectedRepo, gitRefState, editingMode, UpdateDocumentRequestObject, store?.attachmentWikiUrl]);
+    }, [
+      selectedRepo,
+      gitRefState,
+      editingMode,
+      UpdateDocumentRequestObject,
+      store?.attachmentWikiUrl,
+      isRestoring,
+    ]);
 
-    //Reading the loaded selected favorite data
     useEffect(() => {
       if (!dataToRead) return;
-
-      processGitData(dataToRead);
-    }, [dataToRead, processGitData, store.repoList]);
+      const token = `${dataToRead?.repoId}|${dataToRead?.from?.type}|${dataToRead?.from?.ref}|${dataToRead?.to?.type}|${dataToRead?.to?.ref}`;
+      if (restoreTokenRef.current === token) return;
+      (async () => {
+        await processGitData(dataToRead);
+        restoreTokenRef.current = token;
+        onRestored && onRestored();
+      })();
+    }, [dataToRead, store.repoList, processGitData, onRestored]);
 
     useEffect(() => {
       // Reset the git ref state when a new repo is selected

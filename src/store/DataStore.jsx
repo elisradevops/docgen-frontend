@@ -1,4 +1,4 @@
-import { observable, action, makeObservable, computed } from 'mobx';
+import { observable, action, makeObservable, computed, runInAction } from 'mobx';
 import { configureLogger, makeLoggable } from 'mobx-log';
 import RestApi, { setAuthErrorHandler } from './actions/AzureDevopsRestApi';
 import cookies from 'js-cookies';
@@ -99,6 +99,7 @@ class DocGenDataStore {
       setContextName: action,
       fetchLoadingState: action,
       uploadFile: action,
+      addContentControlToDocument: action,
       fetchUserDetails: action,
       testCredentials: action,
       setCredentials: action,
@@ -106,6 +107,7 @@ class DocGenDataStore {
       deleteFavorite: action,
       saveFavorite: action,
       loadFavorite: action,
+      clearLoadedFavorite: action,
       setAttachmentWiki: action,
       // validation actions
       setValidationState: action,
@@ -778,7 +780,9 @@ class DocGenDataStore {
         logger.error(err.stack);
       })
       .finally(() => {
-        this.loadingState.releaseDefinitionLoadingState = false;
+        runInAction(() => {
+          this.loadingState.releaseDefinitionLoadingState = false;
+        });
       });
   }
 
@@ -836,7 +840,9 @@ class DocGenDataStore {
       logger.error('Error stack:');
       logger.error(err.stack);
     } finally {
-      this.loadingState.releaseDefinitionLoadingState = false;
+      runInAction(() => {
+        this.loadingState.releaseDefinitionLoadingState = false;
+      });
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 import SmartAutocomplete from '../SmartAutocomplete';
 import { observer } from 'mobx-react';
@@ -23,6 +23,8 @@ const ReleaseSelector = observer(
     includeCommittedBy,
     includeUnlinkedCommits,
     workItemFilterOptions,
+    isRestoring,
+    onRestored,
   }) => {
     const [releaseDefinitionHistory, setReleaseDefinitionHistory] = useState([]);
     const [selectedReleaseDefinition, setSelectedReleaseDefinition] = useState(defaultSelectedItem);
@@ -30,6 +32,7 @@ const ReleaseSelector = observer(
     const [selectedReleaseHistoryEnd, setSelectedReleaseHistoryEnd] = useState(defaultSelectedItem);
     const [endPointReleaseHistory, setEndPointRunHistory] = useState([]);
     const [compareMode, setCompareMode] = useState('consecutive');
+    const restoreTokenRef = useRef(null);
 
     const handleStartPointReleaseSelect = useCallback(
       (value, releaseDefinitionHistoryData = null) => {
@@ -103,11 +106,10 @@ const ReleaseSelector = observer(
 
         const historyData = await store.fetchReleaseDefinitionHistory(value.key);
         setReleaseDefinitionHistory(historyData || []);
-        updateContextName(value.text, selectedReleaseHistoryEnd.text);
         setSelectedReleaseDefinition(value);
         return historyData || [];
       },
-      [store, selectedReleaseHistoryEnd.text, updateContextName]
+      [store]
     );
 
     const validateReleaseExists = useCallback(
@@ -139,14 +141,21 @@ const ReleaseSelector = observer(
             releaseHistoryData
           );
 
-          processEndReleaseSelection(data.to, data.from, endReleaseExists, releaseHistoryData);
+          if (endReleaseExists && data.to > data.from) {
+            const selectedEndRelease = releaseHistoryData.find((release) => release.id === data.to);
+            setSelectedReleaseHistoryEnd({ key: selectedEndRelease.id, text: selectedEndRelease.name });
+            // Update context name when both release definition and end release are known
+            updateContextName(data?.selectedRelease?.text, selectedEndRelease?.name);
+          } else {
+            processEndReleaseSelection(data.to, data.from, endReleaseExists, releaseHistoryData);
+          }
         } else {
           toast.warn(`Start release with ID ${data.from} not found in release history data`);
           handleStartPointReleaseSelect(defaultSelectedItem, releaseHistoryData);
           setSelectedReleaseHistoryEnd(defaultSelectedItem);
         }
       },
-      [handleStartPointReleaseSelect, processEndReleaseSelection]
+      [handleStartPointReleaseSelect, processEndReleaseSelection, updateContextName]
     );
 
     const loadSavedData = useCallback(
@@ -172,11 +181,16 @@ const ReleaseSelector = observer(
       [handleOnReleaseSelect, processReleaseSelections, validateReleaseExists]
     );
 
-    //Reading the loaded selected favorite data
     useEffect(() => {
       if (!dataToRead) return;
-      loadSavedData(dataToRead);
-    }, [dataToRead, loadSavedData, store.releaseDefinitionList]);
+      const token = `${dataToRead?.selectedRelease?.key}|${dataToRead?.from}|${dataToRead?.to}`;
+      if (restoreTokenRef.current === token) return;
+      (async () => {
+        await loadSavedData(dataToRead);
+        restoreTokenRef.current = token;
+        onRestored && onRestored();
+      })();
+    }, [dataToRead, store.releaseDefinitionList, loadSavedData, onRestored]);
 
     const UpdateDocumentRequestObject = useCallback(() => {
       addToDocumentRequestObject(
@@ -220,7 +234,7 @@ const ReleaseSelector = observer(
     ]);
 
     useEffect(() => {
-      if (editingMode === false) {
+      if (editingMode === false && !isRestoring) {
         UpdateDocumentRequestObject();
       }
     }, [
@@ -231,6 +245,7 @@ const ReleaseSelector = observer(
       editingMode,
       UpdateDocumentRequestObject,
       includeUnlinkedCommits,
+      isRestoring,
     ]);
 
     useEffect(() => {
