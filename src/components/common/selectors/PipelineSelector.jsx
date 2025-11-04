@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SmartAutocomplete from '../SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
@@ -23,12 +23,15 @@ const PipelineSelector = observer(
     includeCommittedBy,
     includeUnlinkedCommits,
     workItemFilterOptions,
+    isRestoring,
+    onRestored,
   }) => {
     const [pipelineRunHistory, setPipelineRunHistory] = useState([]);
     const [selectedPipeline, setSelectedPipeline] = useState(defaultSelectedItem);
     const [endPointRunHistory, setEndPointRunHistory] = useState([]);
     const [selectedPipelineRunStart, setSelectedPipelineRunStart] = useState(defaultSelectedItem);
     const [selectedPipelineRunEnd, setSelectedPipelineRunEnd] = useState(defaultSelectedItem);
+    const restoreTokenRef = useRef(null);
 
     const UpdateDocumentRequestObject = useCallback(() => {
       addToDocumentRequestObject(
@@ -70,7 +73,7 @@ const PipelineSelector = observer(
     ]);
 
     useEffect(() => {
-      if (editingMode === false) {
+      if (editingMode === false && !isRestoring) {
         UpdateDocumentRequestObject();
       }
     }, [
@@ -81,6 +84,7 @@ const PipelineSelector = observer(
       store.attachmentWikiUrl,
       editingMode,
       UpdateDocumentRequestObject,
+      isRestoring,
     ]);
 
     // Validation: pipeline, start and end must be selected; end must be after start
@@ -253,11 +257,16 @@ const PipelineSelector = observer(
       [handleOnPipelineSelect, processRunSelections, validatePipelineExists]
     );
 
-    //Reading the loaded selected favorite data
     useEffect(() => {
       if (!dataToRead) return;
-      loadSavedData(dataToRead);
-    }, [dataToRead, store.pipelineList, loadSavedData]);
+      const token = `${dataToRead?.selectedPipeline?.key}|${dataToRead?.from}|${dataToRead?.to}`;
+      if (restoreTokenRef.current === token) return;
+      (async () => {
+        await loadSavedData(dataToRead);
+        restoreTokenRef.current = token;
+        onRestored && onRestored();
+      })();
+    }, [dataToRead, store.pipelineList, loadSavedData, onRestored]);
 
     return (
       <div>

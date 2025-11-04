@@ -47,14 +47,14 @@ const SVDGuide = () => {
         </ListItem>
         <ListItem>
           <ListItemText
-            primary='Linked Work Item Selection'
-            secondary='Configure which linked requirements or features are included using the dialog.'
+            primary='Linked work items (per change)'
+            secondary='For each change included, fetch its linked Requirements and/or Features according to your selection. This does not affect which changes are included; it only controls which linked items are pulled for each change.'
           />
         </ListItem>
         <ListItem>
           <ListItemText
             primary='Filter by Work Item Type/State'
-            secondary='Enable the checkbox to activate filtering. By default all types and states are included. Use the multi-select pickers to narrow down the list, or the quick “Select all” / “Clear” actions to adjust selections.'
+            secondary='Enable to restrict which changes are included based on their linked work item types and states. This filtering applies to the changes themselves (global), not to the per-change linked items.'
           />
         </ListItem>
         <ListItem>

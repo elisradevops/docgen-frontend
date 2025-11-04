@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SmartAutocomplete from '../SmartAutocomplete';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -23,6 +23,8 @@ const CommitDateSelector = observer(
     includeCommittedBy,
     includeUnlinkedCommits,
     workItemFilterOptions,
+    isRestoring,
+    onRestored,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
       key: '',
@@ -40,6 +42,8 @@ const CommitDateSelector = observer(
 
     const [includePullRequests, setIncludePullRequests] = useState(false);
     const [includeChangeDescription, setIncludeChangeDescription] = useState(false);
+
+    const restoreTokenRef = useRef(null);
 
     const UpdateDocumentRequestObject = React.useCallback(() => {
       if (selectedRepo.text) {
@@ -94,7 +98,7 @@ const CommitDateSelector = observer(
     ]);
 
     useEffect(() => {
-      if (editingMode === false) {
+      if (editingMode === false && !isRestoring) {
         UpdateDocumentRequestObject();
       }
     }, [
@@ -110,6 +114,7 @@ const CommitDateSelector = observer(
       store.attachmentWikiUrl,
       UpdateDocumentRequestObject,
       workItemFilterOptions,
+      isRestoring,
     ]);
 
     // Validation: repo and valid date range (end >= start)
@@ -146,30 +151,28 @@ const CommitDateSelector = observer(
       };
     }, [selectedRepo?.key, selectedStartDate, selectedEndDate, store, contentControlIndex]);
 
-    //Reading the loaded selected favorite data
     useEffect(() => {
-      async function fetchData() {
-        if (dataToRead) {
-          setSelectedRepo({
-            key: dataToRead.repoId,
-            text: repoList.find((repo) => repo.id === dataToRead.repoId).name,
-          });
-
-          await store.fetchGitRepoBranches(dataToRead.repoId);
-          let splitName = dataToRead.branchName.split('/');
-          let indexAfterHeads = splitName.indexOf('heads') + 1;
-          let elementsAfterHeads = splitName.slice(indexAfterHeads).join('/');
-          setSelectedBranch({ key: elementsAfterHeads, text: elementsAfterHeads });
-
-          setSelectedStartDate(new Date(dataToRead.from));
-          setSelectedEndDate(new Date(dataToRead.to));
-
-          setIncludePullRequests(dataToRead.includePullRequests);
-          setIncludeChangeDescription(dataToRead.includeChangeDescription);
-        }
-      }
-      fetchData();
-    }, [dataToRead, store, repoList]);
+      if (!dataToRead) return;
+      const token = `${dataToRead?.repoId}|${dataToRead?.branchName}|${dataToRead?.from}|${dataToRead?.to}`;
+      if (restoreTokenRef.current === token) return;
+      (async () => {
+        setSelectedRepo({
+          key: dataToRead.repoId,
+          text: repoList.find((repo) => repo.id === dataToRead.repoId).name,
+        });
+        await store.fetchGitRepoBranches(dataToRead.repoId);
+        let splitName = dataToRead.branchName.split('/');
+        let indexAfterHeads = splitName.indexOf('heads') + 1;
+        let elementsAfterHeads = splitName.slice(indexAfterHeads).join('/');
+        setSelectedBranch({ key: elementsAfterHeads, text: elementsAfterHeads });
+        setSelectedStartDate(new Date(dataToRead.from));
+        setSelectedEndDate(new Date(dataToRead.to));
+        setIncludePullRequests(dataToRead.includePullRequests);
+        setIncludeChangeDescription(dataToRead.includeChangeDescription);
+        restoreTokenRef.current = token;
+        onRestored && onRestored();
+      })();
+    }, [dataToRead, store, repoList, onRestored]);
 
     return (
       <div>
