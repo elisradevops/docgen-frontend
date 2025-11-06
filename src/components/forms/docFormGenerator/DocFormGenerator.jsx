@@ -32,7 +32,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       store.setSelectedTemplate(null);
       store.clearLoadedFavorite();
       // Clear validation states when switching doc types (Edge 92 compatibility)
-      store.validationStates = {};
+      store.clearAllValidationStates();
       setLoadingForm(true);
       store
         .fetchDocFormsTemplates(docType)

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Transfer } from 'antd';
 import {
   Box,
@@ -18,6 +18,14 @@ import QueryTree from '../QueryTree';
 import { validateQuery } from '../../../utils/queryValidation';
 import { toJS } from 'mobx';
 import SectionCard from '../../layout/SectionCard';
+import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
+import RestoreBackdrop from '../RestoreBackdrop';
+import { suiteIdCollection } from '../../../utils/sessionPersistence';
+
+/**
+ * TestReporterSelector
+ * Manages test plan/suites, fields, filters, and linked query with session/favorite restore.
+ */
 const defaultItem = {
   key: '',
   text: '',
@@ -61,6 +69,9 @@ const TestReporterSelector = observer(
     const [runStepFilterMode, setRunStepFilterMode] = useState('passed');
     const [selectedFields, setSelectedFields] = useState([]);
     const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
+
+    // isRestoring/restoreReady provided by useTabStatePersistence
+    const savedDataRef = useRef(null);
 
     const fieldsToSelect = useMemo(() => {
       const customFields =
@@ -138,12 +149,14 @@ const TestReporterSelector = observer(
 
     const processTestPlanSelection = useCallback(
       async (dataToSave) => {
-        const testPlan = store.testPlansList.find((testPlan) => testPlan.id === dataToSave.testPlanId);
+        const testPlanId = dataToSave?.testPlanId;
+        if (!testPlanId) return;
+        const testPlan = store.testPlansList.find((testPlan) => testPlan.id === testPlanId);
         if (!testPlan) {
-          toast.warn(`Test plan with ID ${dataToSave.testPlanId} not found`);
+          toast.warn(`Test plan with ID ${testPlanId} not found`);
           return;
         }
-        await handleTestPlanChanged({ key: dataToSave.testPlanId, text: testPlan.name });
+        await handleTestPlanChanged({ key: testPlanId, text: testPlan.name });
       },
       [store.testPlansList, handleTestPlanChanged]
     );
@@ -244,7 +257,7 @@ const TestReporterSelector = observer(
       [store.sharedQueries]
     );
 
-    const loadSavedData = useCallback(
+    const applySavedData = useCallback(
       async (dataToSave) => {
         // 1) Apply test plan and fetch its suites
         await processTestPlanSelection(dataToSave);
@@ -267,6 +280,8 @@ const TestReporterSelector = observer(
         processSavedFields(dataToSave);
         processFilters(dataToSave);
         processSavedQueries(dataToSave.linkedQueryRequest);
+
+        savedDataRef.current = dataToSave;
       },
       [
         processFilters,
@@ -274,13 +289,32 @@ const TestReporterSelector = observer(
         processTestPlanSelection,
         processTestSuiteSelections,
         processSavedQueries,
+        store.loadingState?.testSuiteListLoading,
+        store.testSuiteList,
       ]
     );
 
-    useEffect(() => {
-      if (!store.selectedFavorite?.dataToSave) return;
-      loadSavedData(store.selectedFavorite.dataToSave);
-    }, [loadSavedData, store.selectedFavorite]);
+    const resetLocalState = useCallback(() => {
+      setSelectedTestPlan(defaultItem);
+      setSelectedTestSuites([]);
+      setAllowCrossTestPlan(false);
+      setErrorFilterMode('none');
+      setAllowGrouping(false);
+      setEnableRunTestCaseFilter(false);
+      setRunFilterMode('passed');
+      setEnableRunStepStatusFilter(false);
+      setRunStepFilterMode('passed');
+      setSelectedFields([]);
+      setLinkedQueryRequest(defaultSelectedQueries);
+      savedDataRef.current = null;
+    }, []);
+
+    const { isRestoring, restoreReady } = useTabStatePersistence({
+      store,
+      contentControlIndex,
+      applySavedData,
+      resetLocalState,
+    });
 
     // Validation: Both Test plan and at least one test suite must be selected
     useEffect(() => {
@@ -313,26 +347,9 @@ const TestReporterSelector = observer(
       const updateTestReporterRequestObject = () => {
         let testSuiteIdList = undefined;
         let nonRecursiveTestSuiteIdList = undefined;
-
-        testSuiteIdList = [];
-        nonRecursiveTestSuiteIdList = [];
-        // Function to recursively add children suites
-        const addChildrenSuites = (suiteId) => {
-          const suite = store.testSuiteList.find((suite) => suite.id === suiteId);
-          if (suite && !testSuiteIdList.includes(suiteId)) {
-            testSuiteIdList.push(suiteId);
-            const children = store.testSuiteList.filter((child) => child.parent === suiteId);
-            children.forEach((child) => {
-              addChildrenSuites(child.id);
-            });
-          }
-        };
-
-        // Add suites selected and their children
-        selectedTestSuites.forEach((suite) => {
-          nonRecursiveTestSuiteIdList.push(suite.id);
-          addChildrenSuites(suite.id);
-        });
+        const { testSuiteArray, nonRecursiveTestSuiteIdList: nonRec } = suiteIdCollection(selectedTestSuites, store);
+        testSuiteIdList = testSuiteArray;
+        nonRecursiveTestSuiteIdList = nonRec;
 
         addToDocumentRequestObject(
           {
@@ -358,7 +375,9 @@ const TestReporterSelector = observer(
           contentControlIndex
         );
       };
-      updateTestReporterRequestObject();
+      if (!isRestoring && restoreReady) {
+        updateTestReporterRequestObject();
+      }
     }, [
       selectedTestPlan,
       selectedTestSuites,
@@ -374,7 +393,17 @@ const TestReporterSelector = observer(
       allowGrouping,
       errorFilterMode,
       linkedQueryRequest,
+      isRestoring,
+      restoreReady,
+      store,
     ]);
+
+    // Re-apply query-dependent parts when shared queries arrive
+    useEffect(() => {
+      if (!savedDataRef.current) return;
+      if (!store?.sharedQueries?.acquiredTrees) return;
+      processSavedQueries(savedDataRef.current.linkedQueryRequest);
+    }, [store.sharedQueries, processSavedQueries]);
 
     const onQuerySelected = useCallback((query) => {
       setLinkedQueryRequest((prev) => ({ ...prev, testAssociatedQuery: query }));
@@ -420,6 +449,7 @@ const TestReporterSelector = observer(
     // ].filter(Boolean);
 
     return (
+      <>
       <Collapse
         in={selectedTeamProject?.key !== ''}
         timeout='auto'
@@ -755,6 +785,8 @@ const TestReporterSelector = observer(
           </SectionCard>
         </Stack>
       </Collapse>
+      <RestoreBackdrop open={!!isRestoring} />
+      </>
     );
   }
 );

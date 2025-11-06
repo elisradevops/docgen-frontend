@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+/**
+ * TestContentSelector (STD)
+ * Manages test plan/suites and related options for the STD tab.
+ * Uses useTabStatePersistence to restore/save state with proper gating and provides
+ * dependency-aware re-apply flows for shared queries and test plans/suites.
+ */
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
 import {
@@ -20,6 +26,10 @@ import LinkedMomDialog from '../../dialogs/LinkedMomDialog';
 import SettingsDisplay from '../SettingsDisplay';
 import SmartAutocomplete from '../SmartAutocomplete';
 import SectionCard from '../../layout/SectionCard';
+import logger from '../../../utils/logger';
+import { suiteIdCollection } from '../../../utils/sessionPersistence';
+import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
+import RestoreBackdrop from '../RestoreBackdrop';
 
 const defaultSelectedQueries = {
   traceAnalysisMode: 'none',
@@ -57,25 +67,22 @@ const TestContentSelector = observer(
 
     const [linkedMomRequest, setLinkedMomRequest] = useState(defaultLinkedMomRequest);
     const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
+    // isRestoring/restoreReady provided by useTabStatePersistence below
 
     const UpdateDocumentRequestObject = useCallback(() => {
+      if (!store?.docType) {
+        logger.debug('[STD] UpdateDocumentRequestObject skipped: docType missing');
+        return; // wait until docType is set to avoid writing under a wrong/empty key
+      }
+      logger.debug(
+        `[STD] UpdateDocumentRequestObject: plan=${selectedTestPlan?.key || ''} suitesSel=${(selectedTestSuites||[]).length} suiteSpecific=${isSuiteSpecific}`
+      );
       let testSuiteIdList;
       let nonRecursiveTestSuiteIdList;
       if (isSuiteSpecific) {
-        testSuiteIdList = [];
-        nonRecursiveTestSuiteIdList = [];
-        const addChildrenSuites = (suiteId) => {
-          const suite = store.testSuiteList?.find((s) => s.id === suiteId);
-          if (suite && !testSuiteIdList.includes(suiteId)) {
-            testSuiteIdList.push(suiteId);
-            const children = store.testSuiteList?.filter((child) => child.parent === suiteId);
-            children.forEach((child) => addChildrenSuites(child.id));
-          }
-        };
-        selectedTestSuites.forEach((suite) => {
-          nonRecursiveTestSuiteIdList.push(suite.id);
-          addChildrenSuites(suite.id);
-        });
+        const { testSuiteArray, nonRecursiveTestSuiteIdList: nonRec } = suiteIdCollection(selectedTestSuites, store);
+        testSuiteIdList = testSuiteArray;
+        nonRecursiveTestSuiteIdList = nonRec;
       }
       addToDocumentRequestObject(
         {
@@ -118,28 +125,12 @@ const TestContentSelector = observer(
       flatSuiteTestCases,
       contentControlIndex,
       selectedTestSuites,
-      store.testSuiteList,
+      store,
     ]);
 
-    useEffect(() => {
-      if (editingMode === false) {
-        UpdateDocumentRequestObject();
-      }
-    }, [
-      selectedTestPlan,
-      isSuiteSpecific,
-      selectedTestSuites,
-      includeHardCopyRun,
-      includeAttachments,
-      attachmentType,
-      includeAttachmentContent,
-      includeRequirements,
-      includeCustomerId,
-      traceAnalysisRequest,
-      editingMode,
-      flatSuiteTestCases,
-      UpdateDocumentRequestObject,
-    ]);
+    // Save on state changes, but only after restore completes
+
+    // Persist restored state once restoration completes (captures cases where values changed only during restore)
 
     useEffect(() => {
       let isValid = true;
@@ -171,7 +162,16 @@ const TestContentSelector = observer(
 
     const handleTestPlanChanged = useCallback(
       async (value) => {
-        await store.fetchTestSuitesList(value.key);
+        logger.debug(`[STD] handleTestPlanChanged: ${value?.key || ''}`);
+        const waitForSuitesToLoad = async () => {
+          const deadline = Date.now() + 10000;
+          while (store.loadingState?.testSuiteListLoading) {
+            if (Date.now() > deadline) break;
+            await new Promise((r) => setTimeout(r, 50));
+          }
+        };
+        store.fetchTestSuitesList(value.key);
+        await waitForSuitesToLoad();
         setSelectedTestSuites([]);
         if (value.text) {
           const testPlanNameForFile = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
@@ -184,7 +184,8 @@ const TestContentSelector = observer(
 
     const processTestPlanSelection = useCallback(
       async (dataToSave) => {
-        const { testPlanId } = dataToSave;
+        const { testPlanId } = dataToSave || {};
+        if (!testPlanId) return;
         const testPlan = store.testPlansList.find((tp) => tp.id === testPlanId);
         if (!testPlan) {
           toast.warn(`Test plan with ID ${testPlanId} not found`);
@@ -288,14 +289,27 @@ const TestContentSelector = observer(
       [store.getTestSuiteList]
     );
 
-    const loadSavedData = useCallback(
+    const savedDataRef = React.useRef(null);
+
+    const applySavedData = useCallback(
       async (dataToSave) => {
         try {
+          logger.debug('[STD] applySavedData: begin');
           await processTestPlanSelection(dataToSave);
+          // Ensure suites are available before applying saved suite choices
+          try {
+            const deadline = Date.now() + 10000;
+            while (store.loadingState?.testSuiteListLoading) {
+              if (Date.now() > deadline) break;
+              await new Promise((r) => setTimeout(r, 50));
+            }
+          } catch (e) { void e; }
           processGeneralSettings(dataToSave);
           processTraceAnalysisRequest(dataToSave.traceAnalysisRequest);
           processLinkedMomRequest(dataToSave.linkedMomRequest);
           processTestSuiteSelections(dataToSave);
+          savedDataRef.current = dataToSave;
+          logger.debug('[STD] applySavedData: applied');
         } catch (error) {
           console.error('Error loading saved data:', error);
           toast.error(`Error loading favorite data: ${error.message}`);
@@ -307,14 +321,102 @@ const TestContentSelector = observer(
         processTestSuiteSelections,
         processTraceAnalysisRequest,
         processLinkedMomRequest,
+        store.loadingState?.testSuiteListLoading,
       ]
     );
 
+    const resetLocalState = useCallback(() => {
+      setSelectedTestPlan({ key: '', text: '' });
+      setSelectedTestSuites([]);
+      setIsSuiteSpecific(false);
+      setIncludeHardCopyRun(false);
+      setIncludeAttachments(false);
+      setAttachmentType('asEmbedded');
+      setIncludeAttachmentContent(false);
+      setIncludeRequirements(false);
+      setIncludeCustomerId(false);
+      setFlatSuiteTestCases(false);
+      setTraceAnalysisRequest(defaultSelectedQueries);
+      setLinkedMomRequest(defaultLinkedMomRequest);
+      savedDataRef.current = null;
+    }, []);
+
+    const { isRestoring, restoreReady } = useTabStatePersistence({
+      store,
+      contentControlIndex,
+      applySavedData,
+      resetLocalState,
+    });
+
+    // Save on state changes, but only after restore completes
     useEffect(() => {
-      if (store.selectedFavorite?.dataToSave) {
-        loadSavedData(store.selectedFavorite.dataToSave);
+      if (editingMode === false && !isRestoring && restoreReady) {
+        logger.debug(`[STD] Trigger save effect: isRestoring=${isRestoring} restoreReady=${restoreReady}`);
+        UpdateDocumentRequestObject();
       }
-    }, [loadSavedData, store.selectedFavorite]);
+    }, [
+      selectedTestPlan,
+      isSuiteSpecific,
+      selectedTestSuites,
+      includeHardCopyRun,
+      includeAttachments,
+      attachmentType,
+      includeAttachmentContent,
+      includeRequirements,
+      includeCustomerId,
+      traceAnalysisRequest,
+      linkedMomRequest,
+      editingMode,
+      flatSuiteTestCases,
+      UpdateDocumentRequestObject,
+      isRestoring,
+      store.docType,
+      restoreReady,
+    ]);
+
+    // Persist restored state once restoration completes (captures cases where values changed only during restore)
+    useEffect(() => {
+      if (editingMode === false && !isRestoring && restoreReady) {
+        UpdateDocumentRequestObject();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRestoring, restoreReady]);
+
+    // Re-apply query-dependent parts once shared queries are available (handles late arrivals)
+    useEffect(() => {
+      if (!savedDataRef.current) return;
+      if (!store?.sharedQueries?.acquiredTrees) return;
+      try {
+        logger.debug('[STD] Re-apply queries after sharedQueries ready');
+        processTraceAnalysisRequest(savedDataRef.current.traceAnalysisRequest);
+        processLinkedMomRequest(savedDataRef.current.linkedMomRequest);
+      } catch (e) { void e; }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [store.sharedQueries]);
+
+    // Re-apply saved test plan (and then suites) once test plans become available
+    useEffect(() => {
+      const saved = savedDataRef.current;
+      if (!saved) return;
+      if (selectedTestPlan?.key) return;
+      if (!Array.isArray(store.testPlansList) || store.testPlansList.length === 0) return;
+      logger.debug('[STD] Re-apply saved test plan now that testPlansList is available');
+      (async () => {
+        try {
+          await processTestPlanSelection(saved);
+          // wait for suites to load then apply saved suite selection
+          const deadline = Date.now() + 10000;
+          while (store.loadingState?.testSuiteListLoading) {
+            if (Date.now() > deadline) break;
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          processTestSuiteSelections(saved);
+        } catch (e) { void e; }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [store.testPlansList]);
+
+    // Favorite/Session restoration handled by useTabStatePersistence
 
     useEffect(() => {
       if (!selectedTestPlan?.key) {
@@ -343,6 +445,8 @@ const TestContentSelector = observer(
       }));
     }, [selectedTestPlan?.key, store.testSuiteList]);
 
+    // Clear handled by hook's onClearTabState
+
     const linkedMomEnabled = linkedMomRequest?.linkedMomMode && linkedMomRequest.linkedMomMode !== 'none';
     const traceAnalysisEnabled = traceAnalysisRequest?.traceAnalysisMode && traceAnalysisRequest.traceAnalysisMode !== 'none';
 
@@ -366,6 +470,7 @@ const TestContentSelector = observer(
       : undefined;
 
     return (
+      <>
       <Stack spacing={1.5}>
         <SectionCard
           title='Test Plan and Suites'
@@ -553,6 +658,8 @@ const TestContentSelector = observer(
           </Box>
         ) : null}
       </Stack>
+      <RestoreBackdrop open={!!isRestoring} />
+      </>
     );
   }
 );
