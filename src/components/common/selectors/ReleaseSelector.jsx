@@ -106,10 +106,18 @@ const ReleaseSelector = observer(
 
         const historyData = await store.fetchReleaseDefinitionHistory(value.key);
         setReleaseDefinitionHistory(historyData || []);
+
+        // When changing the release definition, clear previously selected range
+        if (value?.key !== selectedReleaseDefinition?.key) {
+          setSelectedReleaseHistoryStart(defaultSelectedItem);
+          setSelectedReleaseHistoryEnd(defaultSelectedItem);
+          setEndPointRunHistory([]);
+        }
+
         setSelectedReleaseDefinition(value);
         return historyData || [];
       },
-      [store]
+      [store, selectedReleaseDefinition]
     );
 
     const validateReleaseExists = useCallback(

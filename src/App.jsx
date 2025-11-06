@@ -71,6 +71,13 @@ function App({ store }) {
   useEffect(() => {
     const onUnauthorized = () => {
       try {
+        if (store && typeof store.clearAllTabSessionState === 'function') {
+          store.clearAllTabSessionState();
+        }
+      } catch {
+        /* empty */
+      }
+      try {
         removeCookie('azureDevopsUrl', { path: '/' });
         removeCookie('azureDevopsPat', { path: '/' });
       } catch {
@@ -79,7 +86,7 @@ function App({ store }) {
     };
     window.addEventListener('auth-unauthorized', onUnauthorized);
     return () => window.removeEventListener('auth-unauthorized', onUnauthorized);
-  }, [removeCookie]);
+  }, [removeCookie, store]);
 
   // Keep the store's API client in sync with cookies (handles refresh/autofill cases)
   useEffect(() => {

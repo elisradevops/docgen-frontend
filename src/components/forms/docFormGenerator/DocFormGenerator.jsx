@@ -12,6 +12,7 @@ import { Box, Button, Collapse, Typography, Paper, Stack } from '@mui/material';
 import Tooltip from '@mui/material/Tooltip';
 import TestReporterSelector from '../../common/table/TestReporterSelector';
 import { toast } from 'react-toastify';
+import RestoreBackdrop from '../../common/RestoreBackdrop';
 import logger from '../../../utils/logger';
 import { makeKey, tryLocalStorageGet, tryLocalStorageSet } from '../../../utils/storage';
 import LoadingState from '../../common/LoadingState';
@@ -23,6 +24,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [docFormsControls, setDocFormsControls] = useState([]);
   const [selectedDocForm, setSelectedDocForm] = useState(null);
   const [docForm, setDocForm] = useState(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
 
   useEffect(() => {
     if (docType !== '') {
@@ -32,7 +34,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       store.setSelectedTemplate(null);
       store.clearLoadedFavorite();
       // Clear validation states when switching doc types (Edge 92 compatibility)
-      store.validationStates = {};
+      store.clearAllValidationStates();
       setLoadingForm(true);
       store
         .fetchDocFormsTemplates(docType)
@@ -76,8 +78,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   useEffect(() => {
     const pickDefaultTemplate = async () => {
       if (!docType) return;
-      // Don't override if a template is already selected in the store
       if (store.selectedTemplate?.url) return;
+      setTemplatesLoading(true);
       try {
         const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
         if (!Array.isArray(templates) || templates.length === 0) return;
@@ -140,6 +142,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         }
       } catch (e) {
         logger.error(`Error while auto-selecting default template: ${e.message}`);
+      } finally {
+        setTemplatesLoading(false);
       }
     };
     pickDefaultTemplate();
@@ -386,6 +390,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       spacing={1.5}
       sx={{ width: '100%', height: '100%', minHeight: 0 }}
     >
+      <RestoreBackdrop open={templatesLoading} label='Loading templates…' />
       {loadingForm ? (
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <LoadingState

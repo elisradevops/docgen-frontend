@@ -224,6 +224,13 @@ const PipelineSelector = observer(
         const pipelineData = await store.fetchPipelineRunHistory(value.key);
         setPipelineRunHistory(pipelineData || []);
 
+        // When changing the pipeline, clear previously selected run range
+        if (value?.key !== selectedPipeline?.key) {
+          setSelectedPipelineRunStart(defaultSelectedItem);
+          setSelectedPipelineRunEnd(defaultSelectedItem);
+          setEndPointRunHistory([]);
+        }
+
         if (value.text) {
           let convertedPipeline = value.text.trim().replace(/\./g, '-').replace(/\s+/g, '_');
           store.setContextName(`pipeline-${convertedPipeline}`);
@@ -232,7 +239,7 @@ const PipelineSelector = observer(
         setSelectedPipeline(value);
         return pipelineData || []; // Return the pipeline data or empty array
       },
-      [store]
+      [store, selectedPipeline]
     ); // Add 'store' as a dependency
 
     const loadSavedData = useCallback(

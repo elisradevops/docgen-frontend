@@ -12,6 +12,14 @@ import OpenPcrDialog from '../../dialogs/OpenPcrDialog';
 import SettingsDisplay from '../SettingsDisplay';
 import SmartAutocomplete from '../SmartAutocomplete';
 import SectionCard from '../../layout/SectionCard';
+import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
+import { suiteIdCollection } from '../../../utils/sessionPersistence';
+import RestoreBackdrop from '../RestoreBackdrop';
+
+/**
+ * STRTableSelector
+ * Manages STR test plan/suites, options, and detailed steps with session/favorite restore.
+ */
 
 const initialStepsExecutionState = {
   isEnabled: false,
@@ -73,6 +81,19 @@ const STRTableSelector = observer(
     const [openPCRsSelectionRequest, setOpenPCRsSelectionRequest] = useState(
       defaultSelectedQueries
     );
+
+    // Re-apply query-dependent parts once shared queries are available (handles late arrivals)
+    useEffect(() => {
+      if (!savedDataRef.current) return;
+      if (!store?.sharedQueries?.acquiredTrees) return;
+      try {
+        processOpenPcrRequest(savedDataRef.current.openPCRsSelectionRequest);
+        processRequirementQueries(savedDataRef.current);
+      } catch {
+        /* empty */
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [store.sharedQueries]);
     // const [openPCRsSelection, setOpenPCRsSelection] = useState('linked');
     const [includeTestLog, setIncludeTestLog] = useState(false);
     const [includeHardCopyRun, setIncludeHardCopyRun] = useState(false);
@@ -85,33 +106,19 @@ const STRTableSelector = observer(
       initialStepsAnalysisState
     );
 
+    const savedDataRef = React.useRef(null);
+
+    // Keep the last loaded data so we can re-apply query-dependent parts when shared queries arrive
+    // (Value is set inside applySavedData provided to the hook)
+
     const UpdateDocumentRequestObject = useCallback(() => {
+      if (!store?.docType) return; // wait until docType is set to avoid writing under a wrong/empty key
       let testSuiteIdList = undefined;
       let nonRecursiveTestSuiteIdList = undefined;
       if (isSuiteSpecific) {
-        testSuiteIdList = [];
-        nonRecursiveTestSuiteIdList = [];
-        // Function to recursively add children suites
-        const addChildrenSuites = (suiteId) => {
-          const suite = store.testSuiteList.find(
-            (suite) => suite.id === suiteId
-          );
-          if (suite && !testSuiteIdList.includes(suiteId)) {
-            testSuiteIdList.push(suiteId);
-            const children = store.testSuiteList.filter(
-              (child) => child.parent === suiteId
-            );
-            children.forEach((child) => {
-              addChildrenSuites(child.id);
-            });
-          }
-        };
-
-        // Add suites selected and their children
-        selectedTestSuites.forEach((suite) => {
-          nonRecursiveTestSuiteIdList.push(suite.id);
-          addChildrenSuites(suite.id);
-        });
+        const { testSuiteArray, nonRecursiveTestSuiteIdList: nonRec } = suiteIdCollection(selectedTestSuites, store);
+        testSuiteIdList = testSuiteArray;
+        nonRecursiveTestSuiteIdList = nonRec;
       }
       addToDocumentRequestObject(
         {
@@ -139,7 +146,6 @@ const STRTableSelector = observer(
       );
     }, [
       isSuiteSpecific,
-      store.testSuiteList,
       selectedTestSuites,
       addToDocumentRequestObject,
       type,
@@ -155,25 +161,10 @@ const STRTableSelector = observer(
       includeHardCopyRun,
       flatSuiteTestCases,
       contentControlIndex,
+      store,
     ]);
 
-    useEffect(() => {
-      if (editingMode === false) {
-        UpdateDocumentRequestObject();
-      }
-    }, [
-      selectedTestPlan,
-      selectedTestSuites,
-      includeConfigurations,
-      includeHierarchy,
-      includeTestLog,
-      includeHardCopyRun,
-      stepExecutionState,
-      stepAnalysisState,
-      openPCRsSelectionRequest,
-      editingMode,
-      UpdateDocumentRequestObject,
-    ]);
+    
 
     // Validation: test plan required; if suite-specific, require at least one suite
     useEffect(() => {
@@ -364,9 +355,18 @@ const STRTableSelector = observer(
       [store.sharedQueries?.acquiredTrees?.reqTestTrees?.testReqTree]
     );
 
+    const waitForSuitesToLoad = useCallback(async () => {
+      const deadline = Date.now() + 10000;
+      while (store.loadingState?.testSuiteListLoading) {
+        if (Date.now() > deadline) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }, [store.loadingState?.testSuiteListLoading]);
+
     const handleTestPlanChanged = useCallback(
       async (value) => {
-        await store.fetchTestSuitesList(value.key);
+        store.fetchTestSuitesList(value.key);
+        await waitForSuitesToLoad();
         setSelectedTestSuites([]);
         if (value.text) {
           let testPlanNameForFile = value.text
@@ -377,27 +377,24 @@ const STRTableSelector = observer(
         }
         setSelectedTestPlan(value);
       },
-      [store]
+      [store, waitForSuitesToLoad]
     );
 
     const processTestPlanSelection = useCallback(
       async (dataToSave) => {
-        const testPlan = store.testPlansList.find(
-          (testPlan) => testPlan.id === dataToSave.testPlanId
-        );
+        const testPlanId = dataToSave?.testPlanId;
+        if (!testPlanId) return;
+        const testPlan = store.testPlansList.find((tp) => tp.id === testPlanId);
         if (!testPlan) {
-          toast.warn(`Test plan with ID ${dataToSave.testPlanId} not found`);
+          toast.warn(`Test plan with ID ${testPlanId} not found`);
           return;
         }
-        await handleTestPlanChanged({
-          key: dataToSave.testPlanId,
-          text: testPlan.name,
-        });
+        await handleTestPlanChanged({ key: testPlanId, text: testPlan.name });
       },
       [store.testPlansList, handleTestPlanChanged]
     );
 
-    const loadSavedData = useCallback(
+    const applySavedData = useCallback(
       async (dataToSave) => {
         try {
           await processTestPlanSelection(dataToSave);
@@ -407,6 +404,7 @@ const STRTableSelector = observer(
           processRequirementQueries(dataToSave);
           setStepExecutionState(dataToSave.stepExecution);
           setStepAnalysisState(dataToSave.stepAnalysis);
+          savedDataRef.current = dataToSave;
         } catch (error) {
           console.error('Error loading saved data:', error);
           toast.error(`Error loading saved data: ${error.message}`);
@@ -421,11 +419,58 @@ const STRTableSelector = observer(
       ]
     );
 
-    //Reading the loaded selected favorite data
+    const resetLocalState = useCallback(() => {
+      setSelectedTestPlan({ key: '', text: '' });
+      setSelectedTestSuites([]);
+      setIsSuiteSpecific(false);
+      setIncludeConfigurations(false);
+      setIncludeHierarchy(false);
+      setIncludeTestLog(false);
+      setIncludeHardCopyRun(false);
+      setFlatSuiteTestCases(false);
+      setStepExecutionState(initialStepsExecutionState);
+      setStepAnalysisState(initialStepsAnalysisState);
+      setOpenPCRsSelectionRequest(defaultSelectedQueries);
+      savedDataRef.current = null;
+    }, []);
+
+    const { isRestoring, restoreReady } = useTabStatePersistence({
+      store,
+      contentControlIndex,
+      applySavedData,
+      resetLocalState,
+    });
+
+    // Favorite and Session restore handled by useTabStatePersistence
+
+    // Save on state changes, but only after restore completes
     useEffect(() => {
-      if (!store.selectedFavorite?.dataToSave) return;
-      loadSavedData(store.selectedFavorite.dataToSave);
-    }, [loadSavedData, store.selectedFavorite]);
+      if (editingMode === false && !isRestoring && restoreReady) {
+        UpdateDocumentRequestObject();
+      }
+    }, [
+      selectedTestPlan,
+      selectedTestSuites,
+      includeConfigurations,
+      includeHierarchy,
+      includeTestLog,
+      includeHardCopyRun,
+      stepExecutionState,
+      stepAnalysisState,
+      openPCRsSelectionRequest,
+      editingMode,
+      UpdateDocumentRequestObject,
+      isRestoring,
+      restoreReady,
+    ]);
+
+    // Persist restored state once restoration completes (captures values changed only during restore)
+    useEffect(() => {
+      if (editingMode === false && !isRestoring && restoreReady) {
+        UpdateDocumentRequestObject();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRestoring, restoreReady]);
 
     const generateIncludedOpenPcrSettings = () => {
       const settings = [];
@@ -640,6 +685,7 @@ const STRTableSelector = observer(
     const stepAnalysisSummary = generateIncludedStepAnalysisSettings();
 
     return (
+      <>
       <Stack spacing={1.5}>
         <SectionCard
           title='Test Plan and Suites'
@@ -864,6 +910,8 @@ const STRTableSelector = observer(
           </Box>
         ) : null}
       </Stack>
+      <RestoreBackdrop open={!!isRestoring} label='Restoring STR selection…' />
+      </>
     );
   }
 );

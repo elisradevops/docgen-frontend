@@ -13,6 +13,8 @@ import UploadAttachmentFileButton from '../UploadAttachmentFileButton';
 import LinkedWiSelectionDialog from '../../dialogs/LinkedWiSelectionDialog';
 import SettingsDisplay from '../SettingsDisplay';
 import SectionCard from '../../layout/SectionCard';
+import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
+import RestoreBackdrop from '../RestoreBackdrop';
 
 const baseChangeTableDataType = [
   { key: 0, text: 'GIT Object Range', type: 'range' },
@@ -28,7 +30,10 @@ const defaultSelectedQueriesForChangeTableSelector = {
 };
 
 const defaultLinkedWiOptions = { isEnabled: false, linkedWiTypes: 'both', linkedWiRelationship: 'both' };
-
+/**
+ * ChangeTableSelector (SVD)
+ * Manages base data type, query selections, and filters with session/favorite restore.
+ */
 const ChangeTableSelector = observer(
   ({
     store,
@@ -54,6 +59,7 @@ const ChangeTableSelector = observer(
     const [selectedWorkItemTypes, setSelectedWorkItemTypes] = useState([]);
     const [selectedWorkItemStates, setSelectedWorkItemStates] = useState([]);
     const [linkedWiOptions, setLinkedWiOptions] = useState(defaultLinkedWiOptions);
+    // Local restoring coordinates subselector hydration; hook provides base restoring for parent flow
     const [isRestoring, setIsRestoring] = useState(false);
 
     const workItemTypeOptions = useMemo(
@@ -292,36 +298,53 @@ const ChangeTableSelector = observer(
       };
     }, [selectedType, store, contentControlIndex]);
 
-    // Reading the loaded selected favorite data
-    useEffect(() => {
-      const selectedFavorite = store.selectedFavorite;
-      if (!selectedFavorite?.dataToSave) {
-        setIsRestoring(false);
-        return;
-      }
+    // Hook-driven restore/clear
+    const applySavedData = useCallback(
+      async (dataToSave) => {
+        // Start local restoring to block subselector saves until it calls onRestored
+        setIsRestoring(true);
+        try {
+          processSystemOverviewData(dataToSave.systemOverviewQuery);
+          processLinkedWiOptions(dataToSave.linkedWiOptions);
+          processWorkItemFilterOptions(dataToSave.workItemFilterOptions);
+          setIncludeCommittedBy(dataToSave.includeCommittedBy || false);
+          setIncludeUnlinkedCommits(dataToSave.includeUnlinkedCommits || false);
+          processRangeTypeSelection(dataToSave);
+          setLoadedData(dataToSave);
+        } catch (error) {
+          toast.error(`Error restoring previous selection: ${error?.message ?? 'Unknown error'}`);
+        }
+      },
+      [
+        processSystemOverviewData,
+        processLinkedWiOptions,
+        processWorkItemFilterOptions,
+        processRangeTypeSelection,
+      ]
+    );
 
-      const { dataToSave } = selectedFavorite;
-      setIsRestoring(true);
-      try {
-        processSystemOverviewData(dataToSave.systemOverviewQuery);
-        processLinkedWiOptions(dataToSave.linkedWiOptions);
-        processWorkItemFilterOptions(dataToSave.workItemFilterOptions);
-        setIncludeCommittedBy(dataToSave.includeCommittedBy || false);
-        setIncludeUnlinkedCommits(dataToSave.includeUnlinkedCommits || false);
-        processRangeTypeSelection(dataToSave);
-        setLoadedData(dataToSave);
-      } catch (error) {
-        toast.error(`Error processing favorite data: ${error?.message ?? 'Unknown error'}`);
-        setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
-        setIsRestoring(false);
-      }
-    }, [
-      processLinkedWiOptions,
-      processWorkItemFilterOptions,
-      processRangeTypeSelection,
-      processSystemOverviewData,
-      store.selectedFavorite,
-    ]);
+    const resetLocalState = useCallback(() => {
+      setSelectedType(null);
+      setQueryTrees({ systemOverviewQueryTree: [], knownBugsQueryTree: [] });
+      setQueriesRequest(defaultSelectedQueriesForChangeTableSelector);
+      setLoadedData(undefined);
+      setIncludeSystemOverview(false);
+      setIncludeKnownBugs(false);
+      setIncludeCommittedBy(false);
+      setIncludeUnlinkedCommits(false);
+      setIncludeWorkItemFilter(false);
+      setSelectedWorkItemTypes([]);
+      setSelectedWorkItemStates([]);
+      setLinkedWiOptions(defaultLinkedWiOptions);
+      setIsRestoring(false);
+    }, []);
+
+    const { isRestoring: baseRestoring } = useTabStatePersistence({
+      store,
+      contentControlIndex,
+      applySavedData,
+      resetLocalState,
+    });
 
     const handleNewFileUploaded = (fileObject) => {
       if (fileObject) {
@@ -382,400 +405,404 @@ const ChangeTableSelector = observer(
       : 'Pick a base data type to configure the range.';
 
     return (
-      <Stack spacing={1.5}>
-        <Grid
-          container
-          spacing={1.5}
-          alignItems='stretch'
-        >
+      <>
+        <Stack spacing={1.5}>
           <Grid
-            size={{ xs: 12, lg: 8 }}
-            sx={{ minWidth: 0 }}
+            container
+            spacing={1.5}
+            alignItems='stretch'
           >
-            <SectionCard
-              title='Base Data'
-              description='Pick the primary source that drives this change log.'
+            <Grid
+              size={{ xs: 12, lg: 8 }}
+              sx={{ minWidth: 0 }}
             >
-              <Stack spacing={1.25}>
-                <SmartAutocomplete
-                  disableClearable
-                  autoHighlight
-                  openOnFocus
-                  options={baseChangeTableDataType}
-                  value={selectedType}
-                  label='Base data type'
-                  onChange={(_event, newValue) => setSelectedType(newValue)}
-                />
+              <SectionCard
+                title='Base Data'
+                description='Pick the primary source that drives this change log.'
+              >
+                <Stack spacing={1.25}>
+                  <SmartAutocomplete
+                    disableClearable
+                    autoHighlight
+                    openOnFocus
+                    options={baseChangeTableDataType}
+                    value={selectedType}
+                    label='Base data type'
+                    onChange={(_event, newValue) => setSelectedType(newValue)}
+                  />
 
-                {selectedType?.type === 'range' ? (
-                  <GitObjectRangeSelector
-                    store={store}
-                    contentControlTitle={contentControlTitle}
-                    skin='change-table'
-                    editingMode={editingMode}
-                    addToDocumentRequestObject={addToDocumentRequestObject}
-                    contentControlIndex={contentControlIndex}
-                    queriesRequest={queriesRequest}
-                    dataToRead={loadedData}
-                    linkedWiOptions={linkedWiOptions}
-                    includeCommittedBy={includeCommittedBy}
-                    includeUnlinkedCommits={includeUnlinkedCommits}
-                    workItemFilterOptions={workItemFilterOptionsPayload}
-                    isRestoring={isRestoring}
-                    onRestored={() => setIsRestoring(false)}
-                  />
-                ) : null}
-                {selectedType?.type === 'date' ? (
-                  <CommitDateSelector
-                    store={store}
-                    contentControlTitle={contentControlTitle}
-                    skin='change-table'
-                    repoList={store.repoList}
-                    editingMode={editingMode}
-                    addToDocumentRequestObject={addToDocumentRequestObject}
-                    contentControlIndex={contentControlIndex}
-                    queriesRequest={queriesRequest}
-                    dataToRead={loadedData}
-                    linkedWiOptions={linkedWiOptions}
-                    includeCommittedBy={includeCommittedBy}
-                    includeUnlinkedCommits={includeUnlinkedCommits}
-                    workItemFilterOptions={workItemFilterOptionsPayload}
-                    isRestoring={isRestoring}
-                    onRestored={() => setIsRestoring(false)}
-                  />
-                ) : null}
-                {selectedType?.type === 'pipeline' ? (
-                  <PipelineSelector
-                    store={store}
-                    contentControlTitle={contentControlTitle}
-                    skin='change-table'
-                    editingMode={editingMode}
-                    addToDocumentRequestObject={addToDocumentRequestObject}
-                    contentControlIndex={contentControlIndex}
-                    queriesRequest={queriesRequest}
-                    dataToRead={loadedData}
-                    linkedWiOptions={linkedWiOptions}
-                    includeCommittedBy={includeCommittedBy}
-                    includeUnlinkedCommits={includeUnlinkedCommits}
-                    workItemFilterOptions={workItemFilterOptionsPayload}
-                    isRestoring={isRestoring}
-                    onRestored={() => setIsRestoring(false)}
-                  />
-                ) : null}
-                {selectedType?.type === 'release' ? (
-                  <ReleaseSelector
-                    store={store}
-                    contentControlTitle={contentControlTitle}
-                    skin='change-table'
-                    editingMode={editingMode}
-                    addToDocumentRequestObject={addToDocumentRequestObject}
-                    contentControlIndex={contentControlIndex}
-                    queriesRequest={queriesRequest}
-                    dataToRead={loadedData}
-                    linkedWiOptions={linkedWiOptions}
-                    includeCommittedBy={includeCommittedBy}
-                    includeUnlinkedCommits={includeUnlinkedCommits}
-                    workItemFilterOptions={workItemFilterOptionsPayload}
-                    isRestoring={isRestoring}
-                    onRestored={() => setIsRestoring(false)}
-                  />
-                ) : null}
-                {selectedType?.type === 'pullrequest' ? (
-                  <PullRequestSelector
-                    store={store}
-                    contentControlTitle={contentControlTitle}
-                    skin='change-table'
-                    repoList={store.repoList}
-                    pullRequests={store.pullRequestList}
-                    editingMode={editingMode}
-                    addToDocumentRequestObject={addToDocumentRequestObject}
-                    contentControlIndex={contentControlIndex}
-                    queriesRequest={queriesRequest}
-                    dataToRead={loadedData}
-                    linkedWiOptions={linkedWiOptions}
-                    includeCommittedBy={includeCommittedBy}
-                    includeUnlinkedCommits={includeUnlinkedCommits}
-                    workItemFilterOptions={workItemFilterOptionsPayload}
-                  />
-                ) : null}
+                  {selectedType?.type === 'range' ? (
+                    <GitObjectRangeSelector
+                      store={store}
+                      contentControlTitle={contentControlTitle}
+                      skin='change-table'
+                      editingMode={editingMode}
+                      addToDocumentRequestObject={addToDocumentRequestObject}
+                      contentControlIndex={contentControlIndex}
+                      queriesRequest={queriesRequest}
+                      dataToRead={loadedData}
+                      linkedWiOptions={linkedWiOptions}
+                      includeCommittedBy={includeCommittedBy}
+                      includeUnlinkedCommits={includeUnlinkedCommits}
+                      workItemFilterOptions={workItemFilterOptionsPayload}
+                      isRestoring={isRestoring || baseRestoring}
+                      onRestored={() => setIsRestoring(false)}
+                    />
+                  ) : null}
+                  {selectedType?.type === 'date' ? (
+                    <CommitDateSelector
+                      store={store}
+                      contentControlTitle={contentControlTitle}
+                      skin='change-table'
+                      repoList={store.repoList}
+                      editingMode={editingMode}
+                      addToDocumentRequestObject={addToDocumentRequestObject}
+                      contentControlIndex={contentControlIndex}
+                      queriesRequest={queriesRequest}
+                      dataToRead={loadedData}
+                      linkedWiOptions={linkedWiOptions}
+                      includeCommittedBy={includeCommittedBy}
+                      includeUnlinkedCommits={includeUnlinkedCommits}
+                      workItemFilterOptions={workItemFilterOptionsPayload}
+                      isRestoring={isRestoring || baseRestoring}
+                      onRestored={() => setIsRestoring(false)}
+                    />
+                  ) : null}
+                  {selectedType?.type === 'pipeline' ? (
+                    <PipelineSelector
+                      store={store}
+                      contentControlTitle={contentControlTitle}
+                      skin='change-table'
+                      editingMode={editingMode}
+                      addToDocumentRequestObject={addToDocumentRequestObject}
+                      contentControlIndex={contentControlIndex}
+                      queriesRequest={queriesRequest}
+                      dataToRead={loadedData}
+                      linkedWiOptions={linkedWiOptions}
+                      includeCommittedBy={includeCommittedBy}
+                      includeUnlinkedCommits={includeUnlinkedCommits}
+                      workItemFilterOptions={workItemFilterOptionsPayload}
+                      isRestoring={isRestoring || baseRestoring}
+                      onRestored={() => setIsRestoring(false)}
+                    />
+                  ) : null}
+                  {selectedType?.type === 'release' ? (
+                    <ReleaseSelector
+                      store={store}
+                      contentControlTitle={contentControlTitle}
+                      skin='change-table'
+                      editingMode={editingMode}
+                      addToDocumentRequestObject={addToDocumentRequestObject}
+                      contentControlIndex={contentControlIndex}
+                      queriesRequest={queriesRequest}
+                      dataToRead={loadedData}
+                      linkedWiOptions={linkedWiOptions}
+                      includeCommittedBy={includeCommittedBy}
+                      includeUnlinkedCommits={includeUnlinkedCommits}
+                      workItemFilterOptions={workItemFilterOptionsPayload}
+                      isRestoring={isRestoring || baseRestoring}
+                      onRestored={() => setIsRestoring(false)}
+                    />
+                  ) : null}
+                  {selectedType?.type === 'pullrequest' ? (
+                    <PullRequestSelector
+                      store={store}
+                      contentControlTitle={contentControlTitle}
+                      skin='change-table'
+                      repoList={store.repoList}
+                      pullRequests={store.pullRequestList}
+                      editingMode={editingMode}
+                      addToDocumentRequestObject={addToDocumentRequestObject}
+                      contentControlIndex={contentControlIndex}
+                      queriesRequest={queriesRequest}
+                      dataToRead={loadedData}
+                      linkedWiOptions={linkedWiOptions}
+                      includeCommittedBy={includeCommittedBy}
+                      includeUnlinkedCommits={includeUnlinkedCommits}
+                      workItemFilterOptions={workItemFilterOptionsPayload}
+                    />
+                  ) : null}
 
-                <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 1 }}>
-                  <Typography
-                    variant='caption'
-                    color='text.secondary'
+                  <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 1 }}>
+                    <Typography
+                      variant='caption'
+                      color='text.secondary'
+                    >
+                      {baseSummary}
+                    </Typography>
+                  </Box>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1.25}
+                    alignItems='flex-start'
                   >
-                    {baseSummary}
-                  </Typography>
-                </Box>
-                <Stack
-                  direction={{ xs: 'column', md: 'row' }}
-                  spacing={1.25}
-                  alignItems='flex-start'
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={includeUnlinkedCommits}
+                          onChange={(_event, checked) => setIncludeUnlinkedCommits(checked)}
+                        />
+                      }
+                      label='Include commits without linked work items'
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={includeCommittedBy}
+                          onChange={(_event, checked) => setIncludeCommittedBy(checked)}
+                        />
+                      }
+                      label='Include committer'
+                    />
+                  </Stack>
+                </Stack>
+              </SectionCard>
+            </Grid>
+
+            <Grid
+              size={{ xs: 12, lg: 4 }}
+              sx={{ minWidth: 0 }}
+            >
+              <Stack
+                spacing={1.5}
+                sx={{ minHeight: '100%' }}
+              >
+                <SectionCard
+                  title='Work item filters'
+                  compact
                 >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={includeUnlinkedCommits}
-                        onChange={(_event, checked) => setIncludeUnlinkedCommits(checked)}
-                      />
-                    }
-                    label='Include commits without linked work items'
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={includeCommittedBy}
-                        onChange={(_event, checked) => setIncludeCommittedBy(checked)}
-                      />
-                    }
-                    label='Include committer'
-                  />
-                </Stack>
-              </Stack>
-            </SectionCard>
-          </Grid>
-
-          <Grid
-            size={{ xs: 12, lg: 4 }}
-            sx={{ minWidth: 0 }}
-          >
-            <Stack
-              spacing={1.5}
-              sx={{ minHeight: '100%' }}
-            >
-              <SectionCard
-                title='Work item filters'
-                compact
-              >
-                <Stack spacing={1.25}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={includeWorkItemFilter}
-                        onChange={(_event, checked) => {
-                          setIncludeWorkItemFilter(checked);
-                          if (!checked) {
-                            setSelectedWorkItemTypes([]);
-                            setSelectedWorkItemStates([]);
+                  <Stack spacing={1.25}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={includeWorkItemFilter}
+                          onChange={(_event, checked) => {
+                            setIncludeWorkItemFilter(checked);
+                            if (!checked) {
+                              setSelectedWorkItemTypes([]);
+                              setSelectedWorkItemStates([]);
+                            }
+                          }}
+                        />
+                      }
+                      label='Filter changes by work item type and state'
+                    />
+                    <Collapse
+                      in={includeWorkItemFilter}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <Stack spacing={1.25}>
+                        <Stack
+                          direction='row'
+                          spacing={1}
+                          flexWrap='wrap'
+                        >
+                          <Button
+                            size='small'
+                            onClick={() => {
+                              setSelectedWorkItemTypes([...workItemTypeOptions]);
+                            }}
+                            disabled={workItemTypeOptions.length === 0}
+                          >
+                            Select all types
+                          </Button>
+                          <Button
+                            size='small'
+                            onClick={() => {
+                              setSelectedWorkItemTypes([]);
+                              setSelectedWorkItemStates([]);
+                            }}
+                            disabled={
+                              selectedWorkItemTypes.length === 0 && selectedWorkItemStates.length === 0
+                            }
+                          >
+                            Clear selection
+                          </Button>
+                        </Stack>
+                        <SmartAutocomplete
+                          multiple
+                          showCheckbox
+                          autoHighlight
+                          openOnFocus
+                          options={workItemTypeOptions}
+                          value={selectedWorkItemTypes}
+                          loading={store.loadingState.workItemTypesLoadingState}
+                          label='Work item type'
+                          placeholder='Select a work item type'
+                          workItemVisualMode
+                          disableCloseOnSelect
+                          onChange={(_event, newValue) => {
+                            setSelectedWorkItemTypes(Array.isArray(newValue) ? newValue : []);
+                          }}
+                          noOptionsText='No work item types available'
+                        />
+                        <Stack
+                          direction='row'
+                          spacing={1}
+                          flexWrap='wrap'
+                        >
+                          <Button
+                            size='small'
+                            onClick={() => {
+                              setSelectedWorkItemStates([...workItemStateOptions]);
+                            }}
+                            disabled={workItemStateOptions.length === 0}
+                          >
+                            Select all states
+                          </Button>
+                          <Button
+                            size='small'
+                            onClick={() => setSelectedWorkItemStates([])}
+                            disabled={selectedWorkItemStates.length === 0}
+                          >
+                            Clear states
+                          </Button>
+                        </Stack>
+                        <SmartAutocomplete
+                          multiple
+                          showCheckbox
+                          autoHighlight
+                          openOnFocus
+                          options={workItemStateOptions}
+                          value={selectedWorkItemStates}
+                          label='Work item state'
+                          placeholder='Select a work item state'
+                          disabled={selectedWorkItemTypes.length === 0}
+                          workItemVisualMode
+                          disableCloseOnSelect
+                          onChange={(_event, newValue) =>
+                            setSelectedWorkItemStates(Array.isArray(newValue) ? newValue : [])
                           }
-                        }}
-                      />
-                    }
-                    label='Filter changes by work item type and state'
-                  />
-                  <Collapse
-                    in={includeWorkItemFilter}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <Stack spacing={1.25}>
-                      <Stack
-                        direction='row'
-                        spacing={1}
-                        flexWrap='wrap'
-                      >
-                        <Button
-                          size='small'
-                          onClick={() => {
-                            setSelectedWorkItemTypes([...workItemTypeOptions]);
-                          }}
-                          disabled={workItemTypeOptions.length === 0}
-                        >
-                          Select all types
-                        </Button>
-                        <Button
-                          size='small'
-                          onClick={() => {
-                            setSelectedWorkItemTypes([]);
-                            setSelectedWorkItemStates([]);
-                          }}
-                          disabled={selectedWorkItemTypes.length === 0 && selectedWorkItemStates.length === 0}
-                        >
-                          Clear selection
-                        </Button>
+                          noOptionsText={
+                            selectedWorkItemTypes.length > 0
+                              ? 'No states available for the selected types'
+                              : 'Select at least one work item type first'
+                          }
+                        />
                       </Stack>
-                      <SmartAutocomplete
-                        multiple
-                        showCheckbox
-                        autoHighlight
-                        openOnFocus
-                        options={workItemTypeOptions}
-                        value={selectedWorkItemTypes}
-                        loading={store.loadingState.workItemTypesLoadingState}
-                        label='Work item type'
-                        placeholder='Select a work item type'
-                        workItemVisualMode
-                        disableCloseOnSelect
-                        onChange={(_event, newValue) => {
-                          setSelectedWorkItemTypes(Array.isArray(newValue) ? newValue : []);
-                        }}
-                        noOptionsText='No work item types available'
-                      />
-                      <Stack
-                        direction='row'
-                        spacing={1}
-                        flexWrap='wrap'
-                      >
-                        <Button
-                          size='small'
-                          onClick={() => {
-                            setSelectedWorkItemStates([...workItemStateOptions]);
+                    </Collapse>
+                    <SettingsDisplay
+                      title='Configured values'
+                      settings={workItemFilterSummary}
+                      emptyMessage='Work item filters disabled.'
+                      boxProps={{ p: 0, bgcolor: 'transparent' }}
+                    />
+                  </Stack>
+                </SectionCard>
+                <SectionCard
+                  title='Queries'
+                  compact
+                  loading={store.fetchLoadingState().sharedQueriesLoadingState}
+                  loadingText='Loading queries...'
+                >
+                  <Stack spacing={1}>
+                    <FormControlLabel
+                      disabled={
+                        store.fetchLoadingState().sharedQueriesLoadingState ||
+                        !queryTrees.systemOverviewQueryTree ||
+                        queryTrees.systemOverviewQueryTree?.length === 0
+                      }
+                      control={
+                        <Checkbox
+                          checked={includeSystemOverview}
+                          onChange={(_event, checked) => {
+                            setIncludeSystemOverview(checked);
+                            if (!checked) setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: null }));
                           }}
-                          disabled={workItemStateOptions.length === 0}
-                        >
-                          Select all states
-                        </Button>
-                        <Button
-                          size='small'
-                          onClick={() => setSelectedWorkItemStates([])}
-                          disabled={selectedWorkItemStates.length === 0}
-                        >
-                          Clear states
-                        </Button>
-                      </Stack>
-                      <SmartAutocomplete
-                        multiple
-                        showCheckbox
-                        autoHighlight
-                        openOnFocus
-                        options={workItemStateOptions}
-                        value={selectedWorkItemStates}
-                        label='Work item state'
-                        placeholder='Select a work item state'
-                        disabled={selectedWorkItemTypes.length === 0}
-                        workItemVisualMode
-                        disableCloseOnSelect
-                        onChange={(_event, newValue) =>
-                          setSelectedWorkItemStates(Array.isArray(newValue) ? newValue : [])
-                        }
-                        noOptionsText={
-                          selectedWorkItemTypes.length > 0
-                            ? 'No states available for the selected types'
-                            : 'Select at least one work item type first'
-                        }
-                      />
-                    </Stack>
-                  </Collapse>
-                  <SettingsDisplay
-                    title='Configured values'
-                    settings={workItemFilterSummary}
-                    emptyMessage='Work item filters disabled.'
-                    boxProps={{ p: 0, bgcolor: 'transparent' }}
-                  />
-                </Stack>
-              </SectionCard>
-              <SectionCard
-                title='Queries'
-                compact
-                loading={store.fetchLoadingState().sharedQueriesLoadingState}
-                loadingText='Loading queries...'
-              >
-                <Stack spacing={1}>
-                  
-                  <FormControlLabel
-                    disabled={
-                      store.fetchLoadingState().sharedQueriesLoadingState ||
-                      !queryTrees.systemOverviewQueryTree ||
-                      queryTrees.systemOverviewQueryTree?.length === 0
-                    }
-                    control={
-                      <Checkbox
-                        checked={includeSystemOverview}
-                        onChange={(_event, checked) => {
-                          setIncludeSystemOverview(checked);
-                          if (!checked) setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: null }));
-                        }}
-                      />
-                    }
-                    label='Include system overview'
-                  />
-                  <Collapse
-                    in={includeSystemOverview}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <QueryTree
-                      data={queryTrees.systemOverviewQueryTree}
-                      prevSelectedQuery={queriesRequest?.sysOverviewQuery}
-                      onSelectedQuery={onSelectedSystemOverviewQuery}
-                      queryType='system-overview'
-                      isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                        />
+                      }
+                      label='Include system overview'
                     />
-                  </Collapse>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        disabled={
-                          store.fetchLoadingState().sharedQueriesLoadingState ||
-                          !queryTrees.knownBugsQueryTree ||
-                          queryTrees.knownBugsQueryTree?.length === 0
-                        }
-                        checked={includeKnownBugs}
-                        onChange={(_event, checked) => {
-                          setIncludeKnownBugs(checked);
-                          if (!checked) setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: null }));
-                        }}
+                    <Collapse
+                      in={includeSystemOverview}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <QueryTree
+                        data={queryTrees.systemOverviewQueryTree}
+                        prevSelectedQuery={queriesRequest?.sysOverviewQuery}
+                        onSelectedQuery={onSelectedSystemOverviewQuery}
+                        queryType='system-overview'
+                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
                       />
-                    }
-                    label='Include known possible bugs'
-                  />
-                  <Collapse
-                    in={includeKnownBugs}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <QueryTree
-                      data={queryTrees.knownBugsQueryTree}
-                      prevSelectedQuery={queriesRequest?.knownBugsQuery}
-                      onSelectedQuery={onSelectedKnownBugsQuery}
-                      queryType='known-bugs'
-                      isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                    </Collapse>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          disabled={
+                            store.fetchLoadingState().sharedQueriesLoadingState ||
+                            !queryTrees.knownBugsQueryTree ||
+                            queryTrees.knownBugsQueryTree?.length === 0
+                          }
+                          checked={includeKnownBugs}
+                          onChange={(_event, checked) => {
+                            setIncludeKnownBugs(checked);
+                            if (!checked) setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: null }));
+                          }}
+                        />
+                      }
+                      label='Include known possible bugs'
                     />
-                  </Collapse>
-                </Stack>
-              </SectionCard>
+                    <Collapse
+                      in={includeKnownBugs}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <QueryTree
+                        data={queryTrees.knownBugsQueryTree}
+                        prevSelectedQuery={queriesRequest?.knownBugsQuery}
+                        onSelectedQuery={onSelectedKnownBugsQuery}
+                        queryType='known-bugs'
+                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                      />
+                    </Collapse>
+                  </Stack>
+                </SectionCard>
 
-              <SectionCard
-                title='Wiki File'
-                compact
-              >
-                <UploadAttachmentFileButton
-                  store={store}
-                  onNewFileUpload={handleNewFileUploaded}
-                  onClear={handleClearAttachment}
-                  bucketName='wiki-attachments'
-                  isDisabled={!selectedTeamProject}
-                />
-              </SectionCard>
+                <SectionCard
+                  title='Wiki File'
+                  compact
+                >
+                  <UploadAttachmentFileButton
+                    store={store}
+                    onNewFileUpload={handleNewFileUploaded}
+                    onClear={handleClearAttachment}
+                    bucketName='wiki-attachments'
+                    isDisabled={!selectedTeamProject}
+                  />
+                </SectionCard>
 
-              <SectionCard
-                title='Linked work items'
-                description='Fetch linked Requirements/Features for each included change.'
-                compact
-                actions={
-                  <LinkedWiSelectionDialog
-                    prevOptions={linkedWiOptions}
-                    setOptions={setLinkedWiOptions}
-                    buttonLabel='Configure'
-                    buttonVariant='text'
-                    buttonSize='small'
-                    tooltipTitle='Configure per-change linked work items'
-                  />
-                }
-              >
-                <Stack spacing={1.25}>
-                  <SettingsDisplay
-                    title='Configured values'
-                    settings={linkedWiSummary}
-                    emptyMessage='Per-change linked work items disabled.'
-                    boxProps={{ p: 0, bgcolor: 'transparent' }}
-                  />
-                </Stack>
-              </SectionCard>
-            </Stack>
+                <SectionCard
+                  title='Linked work items'
+                  description='Fetch linked Requirements/Features for each included change.'
+                  compact
+                  actions={
+                    <LinkedWiSelectionDialog
+                      prevOptions={linkedWiOptions}
+                      setOptions={setLinkedWiOptions}
+                      buttonLabel='Configure'
+                      buttonVariant='text'
+                      buttonSize='small'
+                      tooltipTitle='Configure per-change linked work items'
+                    />
+                  }
+                >
+                  <Stack spacing={1.25}>
+                    <SettingsDisplay
+                      title='Configured values'
+                      settings={linkedWiSummary}
+                      emptyMessage='Per-change linked work items disabled.'
+                      boxProps={{ p: 0, bgcolor: 'transparent' }}
+                    />
+                  </Stack>
+                </SectionCard>
+              </Stack>
+            </Grid>
           </Grid>
-        </Grid>
-      </Stack>
+        </Stack>
+        <RestoreBackdrop open={!!(isRestoring || baseRestoring)} label='Restoring SVD selection…' />
+      </>
     );
   }
 );

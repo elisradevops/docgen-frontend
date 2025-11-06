@@ -2,11 +2,18 @@ import { Box, Button, Checkbox, FormControlLabel, Collapse, Grid, Typography, St
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import CategoryIcon from '@mui/icons-material/Category';
 import { observer } from 'mobx-react';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import QueryTree from '../QueryTree';
 import { toast } from 'react-toastify';
 import SectionCard from '../../layout/SectionCard';
 import SettingsDisplay from '../SettingsDisplay';
+import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
+import RestoreBackdrop from '../RestoreBackdrop';
+
+/**
+ * SRSSelector
+ * Manages SRS queries and display mode with session/favorite restore via useTabStatePersistence.
+ */
 
 const defaultSelectedQueriesForSRS = {
   systemRequirements: null,
@@ -46,6 +53,42 @@ const SRSSelector = observer(
       includeSoftwareToSystemRequirements,
       setIncludeSoftwareToSystemRequirements,
     ] = useState(false);
+
+    // Session persistence integration
+    const savedDataRef = useRef(null);
+    const applySavedData = useCallback(async (dataToSave) => {
+      try {
+        const saved = dataToSave?.selectedQueries || dataToSave?.queriesRequest || {};
+        setQueriesRequest({
+          systemRequirements: saved.systemRequirements || null,
+          systemToSoftwareRequirements: saved.systemToSoftwareRequirements || null,
+          softwareToSystemRequirements: saved.softwareToSystemRequirements || null,
+        });
+        setIncludeSystemRequirements(!!dataToSave?.includeSystemRequirements);
+        setIncludeSystemToSoftwareRequirements(!!dataToSave?.includeSystemToSoftwareRequirements);
+        setIncludeSoftwareToSystemRequirements(!!dataToSave?.includeSoftwareToSystemRequirements);
+        if (dataToSave?.displayMode) setDisplayMode(dataToSave.displayMode);
+        savedDataRef.current = dataToSave;
+      } catch {
+        toast.error('Error processing saved data');
+      }
+    }, []);
+
+    const resetLocalState = useCallback(() => {
+      setQueriesRequest(defaultSelectedQueriesForSRS);
+      setIncludeSystemRequirements(false);
+      setIncludeSystemToSoftwareRequirements(false);
+      setIncludeSoftwareToSystemRequirements(false);
+      setDisplayMode('hierarchical');
+      savedDataRef.current = null;
+    }, []);
+
+    const { isRestoring, restoreReady } = useTabStatePersistence({
+      store,
+      contentControlIndex,
+      applySavedData,
+      resetLocalState,
+    });
 
     // Handlers for selections
     const onSelectedSystemRequirementsQuery = useCallback((query) => {
@@ -91,44 +134,22 @@ const SRSSelector = observer(
       }
     }, [sharedQueries?.acquiredTrees]);
 
-    // Restore saved favorite
+    // Re-apply saved queries when shared queries arrive
     useEffect(() => {
-      const favorite = store.selectedFavorite;
-      if (!favorite?.dataToSave) return;
-
-      try {
-        const { dataToSave } = favorite;
-        const saved =
-          dataToSave.selectedQueries || dataToSave.queriesRequest || {};
-
-        setQueriesRequest({
-          systemRequirements: saved.systemRequirements || null,
-          systemToSoftwareRequirements:
-            saved.systemToSoftwareRequirements || null,
-          softwareToSystemRequirements:
-            saved.softwareToSystemRequirements || null,
-        });
-
-        // restore include flags (systemRequirements still enforced by validation)
-        setIncludeSystemRequirements(!!dataToSave.includeSystemRequirements);
-        setIncludeSystemToSoftwareRequirements(
-          !!dataToSave.includeSystemToSoftwareRequirements
-        );
-        setIncludeSoftwareToSystemRequirements(
-          !!dataToSave.includeSoftwareToSystemRequirements
-        );
-        // restore display mode
-        if (dataToSave.displayMode) {
-          setDisplayMode(dataToSave.displayMode);
-        }
-      } catch {
-        toast.error('Error processing favorite data');
-        setQueriesRequest(defaultSelectedQueriesForSRS);
-      }
-    }, [store.selectedFavorite]);
+      if (!savedDataRef.current) return;
+      if (!sharedQueries?.acquiredTrees) return;
+      const dataToSave = savedDataRef.current?.selectedQueries || savedDataRef.current?.queriesRequest;
+      if (!dataToSave) return;
+      setQueriesRequest({
+        systemRequirements: dataToSave.systemRequirements || null,
+        systemToSoftwareRequirements: dataToSave.systemToSoftwareRequirements || null,
+        softwareToSystemRequirements: dataToSave.softwareToSystemRequirements || null,
+      });
+    }, [sharedQueries?.acquiredTrees]);
 
     // Update document request
     const UpdateDocumentRequestObject = useCallback(() => {
+      if (!store?.docType) return;
       const backend = {};
 
       if (queriesRequest.systemRequirements) {
@@ -182,8 +203,11 @@ const SRSSelector = observer(
       displayMode,
     ]);
 
+    // Save on changes only after restore completes
     useEffect(() => {
-      UpdateDocumentRequestObject();
+      if (!isRestoring && restoreReady) {
+        UpdateDocumentRequestObject();
+      }
     }, [
       queriesRequest,
       includeSystemRequirements,
@@ -191,7 +215,17 @@ const SRSSelector = observer(
       includeSoftwareToSystemRequirements,
       displayMode,
       UpdateDocumentRequestObject,
+      isRestoring,
+      restoreReady,
     ]);
+
+    // Persist once after restore completes
+    useEffect(() => {
+      if (!isRestoring && restoreReady) {
+        UpdateDocumentRequestObject();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRestoring, restoreReady]);
 
     // Validation: System Requirements is required
     useEffect(() => {
@@ -236,6 +270,7 @@ const SRSSelector = observer(
       : undefined;
 
     return (
+      <>
       <Stack spacing={1.5}>
         <SectionCard
           title='Display Mode'
@@ -460,6 +495,8 @@ const SRSSelector = observer(
           </Box>
         ) : null}
       </Stack>
+      <RestoreBackdrop open={!!isRestoring} label='Restoring SRS selection…' />
+      </>
     );
   }
 );

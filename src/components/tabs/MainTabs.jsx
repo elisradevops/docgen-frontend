@@ -30,6 +30,7 @@ import SVDGuide from '../common/guides/SVDGuide';
 import SRSGuide from '../common/guides/SRSGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import ClearIcon from '@mui/icons-material/Clear';
+import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOutlined';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import CloseIcon from '@mui/icons-material/Close';
 import FormattingSettingsDialog from '../dialogs/FormattingSettingsDialog';
@@ -337,7 +338,36 @@ const MainTabs = observer(({ store }) => {
           }}
         >
           {selectedTab !== TAB_DOCS && selectedTab !== TAB_TEMPLATES ? (
-            <FormattingSettingsDialog store={store} />
+            <>
+              <FormattingSettingsDialog store={store} />
+              <Tooltip title='Clear selection' placement='top'>
+                <span>
+                  <IconButton
+                    aria-label='clear-tab-selection'
+                    color='error'
+                    size='small'
+                    onClick={() => {
+                      try {
+                        // Clear session storage entries for this docType in current project
+                        store.clearDocTypeTabSessionState(selectedTab);
+                      } catch {
+                        /* empty */
+                      }
+                      try {
+                        // Broadcast a clear event for all selectors in this tab to reset local state
+                        const ev = `docgen:clear-tab:${selectedTab}`;
+                        window.dispatchEvent(new CustomEvent(ev));
+                      } catch {
+                        /* empty */
+                      }
+                    }}
+                    disabled={!isProjectSelected}
+                  >
+                    <CleaningServicesOutlinedIcon fontSize='small' />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </>
           ) : (
             <Tooltip
               title={

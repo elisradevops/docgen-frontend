@@ -15,6 +15,7 @@ import {
 } from '../store/data/docManagerApi';
 import { toast } from 'react-toastify';
 import logger from '../utils/logger';
+import { makeKey, trySessionStorageGet, trySessionStorageSet, trySessionStorageRemove } from '../utils/storage';
 const sanitizeCookie = (v) => {
   if (v == null) return '';
   const s = String(v).trim();
@@ -68,6 +69,7 @@ class DocGenDataStore {
       setTeamProject: action,
       fetchTemplatesList: action,
       fetchTemplatesListForDownload: action,
+      fetchDocFormsTemplates: action,
       fetchDocuments: action,
       fetchDocFolders: action,
       setSelectedTemplate: action,
@@ -112,6 +114,7 @@ class DocGenDataStore {
       // validation actions
       setValidationState: action,
       clearValidationForIndex: action,
+      clearAllValidationStates: action,
       // debug-docs actions
       setShowDebugDocs: action,
       recomputeDocumentTypes: action,
@@ -125,6 +128,13 @@ class DocGenDataStore {
       this.isAuthenticated = false;
       try {
         window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+        // Clear session-scoped debug-docs preference on logout/auth failure
+        try {
+          const key = makeKey('ui', 'prefs', 'showDebugDocs');
+          window.sessionStorage.removeItem(key);
+        } catch {
+          /* empty */
+        }
         // eslint-disable-next-line no-unused-vars
       } catch (e) {
         // no-op in non-browser contexts
@@ -136,6 +146,21 @@ class DocGenDataStore {
       const patFromCookies = sanitizeCookie(cookies.getItem('azureDevopsPat'));
       if (urlFromCookies && patFromCookies) {
         this.setCredentials(urlFromCookies, patFromCookies);
+      }
+    } catch {
+      /* empty */
+    }
+    // Load session-scoped preference for showing debug doc types
+    try {
+      const raw = trySessionStorageGet(makeKey('ui', 'prefs', 'showDebugDocs'));
+      if (raw != null) {
+        let v = false;
+        try {
+          v = JSON.parse(raw);
+        } catch {
+          v = raw === '1' || raw === 'true';
+        }
+        this.showDebugDocs = !!v;
       }
     } catch {
       /* empty */
@@ -229,6 +254,11 @@ class DocGenDataStore {
   // Toggle visibility of debug document types and recompute the visible list
   setShowDebugDocs(value) {
     this.showDebugDocs = !!value;
+    try {
+      trySessionStorageSet(makeKey('ui', 'prefs', 'showDebugDocs'), JSON.stringify(this.showDebugDocs));
+    } catch {
+      /* empty */
+    }
     this.recomputeDocumentTypes();
   }
 
@@ -354,7 +384,9 @@ class DocGenDataStore {
       logger.error('Error stack:');
       logger.error(err.stack);
     } finally {
-      this.loadingState.contentControlsLoadingState = false;
+      runInAction(() => {
+        this.loadingState.contentControlsLoadingState = false;
+      });
     }
   }
 
@@ -380,6 +412,7 @@ class DocGenDataStore {
   }
   //for setting focused teamProject
   setTeamProject(teamProjectId, teamProjectName) {
+    const prevTeamProject = this.teamProject;
     this.teamProject = teamProjectId;
     this.teamProjectName = teamProjectName;
     // Set the project bucket name
@@ -396,6 +429,16 @@ class DocGenDataStore {
       this.fetchPipelineList();
       this.fetchReleaseDefinitionList();
       this.fetchWorkItemTypeList();
+    }
+    // Clear session tab states whenever selecting a non-empty project and it's different from previous
+    // This includes the first selection after a refresh (prevTeamProject is empty),
+    // as well as switching between projects within the same session.
+    if (teamProjectId && prevTeamProject !== teamProjectId) {
+      try {
+        this.clearAllTabSessionState();
+      } catch {
+        /* empty */
+      }
     }
     if (!teamProjectId) {
       this.workItemTypes = [];
@@ -595,6 +638,11 @@ class DocGenDataStore {
     }
   }
 
+  // Clear all validation states (used when switching doc types)
+  clearAllValidationStates() {
+    this.validationStates = {};
+  }
+
   //for fetching shared queries
   fetchSharedQueries() {
     if (this.teamProject && this.teamProject !== '' && this.docType && this.docType !== '') {
@@ -610,7 +658,9 @@ class DocGenDataStore {
           logger.error(err.stack);
         })
         .finally(() => {
-          this.loadingState.sharedQueriesLoadingState = false;
+          runInAction(() => {
+            this.loadingState.sharedQueriesLoadingState = false;
+          });
         });
     }
   }
@@ -889,7 +939,9 @@ class DocGenDataStore {
         logger.error('Error stack:', err.stack);
       })
       .finally(() => {
-        this.loadingState.testSuiteListLoading = false;
+        runInAction(() => {
+          this.loadingState.testSuiteListLoading = false;
+        });
       });
   }
 
@@ -987,6 +1039,14 @@ class DocGenDataStore {
       this.contentControls[arrayIndex] = contentControlObject;
     } else {
       this.contentControls.push(contentControlObject);
+      arrayIndex = this.contentControls.length - 1;
+    }
+
+    // Persist the latest content control state for this control index for the current tab/session
+    try {
+      this.saveTabSessionState(this.docType, arrayIndex, contentControlObject?.data || {});
+    } catch {
+      /* empty */
     }
 
     this.clearLoadedFavorite();
@@ -1042,7 +1102,133 @@ class DocGenDataStore {
     this.selectedFavorite = null;
   }
 
+  // Session-based tab state helpers (namespaced per org and project)
+  /**
+   * Persist the latest content control state for the current tab/session.
+   * Key shape: makeKey('ui','tabState', teamProject, docType, contentControlIndex)
+   * @param {string} docType Current document type (tab)
+   * @param {number|string} contentControlIndex Index of the content control
+   * @param {any} data Serializable data object to save
+   */
+  saveTabSessionState(docType, contentControlIndex, data) {
+    try {
+      if (!docType && !this.docType) return;
+      const dt = docType || this.docType || '';
+      const project = this.teamProject || 'no-project';
+      const key = makeKey('ui', 'tabState', project, dt, String(contentControlIndex));
+      trySessionStorageSet(key, JSON.stringify(data || {}));
+      if (dt === 'STD') {
+        logger.debug(`[STD] saveTabSessionState key=${key}`);
+      }
+    } catch {
+      /* empty */
+    }
+  }
+
+  /**
+   * Load persisted content control state for the current tab/session.
+   * @param {string} docType Current document type (tab)
+   * @param {number|string} contentControlIndex Index of the content control
+   * @returns {any|null} Parsed data object or null if not found/invalid
+   */
+  loadTabSessionState(docType, contentControlIndex) {
+    try {
+      if (!docType && !this.docType) return null;
+      const dt = docType || this.docType || '';
+      const project = this.teamProject || 'no-project';
+      const key = makeKey('ui', 'tabState', project, dt, String(contentControlIndex));
+      const raw = trySessionStorageGet(key);
+      if (!raw) {
+        if (dt === 'STD') {
+          logger.debug(`[STD] loadTabSessionState no-data key=${key}`);
+        }
+        return null;
+      }
+      if (dt === 'STD') {
+        logger.debug(`[STD] loadTabSessionState hit key=${key}`);
+      }
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Clear persisted state for a specific content control within the current tab/session.
+   * @param {string} docType Current document type (tab)
+   * @param {number|string} contentControlIndex Index of the content control
+   */
+  clearTabSessionState(docType, contentControlIndex) {
+    try {
+      const dt = docType || this.docType || '';
+      const project = this.teamProject || 'no-project';
+      const key = makeKey('ui', 'tabState', project, dt, String(contentControlIndex));
+      trySessionStorageRemove(key);
+      if (dt === 'STD') {
+        logger.debug(`[STD] clearTabSessionState key=${key}`);
+      }
+    } catch {
+      /* empty */
+    }
+  }
+
+  /**
+   * Clear all persisted tab states across all projects and docTypes for this org namespace.
+   */
+  clearAllTabSessionState() {
+    try {
+      const prefix = makeKey('ui', 'tabState');
+      // Iterate from end to avoid index shifting on remove
+      for (let i = window.sessionStorage.length - 1; i >= 0; i--) {
+        const k = window.sessionStorage.key(i);
+        if (k && k.startsWith(prefix)) {
+          try {
+            window.sessionStorage.removeItem(k);
+          } catch {
+            /* empty */
+          }
+        }
+      }
+    } catch {
+      /* empty */
+    }
+  }
+
+  // Clear tab session state for a specific docType in the current project only
+  /**
+   * Clear persisted states for the active project restricted to a specific docType.
+   * @param {string} docType Target document type (tab)
+   */
+  clearDocTypeTabSessionState(docType) {
+    try {
+      const project = this.teamProject || 'no-project';
+      const dt = docType || this.docType || '';
+      if (!dt) return;
+      const prefix = makeKey('ui', 'tabState', project, dt);
+      for (let i = window.sessionStorage.length - 1; i >= 0; i--) {
+        const k = window.sessionStorage.key(i);
+        if (k && k.startsWith(prefix)) {
+          try {
+            window.sessionStorage.removeItem(k);
+          } catch {
+            /* empty */
+          }
+        }
+      }
+    } catch {
+      /* empty */
+    }
+  }
+
+  /**
+   * Load a favorite by id and mark as selected. Sets selectedFavorite to null first
+   * to ensure observers react even if the same favorite is chosen again.
+   * Also applies a saved template selection when present.
+   * @param {string|number} favoriteId
+   */
   loadFavorite(favoriteId) {
+    // Force observable change even when re-selecting the same favorite
+    this.selectedFavorite = null;
     this.selectedFavorite = this.favoriteList.find((fav) => fav.id === favoriteId);
     try {
       const savedTemplate = this.selectedFavorite?.dataToSave?.selectedTemplate;
@@ -1133,10 +1319,10 @@ class DocGenDataStore {
 }
 
 const config = {
-  actions: true, // Log actions
-  reactions: false, // Don't log reactions
-  transactions: false, // Don't log transactions
-  computeds: true, // Log computed values
+  actions: false, // Disable action logs to reduce noise
+  reactions: false,
+  transactions: false,
+  computeds: false, // Disable computed logs
 };
 configureLogger(config);
 
