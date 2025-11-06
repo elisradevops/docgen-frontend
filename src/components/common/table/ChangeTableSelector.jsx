@@ -801,7 +801,7 @@ const ChangeTableSelector = observer(
             </Grid>
           </Grid>
         </Stack>
-        <RestoreBackdrop open={!!(isRestoring || baseRestoring)} />
+        <RestoreBackdrop open={!!(isRestoring || baseRestoring)} label='Restoring SVD selection…' />
       </>
     );
   }

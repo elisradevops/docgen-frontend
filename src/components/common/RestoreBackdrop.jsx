@@ -1,5 +1,5 @@
 import React from 'react';
-import { Backdrop, CircularProgress } from '@mui/material';
+import { Backdrop, CircularProgress, Typography, Stack } from '@mui/material';
 
 /**
  * RestoreBackdrop
@@ -8,7 +8,7 @@ import { Backdrop, CircularProgress } from '@mui/material';
  * @param {Object} props
  * @param {boolean} props.open Whether the overlay is visible
  */
-export default function RestoreBackdrop({ open }) {
+export default function RestoreBackdrop({ open, label }) {
   return (
     <Backdrop
       open={!!open}
@@ -20,7 +20,14 @@ export default function RestoreBackdrop({ open }) {
         WebkitBackdropFilter: 'blur(4px)',
       }}
     >
-      <CircularProgress color='inherit' />
+      <Stack spacing={1} alignItems='center'>
+        <CircularProgress color='inherit' />
+        {label ? (
+          <Typography variant='body2' sx={{ color: 'inherit', opacity: 0.9 }}>
+            {label}
+          </Typography>
+        ) : null}
+      </Stack>
     </Backdrop>
   );
 }

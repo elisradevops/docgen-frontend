@@ -785,7 +785,7 @@ const TestReporterSelector = observer(
           </SectionCard>
         </Stack>
       </Collapse>
-      <RestoreBackdrop open={!!isRestoring} />
+      <RestoreBackdrop open={!!isRestoring} label='Restoring Test Reporter selection…' />
       </>
     );
   }

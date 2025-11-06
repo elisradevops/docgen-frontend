@@ -658,7 +658,7 @@ const TestContentSelector = observer(
           </Box>
         ) : null}
       </Stack>
-      <RestoreBackdrop open={!!isRestoring} />
+      <RestoreBackdrop open={!!isRestoring} label='Restoring STD selection…' />
       </>
     );
   }
