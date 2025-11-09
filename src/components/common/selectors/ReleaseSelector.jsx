@@ -170,6 +170,11 @@ const ReleaseSelector = observer(
     const loadSavedData = useCallback(
       async (data) => {
         try {
+          // Restore comparison mode when provided (favorites/session)
+          if (typeof data?.compareMode === 'string' && (data.compareMode === 'consecutive' || data.compareMode === 'allPairs')) {
+            setCompareMode(data.compareMode);
+          }
+
           if (!validateReleaseExists(data.selectedRelease)) {
             return;
           }
