@@ -20,6 +20,7 @@ const PullRequestSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    replaceTaskWithParent,
     workItemFilterOptions,
   }) => {
     const [selectedRepo, setSelectedRepo] = useState({
@@ -50,6 +51,7 @@ const PullRequestSelector = observer(
             linkedWiOptions: linkedWiOptions,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            replaceTaskWithParent,
             workItemFilterOptions,
           },
         },
@@ -67,6 +69,7 @@ const PullRequestSelector = observer(
       linkedWiOptions,
       includeCommittedBy,
       includeUnlinkedCommits,
+      replaceTaskWithParent,
       contentControlIndex,
       workItemFilterOptions,
     ]);
