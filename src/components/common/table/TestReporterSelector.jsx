@@ -20,7 +20,7 @@ import { toJS } from 'mobx';
 import SectionCard from '../../layout/SectionCard';
 import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
 import RestoreBackdrop from '../RestoreBackdrop';
-import { suiteIdCollection } from '../../../utils/sessionPersistence';
+import { suiteIdCollection, waitForSuites } from '../../../utils/sessionPersistence';
 
 /**
  * TestReporterSelector
@@ -263,16 +263,16 @@ const TestReporterSelector = observer(
         await processTestPlanSelection(dataToSave);
 
         // 2) Wait until suites for the selected plan are loaded, then apply saved suite selections
-        const start = Date.now();
-        const timeoutMs = 7000;
-        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
-        while (
-          store.loadingState?.testSuiteListLoading ||
-          !Array.isArray(store.testSuiteList) ||
-          store.testSuiteList.length === 0
-        ) {
-          if (Date.now() - start > timeoutMs) break;
-          await sleep(50);
+        const hasPlan =
+          !!dataToSave?.testPlanId &&
+          Array.isArray(store.testPlansList) &&
+          !!store.testPlansList.find((p) => p.id === dataToSave.testPlanId);
+        if (hasPlan) {
+          try {
+            await waitForSuites(store, 7000);
+          } catch {
+            /* empty */
+          }
         }
         processTestSuiteSelections(dataToSave);
 
@@ -289,8 +289,7 @@ const TestReporterSelector = observer(
         processTestPlanSelection,
         processTestSuiteSelections,
         processSavedQueries,
-        store.loadingState?.testSuiteListLoading,
-        store.testSuiteList,
+        store,
       ]
     );
 
