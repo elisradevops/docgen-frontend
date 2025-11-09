@@ -22,6 +22,7 @@ const PipelineSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    replaceTaskWithParent,
     workItemFilterOptions,
     isRestoring,
     onRestored,
@@ -51,6 +52,7 @@ const PipelineSelector = observer(
             linkedWiOptions: linkedWiOptions,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            replaceTaskWithParent,
             workItemFilterOptions,
           },
         },
@@ -69,6 +71,7 @@ const PipelineSelector = observer(
       contentControlIndex,
       includeCommittedBy,
       includeUnlinkedCommits,
+      replaceTaskWithParent,
       workItemFilterOptions,
     ]);
 

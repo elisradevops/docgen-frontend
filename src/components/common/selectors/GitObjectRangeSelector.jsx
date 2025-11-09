@@ -33,6 +33,7 @@ const GitObjectRangeSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    replaceTaskWithParent,
     workItemFilterOptions,
     isRestoring,
     onRestored,
@@ -78,6 +79,7 @@ const GitObjectRangeSelector = observer(
             linkedWiOptions: linkedWiOptions,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            replaceTaskWithParent,
             workItemFilterOptions,
           },
         },
@@ -101,6 +103,7 @@ const GitObjectRangeSelector = observer(
       contentControlIndex,
       includeCommittedBy,
       includeUnlinkedCommits,
+      replaceTaskWithParent,
       workItemFilterOptions,
     ]);
 

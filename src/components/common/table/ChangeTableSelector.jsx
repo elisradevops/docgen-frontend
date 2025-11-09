@@ -4,7 +4,9 @@ import CommitDateSelector from '../selectors/CommitDateSelector';
 import PipelineSelector from '../selectors/PipelineSelector';
 import ReleaseSelector from '../selectors/ReleaseSelector';
 import { observer } from 'mobx-react';
-import { Box, Checkbox, Collapse, FormControlLabel, Typography, Grid, Stack, Button } from '@mui/material';
+import { Box, Checkbox, Collapse, FormControlLabel, Typography, Grid, Stack, Button, Tooltip } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import SmartAutocomplete from '../SmartAutocomplete';
 import PullRequestSelector from '../selectors/PullRequestSelector';
 import QueryTree from '../QueryTree';
@@ -55,6 +57,7 @@ const ChangeTableSelector = observer(
     const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
     const [includeCommittedBy, setIncludeCommittedBy] = useState(false);
     const [includeUnlinkedCommits, setIncludeUnlinkedCommits] = useState(false);
+    const [replaceTaskWithParent, setReplaceTaskWithParent] = useState(false);
     const [includeWorkItemFilter, setIncludeWorkItemFilter] = useState(false);
     const [selectedWorkItemTypes, setSelectedWorkItemTypes] = useState([]);
     const [selectedWorkItemStates, setSelectedWorkItemStates] = useState([]);
@@ -309,6 +312,7 @@ const ChangeTableSelector = observer(
           processWorkItemFilterOptions(dataToSave.workItemFilterOptions);
           setIncludeCommittedBy(dataToSave.includeCommittedBy || false);
           setIncludeUnlinkedCommits(dataToSave.includeUnlinkedCommits || false);
+          setReplaceTaskWithParent(dataToSave.replaceTaskWithParent || false);
           processRangeTypeSelection(dataToSave);
           setLoadedData(dataToSave);
         } catch (error) {
@@ -332,6 +336,7 @@ const ChangeTableSelector = observer(
       setIncludeKnownBugs(false);
       setIncludeCommittedBy(false);
       setIncludeUnlinkedCommits(false);
+      setReplaceTaskWithParent(false);
       setIncludeWorkItemFilter(false);
       setSelectedWorkItemTypes([]);
       setSelectedWorkItemStates([]);
@@ -444,6 +449,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
                       onRestored={() => setIsRestoring(false)}
@@ -463,6 +469,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
                       onRestored={() => setIsRestoring(false)}
@@ -481,6 +488,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
                       onRestored={() => setIsRestoring(false)}
@@ -499,6 +507,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
                       onRestored={() => setIsRestoring(false)}
@@ -519,6 +528,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                     />
                   ) : null}
@@ -553,6 +563,39 @@ const ChangeTableSelector = observer(
                         />
                       }
                       label='Include committer'
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={replaceTaskWithParent}
+                          onChange={(_event, checked) => setReplaceTaskWithParent(checked)}
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+                          Replace Task with parent item (if exists)
+                          <Tooltip
+                            arrow
+                            placement='top'
+                            componentsProps={{ tooltip: { sx: { maxWidth: 420, p: 1, '& .MuiTypography-root': { lineHeight: 1.35 } } } }}
+                            title={
+                              <Box>
+                                <Typography variant='body2'>
+                                  When enabled, Task work items are replaced by their immediate parent Requirement (1 level).
+                                </Typography>
+                                <Stack direction='row' alignItems='center' spacing={0.5} sx={{ mt: 0.5 }}>
+                                  <WarningAmberOutlinedIcon sx={{ color: 'warning.main' }} fontSize='small' />
+                                  <Typography variant='caption' sx={{ color: 'warning.main', fontWeight: 600 }}>
+                                    With this mode on, Task items will not be displayed.
+                                  </Typography>
+                                </Stack>
+                              </Box>
+                            }
+                          >
+                            <InfoOutlinedIcon fontSize='small' color='info' />
+                          </Tooltip>
+                        </Box>
+                      }
                     />
                   </Stack>
                 </Stack>

@@ -41,6 +41,12 @@ const SVDGuide = () => {
         </ListItem>
         <ListItem>
           <ListItemText
+            primary='Replace Task with parent item (if exists)'
+            secondary='When enabled, Task work items are replaced by their immediate parent Requirement (one level). As a result, Task rows may be omitted from the results.'
+          />
+        </ListItem>
+        <ListItem>
+          <ListItemText
             primary='Upload Installation Instructions'
             secondary='Attach supplemental guidance (doc, pdf, txt).' 
           />
