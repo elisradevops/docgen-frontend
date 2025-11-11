@@ -14,6 +14,7 @@ import {
 import SmartAutocomplete from '../SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
+import TocReminderToast from '../customToasts/TocReminderToast';
 import QueryTree from '../QueryTree';
 import { validateQuery } from '../../../utils/queryValidation';
 import { toJS } from 'mobx';
@@ -414,6 +415,25 @@ const TestReporterSelector = observer(
       } //In case of None or Linked requirement
       else {
         setLinkedQueryRequest({ ...defaultSelectedQueries, linkedQueryMode: value });
+        if (value === 'linked') {
+          toast.info(
+            (
+              <TocReminderToast
+                icon="🔗"
+                title="Linked mode enabled"
+                description="To include related work items in your export, add these columns to your selection:"
+                items={[
+                  'Associated Requirement',
+                  'Associated Bug',
+                  'Associated CR',
+                ]}
+                tip="Find them in the Columns panel. Without these columns, linked items will not be fetched."
+                tipIcon="💡"
+              />
+            ),
+            { autoClose: 8000, closeOnClick: true }
+          );
+        }
       }
     };
 
