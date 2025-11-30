@@ -43,14 +43,27 @@ export default function useTabStatePersistence({
     const fav = store?.selectedFavorite?.dataToSave;
     if (!fav) return;
     const favId = store?.selectedFavorite?.id;
-    const key = favId != null ? `id:${favId}` : `hash:${(() => { try { return JSON.stringify(fav);} catch { return 'x'; } })()}`;
+    const key =
+      favId != null
+        ? `id:${favId}`
+        : `hash:${(() => {
+            try {
+              return JSON.stringify(fav);
+            } catch {
+              return 'x';
+            }
+          })()}`;
     if (appliedFavoriteKeyRef.current === key) return;
     (async () => {
       try {
         setIsRestoring(true);
         savedDataRef.current = fav || null;
         if (typeof applySavedDataRef.current === 'function') {
-          await applySavedDataRef.current(fav);
+          try {
+            await applySavedDataRef.current(fav);
+          } catch {
+            // swallow applySavedData errors here; component-level handlers will surface them
+          }
         }
       } finally {
         setIsRestoring(false);
@@ -58,7 +71,7 @@ export default function useTabStatePersistence({
         appliedFavoriteKeyRef.current = key;
       }
     })();
-  }, [store?.selectedFavorite]);
+  }, [store?.selectedFavorite, contentControlIndex]);
 
   useEffect(() => {
     if (restoredFromSessionRef.current) return;
@@ -76,7 +89,11 @@ export default function useTabStatePersistence({
           setIsRestoring(true);
           savedDataRef.current = dataToSave || null;
           if (typeof applySavedDataRef.current === 'function') {
-            await applySavedDataRef.current(dataToSave);
+            try {
+              await applySavedDataRef.current(dataToSave);
+            } catch {
+              // swallow applySavedData errors here; component-level handlers will surface them
+            }
           }
         } finally {
           setIsRestoring(false);
