@@ -4,7 +4,17 @@ import CommitDateSelector from '../selectors/CommitDateSelector';
 import PipelineSelector from '../selectors/PipelineSelector';
 import ReleaseSelector from '../selectors/ReleaseSelector';
 import { observer } from 'mobx-react';
-import { Box, Checkbox, Collapse, FormControlLabel, Typography, Grid, Stack, Button, Tooltip } from '@mui/material';
+import {
+  Box,
+  Checkbox,
+  Collapse,
+  FormControlLabel,
+  Typography,
+  Grid,
+  Stack,
+  Button,
+  Tooltip,
+} from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import SmartAutocomplete from '../SmartAutocomplete';
@@ -304,7 +314,6 @@ const ChangeTableSelector = observer(
     // Hook-driven restore/clear
     const applySavedData = useCallback(
       async (dataToSave) => {
-        // Start local restoring to block subselector saves until it calls onRestored
         setIsRestoring(true);
         try {
           processSystemOverviewData(dataToSave.systemOverviewQuery);
@@ -317,6 +326,7 @@ const ChangeTableSelector = observer(
           setLoadedData(dataToSave);
         } catch (error) {
           toast.error(`Error restoring previous selection: ${error?.message ?? 'Unknown error'}`);
+          setIsRestoring(false);
         }
       },
       [
@@ -324,6 +334,7 @@ const ChangeTableSelector = observer(
         processLinkedWiOptions,
         processWorkItemFilterOptions,
         processRangeTypeSelection,
+        contentControlIndex,
       ]
     );
 
@@ -350,6 +361,12 @@ const ChangeTableSelector = observer(
       applySavedData,
       resetLocalState,
     });
+
+    useEffect(() => {
+      if (!baseRestoring && isRestoring) {
+        setIsRestoring(false);
+      }
+    }, [isRestoring, baseRestoring, contentControlIndex]);
 
     const handleNewFileUploaded = (fileObject) => {
       if (fileObject) {
@@ -452,7 +469,9 @@ const ChangeTableSelector = observer(
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
-                      onRestored={() => setIsRestoring(false)}
+                      onRestored={() => {
+                        setIsRestoring(false);
+                      }}
                     />
                   ) : null}
                   {selectedType?.type === 'date' ? (
@@ -472,7 +491,9 @@ const ChangeTableSelector = observer(
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
-                      onRestored={() => setIsRestoring(false)}
+                      onRestored={() => {
+                        setIsRestoring(false);
+                      }}
                     />
                   ) : null}
                   {selectedType?.type === 'pipeline' ? (
@@ -491,7 +512,9 @@ const ChangeTableSelector = observer(
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
-                      onRestored={() => setIsRestoring(false)}
+                      onRestored={() => {
+                        setIsRestoring(false);
+                      }}
                     />
                   ) : null}
                   {selectedType?.type === 'release' ? (
@@ -577,22 +600,41 @@ const ChangeTableSelector = observer(
                           <Tooltip
                             arrow
                             placement='top'
-                            componentsProps={{ tooltip: { sx: { maxWidth: 420, p: 1, '& .MuiTypography-root': { lineHeight: 1.35 } } } }}
+                            componentsProps={{
+                              tooltip: {
+                                sx: { maxWidth: 420, p: 1, '& .MuiTypography-root': { lineHeight: 1.35 } },
+                              },
+                            }}
                             title={
                               <Box>
                                 <Typography variant='body2'>
-                                  When enabled, Task work items are replaced by their immediate parent Requirement (1 level).
+                                  When enabled, Task work items are replaced by their immediate parent
+                                  Requirement (1 level).
                                 </Typography>
-                                <Stack direction='row' alignItems='center' spacing={0.5} sx={{ mt: 0.5 }}>
-                                  <WarningAmberOutlinedIcon sx={{ color: 'warning.main' }} fontSize='small' />
-                                  <Typography variant='caption' sx={{ color: 'warning.main', fontWeight: 600 }}>
+                                <Stack
+                                  direction='row'
+                                  alignItems='center'
+                                  spacing={0.5}
+                                  sx={{ mt: 0.5 }}
+                                >
+                                  <WarningAmberOutlinedIcon
+                                    sx={{ color: 'warning.main' }}
+                                    fontSize='small'
+                                  />
+                                  <Typography
+                                    variant='caption'
+                                    sx={{ color: 'warning.main', fontWeight: 600 }}
+                                  >
                                     With this mode on, Task items will not be displayed.
                                   </Typography>
                                 </Stack>
                               </Box>
                             }
                           >
-                            <InfoOutlinedIcon fontSize='small' color='info' />
+                            <InfoOutlinedIcon
+                              fontSize='small'
+                              color='info'
+                            />
                           </Tooltip>
                         </Box>
                       }
@@ -844,7 +886,10 @@ const ChangeTableSelector = observer(
             </Grid>
           </Grid>
         </Stack>
-        <RestoreBackdrop open={!!(isRestoring || baseRestoring)} label='Restoring SVD selection…' />
+        <RestoreBackdrop
+          open={!!(isRestoring || baseRestoring)}
+          label='Restoring SVD selection…'
+        />
       </>
     );
   }

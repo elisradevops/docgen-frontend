@@ -158,22 +158,45 @@ const CommitDateSelector = observer(
       if (!dataToRead) return;
       const token = `${dataToRead?.repoId}|${dataToRead?.branchName}|${dataToRead?.from}|${dataToRead?.to}`;
       if (restoreTokenRef.current === token) return;
+
       (async () => {
-        setSelectedRepo({
-          key: dataToRead.repoId,
-          text: repoList.find((repo) => repo.id === dataToRead.repoId).name,
-        });
-        await store.fetchGitRepoBranches(dataToRead.repoId);
-        let splitName = dataToRead.branchName.split('/');
-        let indexAfterHeads = splitName.indexOf('heads') + 1;
-        let elementsAfterHeads = splitName.slice(indexAfterHeads).join('/');
-        setSelectedBranch({ key: elementsAfterHeads, text: elementsAfterHeads });
-        setSelectedStartDate(new Date(dataToRead.from));
-        setSelectedEndDate(new Date(dataToRead.to));
-        setIncludePullRequests(dataToRead.includePullRequests);
-        setIncludeChangeDescription(dataToRead.includeChangeDescription);
-        restoreTokenRef.current = token;
-        onRestored && onRestored();
+        try {
+          const repo = (repoList || []).find((r) => r.id === dataToRead.repoId);
+          if (!repo) {
+            console.warn(
+              `CommitDateSelector restore: repo with id ${dataToRead.repoId} not found in repoList`
+            );
+            // Nothing more we can reliably restore; avoid throwing and just mark token to prevent loops
+            return;
+          }
+
+          setSelectedRepo({
+            key: dataToRead.repoId,
+            text: repo.name,
+          });
+
+          await store.fetchGitRepoBranches(dataToRead.repoId);
+
+          const splitName = String(dataToRead.branchName || '').split('/');
+          const indexAfterHeads = splitName.indexOf('heads') + 1;
+          const elementsAfterHeads =
+            indexAfterHeads > 0 && indexAfterHeads < splitName.length
+              ? splitName.slice(indexAfterHeads).join('/')
+              : dataToRead.branchName || '';
+
+          setSelectedBranch({ key: elementsAfterHeads, text: elementsAfterHeads });
+          setSelectedStartDate(new Date(dataToRead.from));
+          setSelectedEndDate(new Date(dataToRead.to));
+          setIncludePullRequests(Boolean(dataToRead.includePullRequests));
+          setIncludeChangeDescription(Boolean(dataToRead.includeChangeDescription));
+        } catch (error) {
+          console.error('CommitDateSelector restore error:', error);
+        } finally {
+          restoreTokenRef.current = token;
+          if (onRestored) {
+            onRestored();
+          }
+        }
       })();
     }, [dataToRead, store, repoList, onRestored]);
 
@@ -197,7 +220,11 @@ const CommitDateSelector = observer(
         }}
       /> */}
 
-        <Grid container spacing={2} alignItems='flex-start'>
+        <Grid
+          container
+          spacing={2}
+          alignItems='flex-start'
+        >
           {/* Repo and Branch side-by-side */}
           <Grid size={{ xs: 12, md: 6 }}>
             <SmartAutocomplete
@@ -264,7 +291,12 @@ const CommitDateSelector = observer(
 
           {/* Local checkboxes aligned and spaced consistently */}
           <Grid size={12}>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems='flex-start' sx={{ mt: 1 }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={1}
+              alignItems='flex-start'
+              sx={{ mt: 1 }}
+            >
               <FormControlLabel
                 sx={{ m: 0 }}
                 control={
