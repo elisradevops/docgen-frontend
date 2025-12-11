@@ -17,7 +17,10 @@ const SVDGuide = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant='h5' sx={{ fontWeight: 600, mb: 2 }}>
+      <Typography
+        variant='h5'
+        sx={{ fontWeight: 600, mb: 2 }}
+      >
         SVD Change Log Guide
       </Typography>
       <List disablePadding>
@@ -42,13 +45,13 @@ const SVDGuide = () => {
         <ListItem>
           <ListItemText
             primary='Replace Task with parent item (if exists)'
-            secondary='When enabled, Task work items are replaced by their immediate parent Requirement (one level). As a result, Task rows may be omitted from the results.'
+            secondary='When enabled, Task work items are replaced by their immediate Requirement or Change Request parent (one level), if such a parent exists. Tasks whose parent is of any other type, or missing, are omitted, so Task rows may be removed from the results.'
           />
         </ListItem>
         <ListItem>
           <ListItemText
             primary='Upload Installation Instructions'
-            secondary='Attach supplemental guidance (doc, pdf, txt).' 
+            secondary='Attach supplemental guidance (doc, pdf, txt).'
           />
         </ListItem>
         <ListItem>
@@ -73,7 +76,9 @@ const SVDGuide = () => {
         <ListItem>
           <ListItemText
             primary='Comparison Mode'
-            secondary={'Choose how releases are compared in the selected range. Consecutive (fast): compares only adjacent releases and is recommended when artifacts/services exist in most releases. All pairs (slow): compares every possible pair; use when artifacts/services appear only in non-adjacent releases and you want net changes across skipped versions. Note: All pairs can be much slower and may show repeated changes across multiple pairs.'}
+            secondary={
+              'Choose how releases are compared in the selected range. Consecutive (fast): compares only adjacent releases and is recommended when artifacts/services exist in most releases. All pairs (slow): compares every possible pair; use when artifacts/services appear only in non-adjacent releases and you want net changes across skipped versions. Note: All pairs can be much slower and may show repeated changes across multiple pairs.'
+            }
           />
         </ListItem>
 
@@ -84,8 +89,15 @@ const SVDGuide = () => {
             secondary='Pick the source for change detection.'
           />
         </ListItemButton>
-        <Collapse in={openBaseData} timeout='auto' unmountOnExit>
-          <List component='div' disablePadding>
+        <Collapse
+          in={openBaseData}
+          timeout='auto'
+          unmountOnExit
+        >
+          <List
+            component='div'
+            disablePadding
+          >
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='Git Object Range'
