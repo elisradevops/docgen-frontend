@@ -93,6 +93,7 @@ src/
   - Test content (plans, suites, reporter exports)
   - Work item queries (paragraphs/tables)
   - Traceability matrices and change tables
+  - SVD change logs with optional Task-to-parent replacement, where Task work items can be replaced by their immediate Requirement or Change Request parent (other or missing parents are omitted)
   - STR/SRS composite builders with guide drawers
   - Attachments, wiki URLs, and validation helpers
     The footer highlights missing required selections and blocks submission until validation passes.
