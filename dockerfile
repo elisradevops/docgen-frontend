@@ -1,5 +1,5 @@
 # stage1 as builder
-FROM node:22-alpine as builder
+FROM node:22-slim as builder
 WORKDIR /react-ui
 
 # copy the package.json and package-lock.json to install dependencies
