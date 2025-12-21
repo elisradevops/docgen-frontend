@@ -21,6 +21,14 @@ const sanitizeCookie = (v) => {
   const s = String(v).trim();
   return s === 'null' || s === 'undefined' ? '' : s;
 };
+
+const isAllowedTemplateFileName = (objectKeyOrName) => {
+  const fileName = String(objectKeyOrName || '').split('/').pop() || '';
+  if (!fileName) return false;
+  if (fileName.startsWith('.')) return false;
+  const ext = fileName.split('.').pop()?.toLowerCase() || '';
+  return ['doc', 'docx', 'docm', 'dot', 'dotx', 'dotm'].includes(ext);
+};
 const azureDevopsUrl = sanitizeCookie(cookies.getItem('azureDevopsUrl'));
 const azureDevopsPat = sanitizeCookie(cookies.getItem('azureDevopsPat'));
 class DocGenDataStore {
@@ -460,7 +468,7 @@ class DocGenDataStore {
       );
 
       // Flatten the array of template lists
-      this.templateList = allTemplates.flat();
+      this.templateList = allTemplates.flat().filter((t) => isAllowedTemplateFileName(t?.name));
     } catch (e) {
       logger.error(`Error occurred while fetching templates: ${e.message}`);
       logger.error(`Error stack: `);
@@ -974,16 +982,18 @@ class DocGenDataStore {
   }
 
   //for fetching documents
-  fetchTemplatesListForDownload() {
+  fetchTemplatesListForDownload(projectNameOverride = undefined) {
     this.loadingState.templatesLoadingState = true;
-    getBucketFileList('templates', null, true, this.teamProjectName, true)
+    const effectiveProjectName = projectNameOverride !== undefined ? projectNameOverride : this.teamProjectName;
+    getBucketFileList('templates', null, true, effectiveProjectName, true)
       .then((data) => {
         // Process the data to fix the URLs
-        const processedData = data
+        const processedData = (data || [])
+          .filter((item) => isAllowedTemplateFileName(item?.name))
           .map((item) => {
-            if (item.url && this.teamProjectName) {
+            if (item.url && effectiveProjectName) {
               // Split the URL by the project name and remove the first occurrence
-              const parts = item.url.split(`/${this.teamProjectName}/`);
+              const parts = item.url.split(`/${effectiveProjectName}/`);
               item.url = parts.join(`/`);
             }
             return item;

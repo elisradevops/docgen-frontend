@@ -228,7 +228,12 @@ const MainTabs = observer(({ store }) => {
       store.fetchDocuments();
     } else if (selectedTab === TAB_TEMPLATES) {
       // Templates tab
-      store.fetchTemplatesListForDownload();
+      try {
+        // Let TemplatesTab decide which library (project/shared) to refresh
+        window.dispatchEvent(new CustomEvent('docgen:templates-refresh'));
+      } catch {
+        store.fetchTemplatesListForDownload();
+      }
     }
   };
 
@@ -259,6 +264,20 @@ const MainTabs = observer(({ store }) => {
       <StyledTab
         label='Templates'
         value={TAB_TEMPLATES}
+      />
+      {/* Keep MUI Tabs value valid when using the Developer button */}
+      <StyledTab
+        label='Developer'
+        value={TAB_DEVELOPER}
+        // Must not be `display: none` or removed from layout; MUI measures the selected tab.
+        sx={{
+          visibility: 'hidden',
+          minWidth: 0,
+          width: 0,
+          maxWidth: 0,
+          p: 0,
+          m: 0,
+        }}
       />
     </StyledTabs>
   );
@@ -390,7 +409,7 @@ const MainTabs = observer(({ store }) => {
           )}
           {projectClearable ? (
             <Tooltip
-              title='Clear the selected TeamProject to view all shared templates'
+              title='Clear the selected TeamProject (optional)'
               placement='top'
             >
               <Button
