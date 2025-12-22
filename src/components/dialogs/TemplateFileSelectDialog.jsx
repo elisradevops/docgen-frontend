@@ -31,6 +31,13 @@ export const TemplateFileSelectDialog = ({
   const [openDialog, setOpenDialog] = useState(false);
 
   const storageKey = (docType, project) => makeKey('template', docType, project || 'shared');
+  const isAllowedTemplateName = (objectKeyOrName) => {
+    const fileName = String(objectKeyOrName || '').split('/').pop() || '';
+    if (!fileName) return false;
+    if (fileName.startsWith('.')) return false;
+    const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    return ['doc', 'docx', 'docm', 'dot', 'dotx', 'dotm'].includes(ext);
+  };
   const formatWhen = (d) => {
     if (!d) return '';
     try {
@@ -51,8 +58,10 @@ export const TemplateFileSelectDialog = ({
         const templates = await store.fetchTemplatesList(docType, selectedTeamProject);
         setTemplateFiles(templates); // cache
 
-        // Do not override if a template is already selected (e.g., via Favorites)
-        const alreadySelected = store.selectedTemplate?.url || selectedTemplate?.url;
+        // Do not override if a valid template is already selected (e.g., via Favorites)
+        const currentSelection = store.selectedTemplate || selectedTemplate;
+        const alreadySelected =
+          currentSelection?.url && isAllowedTemplateName(currentSelection?.text) ? currentSelection.url : null;
 
         if (templates.length > 0 && !alreadySelected) {
           const sharedTemplates = templates.filter((t) => String(t.name || '').startsWith('shared/'));

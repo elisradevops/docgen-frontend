@@ -1,6 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
-import { Alert, Box, Paper, Stack, Button as MuiButton } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Paper,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+  Button as MuiButton,
+} from '@mui/material';
 import { Button, Table, Tooltip, Input, Space, Popconfirm } from 'antd';
 import { DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
@@ -18,7 +27,18 @@ import {
 } from '../../../store/data/docManagerApi';
 import logger from '../../../utils/logger';
 
+const resolveProjectName = (selectedTeamProject) => {
+  if (!selectedTeamProject) return 'shared';
+  if (typeof selectedTeamProject === 'string') return selectedTeamProject || 'shared';
+  // Handle object case: { key, text }
+  return selectedTeamProject.text || selectedTeamProject.key || 'shared';
+};
+
 const TemplatesTab = observer(({ store, selectedTeamProject }) => {
+  const projectName = useMemo(() => resolveProjectName(selectedTeamProject), [selectedTeamProject]);
+  const hasProject = projectName !== 'shared';
+  const sharePointEnabled = !!store.showDebugDocs;
+
   const [templates, setTemplates] = useState([]);
   const [deletingTemplateEtag, setDeletingTemplateEtag] = useState(null);
   const [searchText, setSearchText] = useState('');
@@ -32,34 +52,63 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   const [syncing, setSyncing] = useState(false);
   const [conflictData, setConflictData] = useState(null);
 
-  // Helper to get project name string from selectedTeamProject (which might be object or string)
-  const getProjectName = () => {
-    if (!selectedTeamProject) return 'shared';
-    if (typeof selectedTeamProject === 'string') return selectedTeamProject;
-    // Handle object case: { key, text }
-    return selectedTeamProject.text || selectedTeamProject.key || 'shared';
-  };
-
-  // Load SharePoint configuration for this project
-  const loadSharePointConfig = async () => {
-    try {
-      const projectName = getProjectName();
-      const userId = store.userDetails?.name;
-      const result = await getSharePointConfig(userId, projectName);
-      if (result.success && result.config) {
-        setSpConfig(result.config);
-      }
-    } catch {
-      // Config not found, that's okay
-      logger.debug('No SharePoint config found for this project');
-    }
-  };
+  const viewManuallyChangedRef = useRef(false);
+  const [templateLibrary, setTemplateLibrary] = useState(() => (hasProject ? 'project' : 'shared'));
 
   useEffect(() => {
-    store.fetchTemplatesListForDownload();
+    // Keep the existing UX: selecting a project defaults to the project library.
+    // Shared library remains always accessible via the toggle.
+    if (!hasProject) {
+      viewManuallyChangedRef.current = false;
+      setTemplateLibrary('shared');
+    } else if (!viewManuallyChangedRef.current) {
+      setTemplateLibrary('project');
+    }
+  }, [hasProject, projectName]);
+
+  const refreshTemplates = useCallback(() => {
+    const projectNameOverride = templateLibrary === 'shared' ? '' : undefined;
+    store.fetchTemplatesListForDownload(projectNameOverride);
+  }, [store, templateLibrary]);
+
+  useEffect(() => {
+    refreshTemplates();
+  }, [projectName, refreshTemplates]);
+
+  useEffect(() => {
+    if (!sharePointEnabled) return;
+    if (!hasProject) return;
+    const loadSharePointConfig = async () => {
+      try {
+        const userId = store.userDetails?.name;
+        if (!userId) return;
+        const result = await getSharePointConfig(userId, projectName);
+        if (result.success && result.config) {
+          setSpConfig(result.config);
+        }
+      } catch {
+        // Config not found, that's okay
+        logger.debug('No SharePoint config found for this project');
+      }
+    };
     loadSharePointConfig();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTeamProject, store]);
+  }, [hasProject, projectName, sharePointEnabled, store, store.userDetails?.name]);
+
+  useEffect(() => {
+    if (sharePointEnabled) return;
+    setShowConfigDialog(false);
+    setShowCredentialsDialog(false);
+    setShowConflictDialog(false);
+    setSpCredentials(null);
+    setConflictData(null);
+    setSyncing(false);
+  }, [sharePointEnabled]);
+
+  useEffect(() => {
+    const onRefresh = () => refreshTemplates();
+    window.addEventListener('docgen:templates-refresh', onRefresh);
+    return () => window.removeEventListener('docgen:templates-refresh', onRefresh);
+  }, [refreshTemplates]);
 
   useEffect(() => {
     setTemplates(store.templateForDownload || []);
@@ -147,9 +196,9 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
 
   // SharePoint sync handlers
   const handleSharePointSync = () => {
+    if (!sharePointEnabled) return;
     // Validate project is selected (not 'shared' default)
-    const projectName = getProjectName();
-    if (!selectedTeamProject || projectName === 'shared') {
+    if (!hasProject) {
       toast.error('Please select a project before syncing templates');
       return;
     }
@@ -222,7 +271,6 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
 
   const handleConfigSubmit = async (config) => {
     try {
-      const projectName = getProjectName();
       const userId = store.userDetails?.name;
       
       await saveSharePointConfig(
@@ -251,7 +299,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       // Check for conflicts
       setSyncing(true);
       const bucketName = 'templates';
-      const projectName = getProjectName();
+      const currentProjectName = resolveProjectName(selectedTeamProject);
       const docType = store.docType || '';
       
       const result = await checkSharePointConflicts(
@@ -260,7 +308,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         spConfig.folder,
         credentials,
         bucketName,
-        projectName,
+        currentProjectName,
         docType
       );
       
@@ -300,7 +348,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
     try {
       setSyncing(true);
       const bucketName = 'templates';
-      const projectName = getProjectName();
+      const currentProjectName = resolveProjectName(selectedTeamProject);
       const docType = store.docType || '';
       
       // Use passed credentials parameter, fallback to state if not provided
@@ -312,7 +360,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         spConfig.folder,
         authToUse,
         bucketName,
-        projectName,
+        currentProjectName,
         docType,
         filesToSkip
       );
@@ -351,8 +399,11 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
           toast.info(message, { autoClose: 3000 });
         }
         
-        // Refresh templates list
-        store.fetchTemplatesListForDownload();
+        // Refresh templates list (respect the current library view)
+        refreshTemplates();
+        if (templateLibrary === 'shared' && hasProject) {
+          toast.info('Sync completed. Switch to "Project templates" to see synced files.', { autoClose: 4000 });
+        }
       }
     } catch (error) {
       setSyncing(false);
@@ -393,7 +444,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       })
       .finally(() => {
         setDeletingTemplateEtag(null);
-        store.fetchTemplatesListForDownload();
+        refreshTemplates();
       });
   };
 
@@ -481,46 +532,96 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   return (
     <Stack spacing={2} sx={{ height: '100%', minHeight: 0 }}>
       <Alert severity='info' sx={{ flexShrink: 0 }}>
-        Select a project to view its templates or leave it blank to see the shared library.
+        View project templates or standard templates (shared) without clearing the selected Team Project.
       </Alert>
-      
-      {(!selectedTeamProject || getProjectName() === 'shared') ? (
-        <Alert severity="warning" sx={{ flexShrink: 0 }}>
-          ⚠️ Select a project first to sync templates from SharePoint
-        </Alert>
-      ) : (
-        <Box sx={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-          <MuiButton
-            variant="contained"
-            startIcon={<CloudSyncIcon />}
-            onClick={handleSharePointSync}
-            disabled={syncing}
+
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+          flexShrink: 0,
+        }}
+      >
+        <ToggleButtonGroup
+          color='primary'
+          size='small'
+          value={templateLibrary}
+          exclusive
+          onChange={(_e, next) => {
+            if (!next) return;
+            viewManuallyChangedRef.current = true;
+            setTemplateLibrary(next);
+          }}
+          aria-label='template library view'
+        >
+          <ToggleButton
+            value='project'
+            disabled={!hasProject}
+            aria-label='project templates'
           >
-            {syncing ? 'Syncing...' : 'Sync from SharePoint'}
-          </MuiButton>
-          {spConfig ? (
-            <Alert severity="success" sx={{ flex: 1 }}>
-              <Box>
-                <strong>📁 SharePoint Location:</strong>
-                <br />
-                {spConfig.displayName && (
-                  <>
-                    <strong>{spConfig.displayName}</strong>
-                    <br />
-                  </>
-                )}
-                <span style={{ fontSize: '0.9em' }}>
-                  {new URL(spConfig.siteUrl).hostname} → {spConfig.library} → {spConfig.folder}
-                </span>
-              </Box>
-            </Alert>
-          ) : (
-            <Alert severity="info" sx={{ flex: 1 }}>
-              Click "Sync from SharePoint" to configure your SharePoint source
-            </Alert>
-          )}
-        </Box>
-      )}
+            Project templates
+          </ToggleButton>
+          <ToggleButton
+            value='shared'
+            aria-label='standard templates'
+          >
+            Standard templates
+          </ToggleButton>
+        </ToggleButtonGroup>
+
+        <Typography
+          variant='body2'
+          color='text.secondary'
+          sx={{ flex: 1, minWidth: 260 }}
+        >
+          {templateLibrary === 'shared'
+            ? `Showing the shared library${hasProject ? ` (project "${projectName}" remains selected)` : ''}.`
+            : `Showing templates for project "${projectName}".`}
+        </Typography>
+      </Box>
+      
+      {sharePointEnabled ? (
+        !hasProject ? (
+          <Alert severity="warning" sx={{ flexShrink: 0 }}>
+            ⚠️ Select a project first to sync templates from SharePoint
+          </Alert>
+        ) : (
+          <Box sx={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+            <MuiButton
+              variant="contained"
+              startIcon={<CloudSyncIcon />}
+              onClick={handleSharePointSync}
+              disabled={syncing}
+            >
+              {syncing ? 'Syncing...' : 'Sync from SharePoint'}
+            </MuiButton>
+            {spConfig ? (
+              <Alert severity="success" sx={{ flex: 1 }}>
+                <Box>
+                  <strong>📁 SharePoint Location:</strong>
+                  <br />
+                  {spConfig.displayName && (
+                    <>
+                      <strong>{spConfig.displayName}</strong>
+                      <br />
+                    </>
+                  )}
+                  <span style={{ fontSize: '0.9em' }}>
+                    {new URL(spConfig.siteUrl).hostname} → {spConfig.library} → {spConfig.folder}
+                  </span>
+                </Box>
+              </Alert>
+            ) : (
+              <Alert severity="info" sx={{ flex: 1 }}>
+                Click "Sync from SharePoint" to configure your SharePoint source
+              </Alert>
+            )}
+          </Box>
+        )
+      ) : null}
 
       {store.loadingState.templatesLoadingState ? (
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
@@ -561,29 +662,33 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         </Paper>
       )}
 
-      {/* SharePoint Dialogs */}
-      <SharePointConfigDialog
-        open={showConfigDialog}
-        onClose={() => setShowConfigDialog(false)}
-        onSubmit={handleConfigSubmit}
-        userId={store.userDetails?.name}
-      />
+      {sharePointEnabled ? (
+        <>
+          {/* SharePoint Dialogs */}
+          <SharePointConfigDialog
+            open={showConfigDialog}
+            onClose={() => setShowConfigDialog(false)}
+            onSubmit={handleConfigSubmit}
+            userId={store.userDetails?.name}
+          />
 
-      <SharePointCredentialsDialog
-        open={showCredentialsDialog}
-        onClose={() => setShowCredentialsDialog(false)}
-        onSubmit={handleCredentialsSubmit}
-        siteUrl={spConfig?.siteUrl}
-      />
+          <SharePointCredentialsDialog
+            open={showCredentialsDialog}
+            onClose={() => setShowCredentialsDialog(false)}
+            onSubmit={handleCredentialsSubmit}
+            siteUrl={spConfig?.siteUrl}
+          />
 
-      <SharePointConflictDialog
-        open={showConflictDialog}
-        onClose={() => setShowConflictDialog(false)}
-        onProceed={handleConflictResolution}
-        conflicts={conflictData?.conflicts || []}
-        newFiles={conflictData?.newFiles || []}
-        totalFiles={conflictData?.totalFiles || 0}
-      />
+          <SharePointConflictDialog
+            open={showConflictDialog}
+            onClose={() => setShowConflictDialog(false)}
+            onProceed={handleConflictResolution}
+            conflicts={conflictData?.conflicts || []}
+            newFiles={conflictData?.newFiles || []}
+            totalFiles={conflictData?.totalFiles || 0}
+          />
+        </>
+      ) : null}
     </Stack>
   );
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 
 import { contentTypeOptions } from '../../../store/data/dropDownOptions';
@@ -34,6 +34,12 @@ const DeveloperForm = observer(({ store }) => {
   const [contentControlSkin, setContentControlSkin] = useState('');
   const [showConfigManager, setShowConfigManager] = useState(false);
 
+  useEffect(() => {
+    if (!store.showDebugDocs) {
+      setShowConfigManager(false);
+    }
+  }, [store, store.showDebugDocs]);
+
   const addToDocumentRequestObject = (contentControlObject) => {
     store.addContentControlToDocument(contentControlObject);
   };
@@ -48,41 +54,43 @@ const DeveloperForm = observer(({ store }) => {
         pr: { xs: 0, md: 0.5 },
       }}
     >
-      {/* SharePoint Configuration Management Section */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2, md: 3 },
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography variant='h6' component='h2'>
-            SharePoint Configuration Management
-          </Typography>
-          <Typography variant='body2' color='text.secondary'>
-            Manage SharePoint connections for template synchronization across all projects.
-          </Typography>
-        </Box>
+      {/* SharePoint Configuration Management Section (debug only) */}
+      {store.showDebugDocs ? (
+        <Paper
+          elevation={0}
+          sx={{
+            p: { xs: 2, md: 3 },
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          <Box>
+            <Typography variant='h6' component='h2'>
+              SharePoint Configuration Management
+            </Typography>
+            <Typography variant='body2' color='text.secondary'>
+              Manage SharePoint connections for template synchronization across all projects.
+            </Typography>
+          </Box>
 
-        <Divider sx={{ borderColor: (theme) => theme.palette.divider }} />
+          <Divider sx={{ borderColor: (theme) => theme.palette.divider }} />
 
-        <Alert severity="info" sx={{ mb: 1 }}>
-          Configure SharePoint sources for each project. Users can sync templates from these configured locations.
-        </Alert>
+          <Alert severity="info" sx={{ mb: 1 }}>
+            Configure SharePoint sources for each project. Users can sync templates from these configured locations.
+          </Alert>
 
-        <Box>
-          <Button
-            variant='contained'
-            startIcon={<SettingsIcon />}
-            onClick={() => setShowConfigManager(true)}
-          >
-            Manage SharePoint Configurations
-          </Button>
-        </Box>
-      </Paper>
+          <Box>
+            <Button
+              variant='contained'
+              startIcon={<SettingsIcon />}
+              onClick={() => setShowConfigManager(true)}
+            >
+              Manage SharePoint Configurations
+            </Button>
+          </Box>
+        </Paper>
+      ) : null}
 
       <Stack
         direction={{ xs: 'column', lg: 'row' }}
@@ -318,13 +326,15 @@ const DeveloperForm = observer(({ store }) => {
         </Paper>
       </Stack>
 
-      {/* SharePoint Configuration Manager Dialog */}
-      <SharePointConfigManager
-        open={showConfigManager}
-        onClose={() => setShowConfigManager(false)}
-        userId={store.userDetails?.name}
-        currentProject={store.teamProject}
-      />
+      {/* SharePoint Configuration Manager Dialog (debug only) */}
+      {store.showDebugDocs ? (
+        <SharePointConfigManager
+          open={showConfigManager}
+          onClose={() => setShowConfigManager(false)}
+          userId={store.userDetails?.name}
+          currentProject={store.teamProject}
+        />
+      ) : null}
     </Stack>
   );
 });
