@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Transfer } from 'antd';
+import { Space, Switch, Tooltip, Transfer } from 'antd';
+import { InfoCircleOutlined } from '@ant-design/icons';
 import {
   Box,
   Checkbox,
@@ -70,6 +71,7 @@ const TestReporterSelector = observer(
     const [runStepFilterMode, setRunStepFilterMode] = useState('passed');
     const [selectedFields, setSelectedFields] = useState([]);
     const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
+    const [includeAllHistory, setIncludeAllHistory] = useState(false);
 
     // isRestoring/restoreReady provided by useTabStatePersistence
     const savedDataRef = useRef(null);
@@ -209,6 +211,7 @@ const TestReporterSelector = observer(
       const errorFilterMode = dataToSave?.errorFilterMode;
       const savedRunFilterMode = dataToSave?.runFilterMode;
       const savedRunStepFilterMode = dataToSave?.runStepFilterMode;
+      const savedIncludeAllHistory = dataToSave?.includeAllHistory;
       if (allowCrossTestPlan) {
         setAllowCrossTestPlan(allowCrossTestPlan);
       }
@@ -229,6 +232,9 @@ const TestReporterSelector = observer(
       }
       if (savedRunStepFilterMode) {
         setRunStepFilterMode(savedRunStepFilterMode);
+      }
+      if (savedIncludeAllHistory !== undefined) {
+        setIncludeAllHistory(!!savedIncludeAllHistory);
       }
     }, []);
 
@@ -306,8 +312,20 @@ const TestReporterSelector = observer(
       setRunStepFilterMode('passed');
       setSelectedFields([]);
       setLinkedQueryRequest(defaultSelectedQueries);
+      setIncludeAllHistory(false);
       savedDataRef.current = null;
     }, []);
+
+    const hasHistorySelected = useMemo(
+      () => (selectedFields || []).includes('System.History@testCaseWorkItemField'),
+      [selectedFields]
+    );
+
+    useEffect(() => {
+      if (!hasHistorySelected && includeAllHistory) {
+        setIncludeAllHistory(false);
+      }
+    }, [hasHistorySelected, includeAllHistory]);
 
     const { isRestoring, restoreReady } = useTabStatePersistence({
       store,
@@ -369,6 +387,7 @@ const TestReporterSelector = observer(
               allowGrouping: allowGrouping,
               selectedFields: selectedFields,
               linkedQueryRequest: linkedQueryRequest,
+              includeAllHistory,
             },
             isExcelSpreadsheet: true,
           },
@@ -393,6 +412,7 @@ const TestReporterSelector = observer(
       allowGrouping,
       errorFilterMode,
       linkedQueryRequest,
+      includeAllHistory,
       isRestoring,
       restoreReady,
       store,
@@ -768,12 +788,28 @@ const TestReporterSelector = observer(
           <SectionCard
             title='Columns'
             description='Pick which fields appear in the exported spreadsheet.'
-          >
-            <Stack spacing={1.25}>
-              <Typography
-                variant='body2'
-                color='text.secondary'
-              >
+	          >
+	            <Stack spacing={1.25}>
+	              {hasHistorySelected ? (
+	                <Space
+	                  align='center'
+	                  size='small'
+	                >
+	                  <Switch
+	                    size='small'
+	                    checked={includeAllHistory}
+	                    onChange={(checked) => setIncludeAllHistory(checked)}
+	                  />
+	                  <Typography variant='body2'>Include all discussion history</Typography>
+	                  <Tooltip title='Default: only the most recent comment is exported'>
+	                    <InfoCircleOutlined style={{ color: 'rgba(0,0,0,0.45)' }} />
+	                  </Tooltip>
+	                </Space>
+	              ) : null}
+	              <Typography
+	                variant='body2'
+	                color='text.secondary'
+	              >
                 {selectedFields.length
                   ? `${selectedFields.length} field${selectedFields.length === 1 ? '' : 's'} selected`
                   : 'No fields selected yet. Move fields to the list on the right.'}
