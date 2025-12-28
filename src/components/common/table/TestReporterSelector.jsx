@@ -1,17 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Space, Switch, Tooltip, Transfer } from 'antd';
-import { InfoCircleOutlined } from '@ant-design/icons';
+import { Transfer } from 'antd';
 import {
   Box,
   Checkbox,
   Collapse,
   FormControlLabel,
   Grid,
+  IconButton,
   Radio,
   RadioGroup,
   Stack,
+  Switch,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import SmartAutocomplete from '../SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
@@ -169,7 +172,10 @@ const TestReporterSelector = observer(
         const testSuiteList = store.getTestSuiteList;
         const makeOption = (s) => (s ? { ...s, key: s.id, text: `${s.name} - (${s.id})` } : null);
 
-        if (Array.isArray(dataToSave?.nonRecursiveTestSuiteIdList) && dataToSave.nonRecursiveTestSuiteIdList.length > 0) {
+        if (
+          Array.isArray(dataToSave?.nonRecursiveTestSuiteIdList) &&
+          dataToSave.nonRecursiveTestSuiteIdList.length > 0
+        ) {
           const validTestSuites = dataToSave.nonRecursiveTestSuiteIdList
             .map((suiteId) => testSuiteList.find((suite) => suite.id === suiteId))
             .filter(Boolean)
@@ -321,18 +327,19 @@ const TestReporterSelector = observer(
       [selectedFields]
     );
 
-    useEffect(() => {
-      if (!hasHistorySelected && includeAllHistory) {
-        setIncludeAllHistory(false);
-      }
-    }, [hasHistorySelected, includeAllHistory]);
-
     const { isRestoring, restoreReady } = useTabStatePersistence({
       store,
       contentControlIndex,
       applySavedData,
       resetLocalState,
     });
+
+    useEffect(() => {
+      if (isRestoring || !restoreReady) return;
+      if (!hasHistorySelected && includeAllHistory) {
+        setIncludeAllHistory(false);
+      }
+    }, [hasHistorySelected, includeAllHistory, isRestoring, restoreReady]);
 
     // Validation: Both Test plan and at least one test suite must be selected
     useEffect(() => {
@@ -365,7 +372,10 @@ const TestReporterSelector = observer(
       const updateTestReporterRequestObject = () => {
         let testSuiteIdList = undefined;
         let nonRecursiveTestSuiteIdList = undefined;
-        const { testSuiteArray, nonRecursiveTestSuiteIdList: nonRec } = suiteIdCollection(selectedTestSuites, store);
+        const { testSuiteArray, nonRecursiveTestSuiteIdList: nonRec } = suiteIdCollection(
+          selectedTestSuites,
+          store
+        );
         testSuiteIdList = testSuiteArray;
         nonRecursiveTestSuiteIdList = nonRec;
 
@@ -437,20 +447,14 @@ const TestReporterSelector = observer(
         setLinkedQueryRequest({ ...defaultSelectedQueries, linkedQueryMode: value });
         if (value === 'linked') {
           toast.info(
-            (
-              <TocReminderToast
-                icon="🔗"
-                title="Linked mode enabled"
-                description="To include related work items in your export, add these columns to your selection:"
-                items={[
-                  'Associated Requirement',
-                  'Associated Bug',
-                  'Associated CR',
-                ]}
-                tip="Find them in the Columns panel. Without these columns, linked items will not be fetched."
-                tipIcon="💡"
-              />
-            ),
+            <TocReminderToast
+              icon='🔗'
+              title='Linked mode enabled'
+              description='To include related work items in your export, add these columns to your selection:'
+              items={['Associated Requirement', 'Associated Bug', 'Associated CR']}
+              tip='Find them in the Columns panel. Without these columns, linked items will not be fetched.'
+              tipIcon='💡'
+            />,
             { autoClose: 8000, closeOnClick: true }
           );
         }
@@ -489,205 +493,260 @@ const TestReporterSelector = observer(
 
     return (
       <>
-      <Collapse
-        in={selectedTeamProject?.key !== ''}
-        timeout='auto'
-        unmountOnExit
-      >
-        <Stack
-          spacing={1.5}
-          sx={{ my: 1 }}
+        <Collapse
+          in={selectedTeamProject?.key !== ''}
+          timeout='auto'
+          unmountOnExit
         >
-          <SectionCard
-            title='Scope'
-            description='Choose the test plan and suites to include in this report.'
+          <Stack
+            spacing={1.5}
+            sx={{ my: 1 }}
           >
-            <Grid
-              container
-              spacing={1.25}
-              alignItems='flex-start'
+            <SectionCard
+              title='Scope'
+              description='Choose the test plan and suites to include in this report.'
             >
               <Grid
-                size={{ xs: 12, md: 5 }}
-                sx={{ minWidth: 0 }}
+                container
+                spacing={1.25}
+                alignItems='flex-start'
               >
-                <SmartAutocomplete
-                  size='small'
-                  disableClearable
-                  autoHighlight
-                  openOnFocus
-                  loading={store.loadingState.testPlanLoadingState}
-                  options={store.testPlansList.map((testPlan) => ({
-                    key: testPlan.id,
-                    text: testPlan.name,
-                  }))}
-                  label='Test plan'
-                  textFieldProps={{
-                    size: 'small',
-                    sx: {
-                      '& .MuiInputBase-root': { minHeight: 56 },
-                    },
-                  }}
-                  onChange={async (_event, newValue) => {
-                    await handleTestPlanChanged(newValue);
-                  }}
-                  value={selectedTestPlan}
-                />
-              </Grid>
-              <Grid
-                size={{ xs: 12, md: 7 }}
-                sx={{ minWidth: 0 }}
-              >
-                <SmartAutocomplete
-                  multiple
-                  size='small'
-                  options={
-                    selectedTestPlan?.key
-                      ? (store.testSuiteList || []).map((s) => ({
-                          ...s,
-                          key: s.id,
-                          text: `${s.name} - (${s.id})`,
-                        }))
-                      : []
-                  }
-                  loading={store.loadingState.testSuiteListLoading}
-                  disableCloseOnSelect
-                  autoHighlight
-                  groupBy={(option) => {
-                    const parent = suiteById.get(option.parent);
-                    return parent ? `Parent: ${parent.name}` : 'Top Level';
-                  }}
-                  label='Test suites (descendants auto-included)'
-                  placeholder='Search suites...'
-                  textFieldProps={{
-                    size: 'small',
-                    helperText: selectedTestPlan?.key
-                      ? 'Descendants are auto-included'
-                      : 'Select a test plan first',
-                  }}
-                  showCheckbox
-                  disabled={!selectedTestPlan?.key}
-                  onChange={async (_event, newValue) => {
-                    setSelectedTestSuites(newValue);
-                  }}
-                  value={selectedTestSuites}
-                />
-              </Grid>
-            </Grid>
-          </SectionCard>
-
-          <SectionCard
-            title='Execution filters'
-            description='Limit runs and highlight failures before exporting.'
-          >
-            <Stack spacing={1.5}>
-              <Stack
-                direction={{ xs: 'column', md: 'row' }}
-                spacing={{ xs: 1.25, md: 2 }}
-              >
-                <Stack
-                  spacing={0.75}
-                  sx={{ flex: 1 }}
+                <Grid
+                  size={{ xs: 12, md: 5 }}
+                  sx={{ minWidth: 0 }}
                 >
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size='small'
-                        checked={allowGrouping}
-                        onChange={(_event, checked) => {
-                          setAllowGrouping(checked);
-                        }}
-                      />
-                    }
-                    label='Group results by suite'
+                  <SmartAutocomplete
+                    size='small'
+                    disableClearable
+                    autoHighlight
+                    openOnFocus
+                    loading={store.loadingState.testPlanLoadingState}
+                    options={store.testPlansList.map((testPlan) => ({
+                      key: testPlan.id,
+                      text: testPlan.name,
+                    }))}
+                    label='Test plan'
+                    textFieldProps={{
+                      size: 'small',
+                      sx: {
+                        '& .MuiInputBase-root': { minHeight: 56 },
+                      },
+                    }}
+                    onChange={async (_event, newValue) => {
+                      await handleTestPlanChanged(newValue);
+                    }}
+                    value={selectedTestPlan}
                   />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size='small'
-                        checked={allowCrossTestPlan}
-                        onChange={(_event, checked) => {
-                          setAllowCrossTestPlan(checked);
-                        }}
-                      />
+                </Grid>
+                <Grid
+                  size={{ xs: 12, md: 7 }}
+                  sx={{ minWidth: 0 }}
+                >
+                  <SmartAutocomplete
+                    multiple
+                    size='small'
+                    options={
+                      selectedTestPlan?.key
+                        ? (store.testSuiteList || []).map((s) => ({
+                            ...s,
+                            key: s.id,
+                            text: `${s.name} - (${s.id})`,
+                          }))
+                        : []
                     }
-                    label='Include runs from other test plans'
+                    loading={store.loadingState.testSuiteListLoading}
+                    disableCloseOnSelect
+                    autoHighlight
+                    groupBy={(option) => {
+                      const parent = suiteById.get(option.parent);
+                      return parent ? `Parent: ${parent.name}` : 'Top Level';
+                    }}
+                    label='Test suites (descendants auto-included)'
+                    placeholder='Search suites...'
+                    textFieldProps={{
+                      size: 'small',
+                      helperText: selectedTestPlan?.key
+                        ? 'Descendants are auto-included'
+                        : 'Select a test plan first',
+                    }}
+                    showCheckbox
+                    disabled={!selectedTestPlan?.key}
+                    onChange={async (_event, newValue) => {
+                      setSelectedTestSuites(newValue);
+                    }}
+                    value={selectedTestSuites}
                   />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size='small'
-                        checked={enableRunTestCaseFilter}
-                        onChange={(_event, checked) => {
-                          setEnableRunTestCaseFilter(checked);
-                        }}
-                      />
-                    }
-                    label='Only include executed test cases'
-                  />
-                  <Collapse
-                    in={enableRunTestCaseFilter}
-                    timeout='auto'
-                    unmountOnExit
+                </Grid>
+              </Grid>
+            </SectionCard>
+
+            <SectionCard
+              title='Execution filters'
+              description='Limit runs and highlight failures before exporting.'
+            >
+              <Stack spacing={1.5}>
+                <Stack
+                  direction={{ xs: 'column', md: 'row' }}
+                  spacing={{ xs: 1.25, md: 2 }}
+                >
+                  <Stack
+                    spacing={0.75}
+                    sx={{ flex: 1 }}
                   >
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={allowGrouping}
+                          onChange={(_event, checked) => {
+                            setAllowGrouping(checked);
+                          }}
+                        />
+                      }
+                      label='Group results by suite'
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={allowCrossTestPlan}
+                          onChange={(_event, checked) => {
+                            setAllowCrossTestPlan(checked);
+                          }}
+                        />
+                      }
+                      label='Include runs from other test plans'
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={enableRunTestCaseFilter}
+                          onChange={(_event, checked) => {
+                            setEnableRunTestCaseFilter(checked);
+                          }}
+                        />
+                      }
+                      label='Only include executed test cases'
+                    />
+                    <Collapse
+                      in={enableRunTestCaseFilter}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <Typography
+                        variant='caption'
+                        color='text.secondary'
+                        sx={{ pl: 4 }}
+                      >
+                        Unexecuted test cases are filtered out of the export.
+                      </Typography>
+                    </Collapse>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size='small'
+                          checked={enableRunStepStatusFilter}
+                          onChange={(_event, checked) => {
+                            setEnableRunStepStatusFilter(checked);
+                          }}
+                        />
+                      }
+                      label='Only include executed steps'
+                    />
+                    <Collapse
+                      in={enableRunStepStatusFilter}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <Typography
+                        variant='caption'
+                        color='text.secondary'
+                        sx={{ pl: 4 }}
+                      >
+                        Steps without execution results are skipped.
+                      </Typography>
+                    </Collapse>
+                  </Stack>
+
+                  <Stack
+                    spacing={0.75}
+                    sx={{ flex: 1 }}
+                  >
+                    <Typography
+                      id='error-filter-mode-label'
+                      variant='subtitle2'
+                    >
+                      Error filter mode
+                    </Typography>
                     <Typography
                       variant='caption'
                       color='text.secondary'
-                      sx={{ pl: 4 }}
                     >
-                      Unexecuted test cases are filtered out of the export.
+                      Keep only the runs that failed at the selected level.
                     </Typography>
-                  </Collapse>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size='small'
-                        checked={enableRunStepStatusFilter}
-                        onChange={(_event, checked) => {
-                          setEnableRunStepStatusFilter(checked);
-                        }}
+                    <RadioGroup
+                      row
+                      name='error-filter-mode'
+                      aria-labelledby='error-filter-mode-label'
+                      value={errorFilterMode}
+                      onChange={(event) => {
+                        setErrorFilterMode(event.target.value);
+                      }}
+                    >
+                      <FormControlLabel
+                        value='none'
+                        label='None'
+                        control={<Radio size='small' />}
                       />
-                    }
-                    label='Only include executed steps'
-                  />
-                  <Collapse
-                    in={enableRunStepStatusFilter}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <Typography
-                      variant='caption'
-                      color='text.secondary'
-                      sx={{ pl: 4 }}
-                    >
-                      Steps without execution results are skipped.
-                    </Typography>
-                  </Collapse>
+                      <FormControlLabel
+                        value='onlyTestCaseResult'
+                        label='Test case level'
+                        control={<Radio size='small' />}
+                      />
+                      <FormControlLabel
+                        value='onlyTestStepsResult'
+                        label='Step level'
+                        control={<Radio size='small' />}
+                      />
+                      <FormControlLabel
+                        value='both'
+                        label='Both levels'
+                        control={<Radio size='small' />}
+                      />
+                    </RadioGroup>
+                  </Stack>
                 </Stack>
+              </Stack>
+            </SectionCard>
 
-                <Stack
-                  spacing={0.75}
-                  sx={{ flex: 1 }}
-                >
+            <SectionCard
+              title='Linked items'
+              description='Choose how related work items should be pulled in.'
+              loading={store.fetchLoadingState().sharedQueriesLoadingState}
+              loadingText='Loading queries...'
+            >
+              <Stack spacing={1.25}>
+                <Stack spacing={0.75}>
                   <Typography
-                    id='error-filter-mode-label'
+                    id='linked-item-query-group-label'
                     variant='subtitle2'
                   >
-                    Error filter mode
+                    Linked item mode
                   </Typography>
                   <Typography
                     variant='caption'
                     color='text.secondary'
                   >
-                    Keep only the runs that failed at the selected level.
+                    Include linked work items directly or drive them from a query.
                   </Typography>
                   <RadioGroup
                     row
-                    name='error-filter-mode'
-                    aria-labelledby='error-filter-mode-label'
-                    value={errorFilterMode}
+                    name='linked-item-query-group'
+                    aria-labelledby='linked-item-query-group-label'
+                    value={linkedQueryRequest.linkedQueryMode}
                     onChange={(event) => {
-                      setErrorFilterMode(event.target.value);
+                      handleLinkedQueryChange(event.target.value);
                     }}
                   >
                     <FormControlLabel
@@ -696,151 +755,111 @@ const TestReporterSelector = observer(
                       control={<Radio size='small' />}
                     />
                     <FormControlLabel
-                      value='onlyTestCaseResult'
-                      label='Test case level'
+                      value='linked'
+                      label='Linked'
                       control={<Radio size='small' />}
                     />
                     <FormControlLabel
-                      value='onlyTestStepsResult'
-                      label='Step level'
+                      value='query'
+                      label='Query'
                       control={<Radio size='small' />}
-                    />
-                    <FormControlLabel
-                      value='both'
-                      label='Both levels'
-                      control={<Radio size='small' />}
+                      disabled={
+                        store.fetchLoadingState().sharedQueriesLoadingState ||
+                        !queryTrees.testAssociatedTree ||
+                        queryTrees.testAssociatedTree.length === 0
+                      }
                     />
                   </RadioGroup>
                 </Stack>
-              </Stack>
-            </Stack>
-          </SectionCard>
-
-          <SectionCard
-            title='Linked items'
-            description='Choose how related work items should be pulled in.'
-            loading={store.fetchLoadingState().sharedQueriesLoadingState}
-            loadingText='Loading queries...'
-          >
-            <Stack spacing={1.25}>
-              <Stack spacing={0.75}>
-                <Typography
-                  id='linked-item-query-group-label'
-                  variant='subtitle2'
+                <Collapse
+                  in={linkedQueryRequest.linkedQueryMode === 'query'}
+                  timeout='auto'
+                  unmountOnExit
                 >
-                  Linked item mode
-                </Typography>
+                  <Box sx={{ mt: 1 }}>
+                    <QueryTree
+                      data={queryTrees.testAssociatedTree}
+                      prevSelectedQuery={linkedQueryRequest.testAssociatedQuery}
+                      onSelectedQuery={onQuerySelected}
+                      queryType={'test-associated'}
+                      isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
+                    />
+                  </Box>
+                </Collapse>
+              </Stack>
+            </SectionCard>
+
+            <SectionCard
+              title='Columns'
+              description='Pick which fields appear in the exported spreadsheet.'
+            >
+              <Stack spacing={1.25}>
+                {hasHistorySelected ? (
+                  <Stack
+                    direction='row'
+                    spacing={0.5}
+                    alignItems='center'
+                  >
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          size='small'
+                          checked={includeAllHistory}
+                          onChange={(_event, checked) => setIncludeAllHistory(checked)}
+                        />
+                      }
+                      label={<Typography variant='body2'>Include all discussion history</Typography>}
+                    />
+                    <Tooltip title='Default: only the most recent comment is exported'>
+                      <IconButton
+                        size='small'
+                        aria-label='Include all discussion history info'
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        <InfoOutlined fontSize='inherit' />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                ) : null}
                 <Typography
-                  variant='caption'
+                  variant='body2'
                   color='text.secondary'
                 >
-                  Include linked work items directly or drive them from a query.
+                  {selectedFields.length
+                    ? `${selectedFields.length} field${selectedFields.length === 1 ? '' : 's'} selected`
+                    : 'No fields selected yet. Move fields to the list on the right.'}
                 </Typography>
-                <RadioGroup
-                  row
-                  name='linked-item-query-group'
-                  aria-labelledby='linked-item-query-group-label'
-                  value={linkedQueryRequest.linkedQueryMode}
-                  onChange={(event) => {
-                    handleLinkedQueryChange(event.target.value);
+                <Transfer
+                  showSearch
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'flex-start',
                   }}
-                >
-                  <FormControlLabel
-                    value='none'
-                    label='None'
-                    control={<Radio size='small' />}
-                  />
-                  <FormControlLabel
-                    value='linked'
-                    label='Linked'
-                    control={<Radio size='small' />}
-                  />
-                  <FormControlLabel
-                    value='query'
-                    label='Query'
-                    control={<Radio size='small' />}
-                    disabled={
-                      store.fetchLoadingState().sharedQueriesLoadingState ||
-                      !queryTrees.testAssociatedTree ||
-                      queryTrees.testAssociatedTree.length === 0
-                    }
-                  />
-                </RadioGroup>
+                  listStyle={{
+                    width: 'calc(50% - 20px)',
+                    flexGrow: 1,
+                    height: 240,
+                  }}
+                  listHeight={260}
+                  dataSource={fieldsToSelect}
+                  targetKeys={selectedFields}
+                  render={(item) => item.text}
+                  onChange={(nextTargetKeys) => {
+                    setSelectedFields(nextTargetKeys);
+                  }}
+                  titles={['Available fields', 'Selected fields']}
+                  filterOption={(input, option) => option.text.toLowerCase().includes(input.toLowerCase())}
+                />
               </Stack>
-              <Collapse
-                in={linkedQueryRequest.linkedQueryMode === 'query'}
-                timeout='auto'
-                unmountOnExit
-              >
-                <Box sx={{ mt: 1 }}>
-                  <QueryTree
-                    data={queryTrees.testAssociatedTree}
-                    prevSelectedQuery={linkedQueryRequest.testAssociatedQuery}
-                    onSelectedQuery={onQuerySelected}
-                    queryType={'test-associated'}
-                    isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                  />
-                </Box>
-              </Collapse>
-            </Stack>
-          </SectionCard>
-
-          <SectionCard
-            title='Columns'
-            description='Pick which fields appear in the exported spreadsheet.'
-	          >
-	            <Stack spacing={1.25}>
-	              {hasHistorySelected ? (
-	                <Space
-	                  align='center'
-	                  size='small'
-	                >
-	                  <Switch
-	                    size='small'
-	                    checked={includeAllHistory}
-	                    onChange={(checked) => setIncludeAllHistory(checked)}
-	                  />
-	                  <Typography variant='body2'>Include all discussion history</Typography>
-	                  <Tooltip title='Default: only the most recent comment is exported'>
-	                    <InfoCircleOutlined style={{ color: 'rgba(0,0,0,0.45)' }} />
-	                  </Tooltip>
-	                </Space>
-	              ) : null}
-	              <Typography
-	                variant='body2'
-	                color='text.secondary'
-	              >
-                {selectedFields.length
-                  ? `${selectedFields.length} field${selectedFields.length === 1 ? '' : 's'} selected`
-                  : 'No fields selected yet. Move fields to the list on the right.'}
-              </Typography>
-              <Transfer
-                showSearch
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'flex-start',
-                }}
-                listStyle={{
-                  width: 'calc(50% - 20px)',
-                  flexGrow: 1,
-                  height: 240,
-                }}
-                listHeight={260}
-                dataSource={fieldsToSelect}
-                targetKeys={selectedFields}
-                render={(item) => item.text}
-                onChange={(nextTargetKeys) => {
-                  setSelectedFields(nextTargetKeys);
-                }}
-                titles={['Available fields', 'Selected fields']}
-                filterOption={(input, option) => option.text.toLowerCase().includes(input.toLowerCase())}
-              />
-            </Stack>
-          </SectionCard>
-        </Stack>
-      </Collapse>
-      <RestoreBackdrop open={!!isRestoring} label='Restoring Test Reporter selection…' />
+            </SectionCard>
+          </Stack>
+        </Collapse>
+        <RestoreBackdrop
+          open={!!isRestoring}
+          label='Restoring Test Reporter selection…'
+        />
       </>
     );
   }
