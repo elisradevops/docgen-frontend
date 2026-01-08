@@ -62,6 +62,128 @@ const formatIsoAsUi = (raw) => {
   }
 };
 
+const normalizeWorkItemColor = (rawColor) => {
+  if (typeof rawColor !== 'string') return null;
+  const trimmed = rawColor.trim();
+  if (!trimmed) return null;
+  if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) {
+    return trimmed.length === 9 ? `#${trimmed.slice(1, 7)}` : trimmed;
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return `#${trimmed}`;
+  }
+  if (/^[0-9a-fA-F]{8}$/.test(trimmed)) {
+    return `#${trimmed.slice(0, 6)}`;
+  }
+  return trimmed;
+};
+
+const getWorkItemIconUrl = (iconValue) => {
+  if (!iconValue) return null;
+  if (typeof iconValue === 'string') return iconValue;
+  if (typeof iconValue === 'object') {
+    return iconValue.dataUrl || iconValue.url || iconValue.href || null;
+  }
+  return null;
+};
+
+const isSameOrigin = (url) => {
+  if (typeof url !== 'string') return false;
+  if (url.startsWith('data:')) return true;
+  try {
+    const absolute = new URL(url, typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+    if (typeof window === 'undefined') return false;
+    return absolute.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
+const getWorkItemIconColor = (option) => {
+  const directColor = normalizeWorkItemColor(option?.color);
+  if (directColor) return directColor;
+
+  const icon = option?.icon;
+  if (icon) {
+    const iconColor = normalizeWorkItemColor(icon.color || icon.foregroundColor);
+    if (iconColor) return iconColor;
+
+    const iconUrl = getWorkItemIconUrl(icon);
+    if (iconUrl) {
+      try {
+        const url = new URL(iconUrl, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+        const colorParam = url.searchParams.get('color');
+        const normalizedFromUrl = normalizeWorkItemColor(colorParam || undefined);
+        if (normalizedFromUrl) return normalizedFromUrl;
+      } catch {
+        const match = /[?&]color=([^&]+)/i.exec(iconUrl);
+        if (match?.[1]) {
+          const normalizedFromRegex = normalizeWorkItemColor(match[1]);
+          if (normalizedFromRegex) return normalizedFromRegex;
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
+const renderWorkItemVisual = (option, { size = 14, marginRight = 6 } = {}) => {
+  if (!option || typeof option !== 'object') return null;
+  const resolvedColor = getWorkItemIconColor(option) || '#f3f2f1';
+  const iconUrl = getWorkItemIconUrl(option.icon);
+  const canUseIcon = iconUrl && isSameOrigin(iconUrl);
+  if (!resolvedColor && !iconUrl) return null;
+
+  if (canUseIcon) {
+    const iconContainerStyle = {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: size,
+      height: size,
+      marginRight,
+      flexShrink: 0,
+    };
+
+    const maskStyle = {
+      width: '100%',
+      height: '100%',
+      backgroundColor: resolvedColor || '#0078d4',
+      WebkitMaskImage: `url(${iconUrl})`,
+      maskImage: `url(${iconUrl})`,
+      WebkitMaskRepeat: 'no-repeat',
+      maskRepeat: 'no-repeat',
+      WebkitMaskPosition: 'center',
+      maskPosition: 'center',
+      WebkitMaskSize: 'contain',
+      maskSize: 'contain',
+    };
+
+    return (
+      <span aria-hidden='true' style={iconContainerStyle}>
+        <span style={maskStyle} />
+      </span>
+    );
+  }
+
+  if (resolvedColor) {
+    const dotSize = size * 0.6;
+    const dotStyle = {
+      width: dotSize,
+      height: dotSize,
+      borderRadius: '50%',
+      backgroundColor: resolvedColor,
+      display: 'inline-block',
+      marginRight,
+      flexShrink: 0,
+    };
+    return <span aria-hidden='true' style={dotStyle} />;
+  }
+
+  return null;
+};
+
 const ObjectValueCard = ({ value, primaryOf }) => {
   const highlightPairs = useMemo(() => {
     const obj = value || {};
@@ -159,6 +281,45 @@ const valueCell = (value, { rowKey } = {}) => {
   if (Array.isArray(value)) {
     const rawRowKey = String(rowKey || '').toLowerCase();
     const isSelectedFields = rawRowKey === 'selectedfields' || rawRowKey.endsWith('.selectedfields') || rawRowKey.includes('selectedfields');
+    const isWorkItemTypes = rawRowKey.includes('workitemtypes');
+    const isWorkItemStates = rawRowKey.includes('workitemstates');
+    if (isWorkItemTypes || isWorkItemStates) {
+      const items = value
+        .map((v) => {
+          if (v == null) return null;
+          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+            return { label: String(v), source: null };
+          }
+          if (typeof v === 'object') {
+            const label = v?.text ?? v?.name ?? v?.title ?? v?.value ?? v?.key ?? v?.id;
+            if (!label) return null;
+            return { label: String(label), source: v };
+          }
+          return null;
+        })
+        .filter(Boolean);
+      if (items.length === 0) return null;
+      const count = items.length;
+      const preview = items.slice(0, 2).map((item) => item.label).join(', ');
+      const needsCollapsible = count > 6;
+      return (
+        <div style={{ minWidth: 0 }}>
+          <details open={!needsCollapsible}>
+            <summary style={{ cursor: 'pointer', color: '#374151' }}>
+              {count} selected{preview ? ` — ${preview}${count > 2 ? ', …' : ''}` : ''}
+            </summary>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, maxHeight: 140, overflowY: 'auto' }}>
+              {items.map((item, idx) => (
+                <Tag key={`${item.label}-${idx}`} style={{ marginInlineEnd: 0, display: 'inline-flex', alignItems: 'center' }}>
+                  {item.source ? renderWorkItemVisual(item.source) : null}
+                  <span>{item.label}</span>
+                </Tag>
+              ))}
+            </div>
+          </details>
+        </div>
+      );
+    }
     const isAllStrings = value.every((v) => typeof v === 'string' && String(v).trim());
     const items = isSelectedFields && isAllStrings ? value.map(labelizeSelectedFieldToken).filter(Boolean) : value.map(normalizeDisplayValue).filter(Boolean);
     if (items.length === 0) return null;
