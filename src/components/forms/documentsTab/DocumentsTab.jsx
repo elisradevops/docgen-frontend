@@ -5,17 +5,39 @@ import { Alert, Box, Paper, Stack } from '@mui/material';
 import { Button, Input, Space, Table } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import LoadingState from '../../common/LoadingState';
+import { getJSONContentFromObject } from '../../../store/data/docManagerApi';
+import SelectedInputPopover from './SelectedInputPopover';
 
 const DocumentsTab = observer(({ store, selectedTeamProject }) => {
   const [searchText, setSearchText] = useState('');
   const [searchedColumn, setSearchedColumn] = useState('');
   const searchInput = useRef(null);
+  const [inputDetailsByDoc, setInputDetailsByDoc] = useState({});
+  const [loadingInputDoc, setLoadingInputDoc] = useState(null);
 
   useEffect(() => {
     if (selectedTeamProject) {
       store.fetchDocuments();
     }
   }, [store, selectedTeamProject]);
+
+  const ensureInputDetailsLoaded = async (record) => {
+    const docName = String(record?.name || '');
+    const key = String(record?.inputDetailsKey || '').trim();
+    if (!docName || !key) return;
+    if (inputDetailsByDoc[docName]) return;
+    if (loadingInputDoc === docName) return;
+    setLoadingInputDoc(docName);
+    try {
+      const bucket = store?.ProjectBucketName;
+      const details = await getJSONContentFromObject(bucket, key);
+      if (details) {
+        setInputDetailsByDoc((prev) => ({ ...prev, [docName]: details }));
+      }
+    } finally {
+      setLoadingInputDoc(null);
+    }
+  };
 
   const handleSearch = (selectedKeys, confirm, dataIndex) => {
     confirm();
@@ -31,10 +53,7 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
 
   const getColumnSearchProps = (dataIndex) => ({
     filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters, close }) => (
-      <div
-        style={{ padding: 8 }}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
+      <div style={{ padding: 8 }} onKeyDown={(e) => e.stopPropagation()}>
         <Input
           ref={searchInput}
           placeholder={`Search ${dataIndex}`}
@@ -53,41 +72,26 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
           >
             Search
           </Button>
-          <Button
-            onClick={() => clearFilters && handleReset(clearFilters, confirm)}
-            size='small'
-            style={{ width: 90 }}
-          >
+          <Button onClick={() => clearFilters && handleReset(clearFilters, confirm)} size='small' style={{ width: 90 }}>
             Reset
           </Button>
-          <Button
-            type='link'
-            size='small'
-            onClick={() => {
-              close();
-            }}
-          >
+          <Button type='link' size='small' onClick={close}>
             Close
           </Button>
         </Space>
       </div>
     ),
     filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />,
-    onFilter: (value, record) => record[dataIndex]?.toString().toLowerCase().includes(value.toLowerCase()),
+    onFilter: (value, record) => record[dataIndex]?.toString().toLowerCase().includes(String(value).toLowerCase()),
     filterDropdownProps: {
       onOpenChange(open) {
-        if (open) {
-          setTimeout(() => searchInput.current?.select(), 100);
-        }
+        if (open) setTimeout(() => searchInput.current?.select(), 100);
       },
     },
     render: (text) =>
       searchedColumn === dataIndex ? (
         <Highlighter
-          highlightStyle={{
-            backgroundColor: '#ffc069',
-            padding: 0,
-          }}
+          highlightStyle={{ backgroundColor: '#ffc069', padding: 0 }}
           searchWords={[searchText]}
           autoEscape
           textToHighlight={text ? text.toString() : ''}
@@ -107,10 +111,7 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
         const content =
           searchedColumn === 'name' ? (
             <Highlighter
-              highlightStyle={{
-                backgroundColor: '#ffc069',
-                padding: 0,
-              }}
+              highlightStyle={{ backgroundColor: '#ffc069', padding: 0 }}
               searchWords={[searchText]}
               autoEscape
               textToHighlight={text ? text.toString() : ''}
@@ -118,9 +119,28 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
           ) : (
             text
           );
-        return <a href={record.url}>{content}</a>;
+
+        const docName = String(record?.name || '');
+        const inputSummary = String(record?.inputSummary || '').trim();
+        const inputDetailsKey = String(record?.inputDetailsKey || '').trim();
+        const inputDetails = inputDetailsByDoc[docName];
+
+        return (
+          <Space size={6}>
+            <a href={record.url}>{content}</a>
+            <SelectedInputPopover
+              inputSummary={inputSummary}
+              inputDetailsKey={inputDetailsKey}
+              inputDetails={inputDetails}
+              loading={loadingInputDoc === docName && !inputDetails}
+              onOpenChange={(open) => {
+                if (open) ensureInputDetailsLoaded(record);
+              }}
+            />
+          </Space>
+        );
       },
-      sorter: (a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      sorter: (a, b) => String(a.name || '').toLowerCase().localeCompare(String(b.name || '').toLowerCase()),
     },
     {
       title: 'Created By',
@@ -131,10 +151,7 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
         const content =
           searchedColumn === 'createdBy' ? (
             <Highlighter
-              highlightStyle={{
-                backgroundColor: '#ffc069',
-                padding: 0,
-              }}
+              highlightStyle={{ backgroundColor: '#ffc069', padding: 0 }}
               searchWords={[searchText]}
               autoEscape
               textToHighlight={text ? text.toString() : ''}
@@ -144,14 +161,21 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
           );
         return content;
       },
-      sorter: (a, b) => a.createdBy.toLowerCase().localeCompare(b.createdBy.toLowerCase()),
+      sorter: (a, b) => String(a.createdBy || '').toLowerCase().localeCompare(String(b.createdBy || '').toLowerCase()),
     },
     {
       title: 'Changed Date',
       dataIndex: 'lastModified',
       key: 'lastModified',
-      render: (date) => new Date(date).toLocaleString(),
-      sorter: (a, b) => new Date(a.lastModified) - new Date(b.lastModified),
+      render: (date) => {
+        const d = new Date(date);
+        return isNaN(d.getTime()) ? '' : d.toLocaleString();
+      },
+      sorter: (a, b) => {
+        const ta = new Date(a?.lastModified).getTime();
+        const tb = new Date(b?.lastModified).getTime();
+        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
+      },
     },
   ];
 
@@ -199,4 +223,6 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
     </Stack>
   );
 });
+
 export default DocumentsTab;
+

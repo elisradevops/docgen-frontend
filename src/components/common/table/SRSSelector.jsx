@@ -183,7 +183,6 @@ const SRSSelector = observer(
             includeSystemRequirements,
             includeSystemToSoftwareRequirements,
             includeSoftwareToSystemRequirements,
-            selectedQueries: queriesRequest,
             displayMode,
           },
         },

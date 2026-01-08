@@ -29,6 +29,493 @@ const isAllowedTemplateFileName = (objectKeyOrName) => {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   return ['doc', 'docx', 'docm', 'dot', 'dotx', 'dotm'].includes(ext);
 };
+
+const truncateForMetadata = (value, maxLen = 1024) => {
+  const s = String(value || '').trim();
+  if (!s) return '';
+  if (s.length <= maxLen) return s;
+  return s.slice(0, Math.max(0, maxLen - 3)) + '...';
+};
+
+const toTitleCase = (s) =>
+  String(s || '')
+    .trim()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const beautifyContextName = (s) => String(s || '').replace(/_-_/g, ' - ').replace(/_/g, ' ').trim();
+
+const formatUiDateTime = (date) => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) return '';
+  try {
+    const locale = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+    const formatted = new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+    return formatted.replace(',', '');
+  } catch {
+    return date.toISOString();
+  }
+};
+
+const looksLikeIsoDateTime = (s) =>
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(String(s || '').trim());
+
+const inputLabelForKey = (key) => {
+  const k = String(key || '').trim();
+  const map = {
+    docType: 'Document Type',
+    context: 'Context',
+    template: 'Template',
+    selectedPipeline: 'Pipeline',
+    rangeType: 'Range Type',
+    branchName: 'Branch',
+    testPlanId: 'Test Plan',
+    testPlanText: 'Test Plan',
+    testSuiteArray: 'Suites',
+    testSuiteTextList: 'Suites',
+    prIds: 'Pull Requests',
+    queryId: 'Query',
+    selectedRelease: 'Release',
+    selectedRepo: 'Repository',
+    selectedQuery: 'Query',
+    selectedBuild: 'Build',
+    isSuiteSpecific: 'Limit to specific suites',
+    includeConfigurations: 'Display configuration name',
+    includeHierarchy: 'Display test group hierarchy',
+    includeTestLog: 'Include test log',
+    includeHardCopyRun: 'Generate manual hard-copy run',
+    flatSuiteTestCases: 'Flatten single-suite test cases',
+    fromText: 'From',
+    toText: 'To',
+    from: 'From',
+    to: 'To',
+  };
+  return map[k] || toTitleCase(k);
+};
+
+const summarizeList = (items, max = 4) => {
+  const arr = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (arr.length === 0) return '';
+  const head = arr.slice(0, max).map((v) => String(v));
+  const suffix = arr.length > max ? ` (+${arr.length - max})` : '';
+  return head.join(', ') + suffix;
+};
+
+const summarizeInputValue = (value) => {
+  if (value == null) return '';
+  if (value instanceof Date && !isNaN(value.getTime())) return formatUiDateTime(value);
+  if (typeof value === 'string') {
+    const normalizedEnums = {
+      asEmbedded: 'As Embedded',
+      asLink: 'As Link',
+      runOnly: 'Run Only',
+      planOnly: 'Plan Only',
+      openPcrOnly: 'Open PCR Only',
+      testOnly: 'Test Case Only',
+    };
+    const normalized = normalizedEnums[String(value).trim()];
+    if (normalized) return normalized;
+    if (looksLikeIsoDateTime(value)) {
+      const formatted = formatUiDateTime(new Date(value));
+      return formatted || truncateForMetadata(value, 120);
+    }
+    return truncateForMetadata(value, 120);
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    const compact = value
+      .filter((v) => v != null)
+      .slice(0, 3)
+      .map((v) => (typeof v === 'object' ? summarizeInputValue(v?.text ?? v?.name ?? v?.key ?? v?.id) : String(v)));
+    const suffix = value.length > 3 ? ` (+${value.length - 3})` : '';
+    return compact.join(', ') + suffix;
+  }
+  if (typeof value === 'object') {
+    const label = value?.text ?? value?.name ?? value?.title ?? value?.key ?? value?.id;
+    return summarizeInputValue(label);
+  }
+  return truncateForMetadata(String(value), 120);
+};
+
+const extractInputDetails = (data) => {
+  const details = [];
+  if (!data || typeof data !== 'object') return details;
+  const handledKeys = new Set();
+  const addDetail = ({ key, label, value }) => {
+    const rendered = String(value || '').trim();
+    if (!rendered) return;
+    details.push({ key, label, value: rendered });
+    if (key) handledKeys.add(key);
+  };
+
+  const allowedPrimitiveKeys = new Set([
+    'rangeType',
+    'branchName',
+    'testPlanId',
+    'testPlanText',
+    'fromText',
+    'toText',
+    'queryId',
+  ]);
+  const allowedArrayKeys = new Set(['testSuiteArray', 'testSuiteTextList', 'prIds', 'selectedFields']);
+  const allowedObjectKeys = new Set([
+    'selectedRelease',
+    'selectedRepo',
+    'selectedQuery',
+    'selectedBuild',
+    'selectedPipeline',
+  ]);
+  const allowedMaybeDateKeys = new Set(['from', 'to']);
+  const hasFromText = !!String(data.fromText || '').trim();
+  const hasToText = !!String(data.toText || '').trim();
+  const hasTestPlanText = !!String(data.testPlanText || '').trim();
+  const hasSuiteTextList = Array.isArray(data.testSuiteTextList) && data.testSuiteTextList.length > 0;
+  const rangeType = String(data.rangeType || '').trim();
+
+  for (const key of allowedPrimitiveKeys) {
+    if (key === 'testPlanId' && hasTestPlanText) {
+      handledKeys.add(key);
+      continue;
+    }
+    const v = data[key];
+    const rendered = summarizeInputValue(v);
+    if (!rendered) continue;
+    if (key === 'fromText' && rangeType === 'pipeline') {
+      addDetail({ key, label: 'From Version', value: rendered });
+      continue;
+    }
+    if (key === 'toText' && rangeType === 'pipeline') {
+      addDetail({ key, label: 'To Version', value: rendered });
+      continue;
+    }
+    if (key === 'fromText' && rangeType === 'release') {
+      addDetail({ key, label: 'From Release', value: rendered });
+      continue;
+    }
+    if (key === 'toText' && rangeType === 'release') {
+      addDetail({ key, label: 'To Release', value: rendered });
+      continue;
+    }
+    addDetail({ key, label: inputLabelForKey(key), value: rendered });
+  }
+
+  for (const key of allowedObjectKeys) {
+    const v = data[key];
+    const rendered = summarizeInputValue(v?.text ?? v?.name ?? v?.key ?? v?.id);
+    if (rendered) addDetail({ key, label: inputLabelForKey(key), value: rendered });
+  }
+
+  for (const key of allowedMaybeDateKeys) {
+    if (key === 'from' && hasFromText) {
+      handledKeys.add(key);
+      continue;
+    }
+    if (key === 'to' && hasToText) {
+      handledKeys.add(key);
+      continue;
+    }
+    const v = data[key];
+    const rendered = summarizeInputValue(v);
+    if (rendered) addDetail({ key, label: inputLabelForKey(key), value: rendered });
+  }
+
+  for (const key of allowedArrayKeys) {
+    if (key === 'testSuiteArray' && hasSuiteTextList) {
+      handledKeys.add(key);
+      continue;
+    }
+    const v = data[key];
+    if (!Array.isArray(v) || v.length === 0) continue;
+    const rendered = summarizeInputValue(v);
+    if (rendered) addDetail({ key, label: inputLabelForKey(key), value: rendered });
+  }
+
+  // Common toggle options (show Yes/No when present)
+  const booleanKeyLabels = [
+    { key: 'includeUnlinkedCommits', label: 'Include commits without linked work items' },
+    { key: 'includeCommittedBy', label: 'Include committer' },
+    { key: 'replaceTaskWithParent', label: 'Replace Task with parent item' },
+    { key: 'includePullRequests', label: 'Include pull requests' },
+    { key: 'includeChangeDescription', label: 'Include change description' },
+    // Test/STR/STD toggles
+    { key: 'isSuiteSpecific', label: inputLabelForKey('isSuiteSpecific') },
+    { key: 'includeConfigurations', label: inputLabelForKey('includeConfigurations') },
+    { key: 'includeHierarchy', label: inputLabelForKey('includeHierarchy') },
+    { key: 'includeTestLog', label: inputLabelForKey('includeTestLog') },
+    { key: 'includeHardCopyRun', label: inputLabelForKey('includeHardCopyRun') },
+    { key: 'flatSuiteTestCases', label: inputLabelForKey('flatSuiteTestCases') },
+    { key: 'includeAttachments', label: 'Generate run attachments' },
+    { key: 'includeRequirements', label: 'Generate covered requirements' },
+    { key: 'includeCustomerId', label: 'Include customer ID' },
+    { key: 'includeAttachmentContent', label: 'Include attachment content' },
+  ];
+  for (const { key, label } of booleanKeyLabels) {
+    const v = data[key];
+    if (typeof v !== 'boolean') continue;
+    addDetail({ key, label, value: v ? 'Yes' : 'No' });
+  }
+
+  // Work item filters summary
+  if (Object.prototype.hasOwnProperty.call(data, 'workItemFilterOptions')) {
+    handledKeys.add('workItemFilterOptions');
+    const w = data.workItemFilterOptions;
+    const enabled = !!w?.isEnabled;
+    addDetail({ key: 'workItemFilters', label: 'Work item filters', value: enabled ? 'Enabled' : 'Disabled' });
+    if (enabled) {
+      const types = Array.isArray(w?.workItemTypes) ? w.workItemTypes : [];
+      const states = Array.isArray(w?.workItemStates) ? w.workItemStates : [];
+      const typesLabel = summarizeList(types.map(toTitleCase));
+      const statesLabel = summarizeList(states.map(toTitleCase));
+      if (typesLabel) addDetail({ key: 'workItemTypes', label: 'Work item types', value: typesLabel });
+      if (statesLabel) addDetail({ key: 'workItemStates', label: 'Work item states', value: statesLabel });
+    }
+  }
+
+  // Queries summary (SVD)
+  if (Object.prototype.hasOwnProperty.call(data, 'systemOverviewQuery')) {
+    handledKeys.add('systemOverviewQuery');
+    const q = data.systemOverviewQuery;
+    const sys = q?.sysOverviewQuery || null;
+    const bugs = q?.knownBugsQuery || null;
+    addDetail({ key: 'includeSystemOverview', label: 'Include system overview', value: sys ? 'Yes' : 'No' });
+    if (sys) {
+      const sysTitle = summarizeInputValue(sys?.title ?? sys?.name ?? sys?.text ?? sys?.id);
+      if (sysTitle) addDetail({ key: 'systemOverviewQuery', label: 'System overview query', value: sysTitle });
+    }
+    addDetail({ key: 'includeKnownBugs', label: 'Include known possible bugs', value: bugs ? 'Yes' : 'No' });
+    if (bugs) {
+      const bugsTitle = summarizeInputValue(bugs?.title ?? bugs?.name ?? bugs?.text ?? bugs?.id);
+      if (bugsTitle) addDetail({ key: 'knownBugsQuery', label: 'Known bugs query', value: bugsTitle });
+    }
+  }
+
+  // Linked work items summary (per change)
+  if (Object.prototype.hasOwnProperty.call(data, 'linkedWiOptions')) {
+    handledKeys.add('linkedWiOptions');
+    const l = data.linkedWiOptions;
+    const enabled = !!l?.isEnabled;
+    addDetail({ key: 'linkedWorkItems', label: 'Linked work items', value: enabled ? 'Enabled' : 'Disabled' });
+    if (enabled) {
+      const types = String(l?.linkedWiTypes || 'both');
+      const rel = String(l?.linkedWiRelationship || 'both');
+      const typesText =
+        types === 'both' ? 'Requirements + Features' : types === 'reqOnly' ? 'Requirements only' : 'Features only';
+      const relText =
+        rel === 'both' ? 'Covers + Affects' : rel === 'coversOnly' ? 'Covers only' : 'Affects only';
+      addDetail({ key: 'linkedWiTypes', label: 'Linked types', value: typesText });
+      addDetail({ key: 'linkedWiRelationship', label: 'Relationship', value: relText });
+    }
+  }
+
+  // Wiki file (installation) summary
+  if (Object.prototype.hasOwnProperty.call(data, 'attachmentWikiUrl')) {
+    handledKeys.add('attachmentWikiUrl');
+    const url = String(data.attachmentWikiUrl || '').trim();
+    if (!url) {
+      addDetail({ key: 'wikiFile', label: 'Wiki file', value: 'Not included' });
+    } else {
+      const fileName = url.split('?')[0].split('/').pop();
+      addDetail({ key: 'wikiFile', label: 'Wiki file', value: fileName ? `Uploaded (${fileName})` : 'Uploaded' });
+    }
+  }
+
+  // Link types filter (if present)
+  if (Array.isArray(data.linkTypeFilterArray) && data.linkTypeFilterArray.length > 0) {
+    handledKeys.add('linkTypeFilterArray');
+    const label = summarizeList(data.linkTypeFilterArray.map(toTitleCase));
+    if (label) addDetail({ key: 'linkTypes', label: 'Link types', value: label });
+  }
+
+  // STR: Open PCR selection
+  if (Object.prototype.hasOwnProperty.call(data, 'openPCRsSelectionRequest')) {
+    handledKeys.add('openPCRsSelectionRequest');
+    const o = data.openPCRsSelectionRequest || {};
+    const mode = String(o?.openPcrMode || 'none');
+    const modeText =
+      mode === 'query' ? 'From query' : mode === 'linked' ? 'From linked CR / Bugs' : 'No';
+    addDetail({ key: 'openPcrMode', label: 'Open PCRs', value: modeText });
+    if (mode === 'query') {
+      const common = String(o?.includeCommonColumnsMode || 'both');
+      const commonText =
+        common === 'openPcrOnly' ? 'Open PCR only' : common === 'testOnly' ? 'Test case only' : 'Both';
+      addDetail({ key: 'openPcrCommonCols', label: 'Include common columns', value: commonText });
+      const t2o = summarizeInputValue(o?.testToOpenPcrQuery?.value ?? o?.testToOpenPcrQuery?.title ?? o?.testToOpenPcrQuery?.name);
+      const o2t = summarizeInputValue(o?.OpenPcrToTestQuery?.value ?? o?.OpenPcrToTestQuery?.title ?? o?.OpenPcrToTestQuery?.name);
+      if (t2o) addDetail({ key: 'testToOpenPcrQuery', label: 'Test to Open PCR query', value: t2o });
+      if (o2t) addDetail({ key: 'openPcrToTestQuery', label: 'Open PCR to Test query', value: o2t });
+    }
+  }
+
+  // STR: Detailed steps execution/analysis
+  if (Object.prototype.hasOwnProperty.call(data, 'stepExecution')) {
+    handledKeys.add('stepExecution');
+    const s = data.stepExecution || {};
+    const enabled = !!s?.isEnabled;
+    addDetail({ key: 'stepExecutionEnabled', label: 'Detailed steps execution', value: enabled ? 'Yes' : 'No' });
+    if (enabled) {
+      if (typeof s?.flatSuiteTestCases === 'boolean') {
+        addDetail({
+          key: 'stepExecutionFlatSuiteTestCases',
+          label: 'Flatten suite test cases (detailed steps)',
+          value: s.flatSuiteTestCases ? 'Yes' : 'No',
+        });
+      }
+      const a = s?.generateAttachments || {};
+      if (typeof a?.isEnabled === 'boolean') {
+        addDetail({ key: 'stepExecutionGenerateAttachments', label: 'Generate attachments', value: a.isEnabled ? 'Yes' : 'No' });
+        if (a.isEnabled) {
+          const type = String(a?.attachmentType || 'asEmbedded');
+          const typeText = type === 'asLink' ? 'Link' : 'Embedded';
+          addDetail({ key: 'stepExecutionAttachmentType', label: 'Attachment type', value: typeText });
+          const mode = String(a?.runAttachmentMode || 'both');
+          const modeText = mode === 'runOnly' ? 'Run only' : mode === 'planOnly' ? 'Plan only' : 'Both';
+          addDetail({ key: 'stepExecutionEvidenceBy', label: 'Evidence by', value: modeText });
+          if (typeof a?.includeAttachmentContent === 'boolean') {
+            addDetail({
+              key: 'stepExecutionIncludeAttachmentContent',
+              label: 'Include attachment content (execution)',
+              value: a.includeAttachmentContent ? 'Yes' : 'No',
+            });
+          }
+        }
+      }
+      const r = s?.generateRequirements || {};
+      if (typeof r?.isEnabled === 'boolean') {
+        addDetail({ key: 'stepExecutionGenerateRequirements', label: 'Generate covered requirements', value: r.isEnabled ? 'Yes' : 'No' });
+        if (r.isEnabled) {
+          const reqMode = String(r?.requirementInclusionMode || 'linkedRequirement');
+          const reqModeText = reqMode === 'query' ? 'From query' : 'From linked requirements';
+          addDetail({ key: 'stepExecutionRequirementsMode', label: 'Requirements based on', value: reqModeText });
+          if (typeof r?.includeCustomerId === 'boolean') {
+            addDetail({ key: 'stepExecutionIncludeCustomerId', label: 'Include customer ID (requirements)', value: r.includeCustomerId ? 'Yes' : 'No' });
+          }
+          if (typeof r?.flatSuiteTestCases === 'boolean') {
+            addDetail({
+              key: 'stepExecutionReqFlatSuiteTestCases',
+              label: 'Flatten suite test cases (requirements)',
+              value: r.flatSuiteTestCases ? 'Yes' : 'No',
+            });
+          }
+          const reqQuery = summarizeInputValue(r?.testReqQuery?.value ?? r?.testReqQuery?.title ?? r?.testReqQuery?.name);
+          if (reqQuery) addDetail({ key: 'stepExecutionRequirementsQuery', label: 'Requirements query', value: reqQuery });
+        }
+      }
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'stepAnalysis')) {
+    handledKeys.add('stepAnalysis');
+    const s = data.stepAnalysis || {};
+    const enabled = !!s?.isEnabled;
+    addDetail({ key: 'stepAnalysisEnabled', label: 'Detailed steps analysis', value: enabled ? 'Yes' : 'No' });
+    if (enabled) {
+      const a = s?.generateRunAttachments || {};
+      if (typeof a?.isEnabled === 'boolean') {
+        addDetail({ key: 'stepAnalysisGenerateRunAttachments', label: 'Generate run attachments (analysis)', value: a.isEnabled ? 'Yes' : 'No' });
+        if (a.isEnabled) {
+          const type = String(a?.attachmentType || 'asEmbedded');
+          const typeText = type === 'asLink' ? 'Link' : 'Embedded';
+          addDetail({ key: 'stepAnalysisAttachmentType', label: 'Attachment type (analysis)', value: typeText });
+          if (typeof a?.includeAttachmentContent === 'boolean') {
+            addDetail({
+              key: 'stepAnalysisIncludeAttachmentContent',
+              label: 'Include attachment content (analysis)',
+              value: a.includeAttachmentContent ? 'Yes' : 'No',
+            });
+          }
+        }
+      }
+      if (typeof s?.isGenerateLinkPCRSEnabled === 'boolean') {
+        addDetail({
+          key: 'stepAnalysisIncludeLinkedPcrs',
+          label: 'Include linked PCRs',
+          value: s.isGenerateLinkPCRSEnabled ? 'Yes' : 'No',
+        });
+      }
+    }
+  }
+
+  // Best-effort fallback: include remaining simple fields (keeps future selectors visible)
+  const ignoredKeys = new Set(['nonRecursiveTestSuiteIdList']);
+  for (const [key, value] of Object.entries(data)) {
+    if (handledKeys.has(key) || ignoredKeys.has(key)) continue;
+    if (value == null) continue;
+    if (typeof value === 'string' && !String(value).trim()) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+
+    const rendered = summarizeInputValue(value);
+    if (!rendered) continue;
+    addDetail({ key, label: inputLabelForKey(key), value: rendered });
+  }
+
+  return details;
+};
+
+const buildInputSummary = ({ docType, contextName, selectedTemplate, contentControls }) => {
+  const parts = [];
+  if (docType) parts.push(`${inputLabelForKey('docType')}: ${docType}`);
+  if (contextName) parts.push(`${inputLabelForKey('context')}: ${beautifyContextName(contextName)}`);
+  const templateFileName = selectedTemplate?.text?.split('/')?.pop?.() || '';
+  if (templateFileName) parts.push(`${inputLabelForKey('template')}: ${templateFileName}`);
+
+  const controls = Array.isArray(contentControls) ? contentControls : [];
+  const includeControlLabel = controls.length > 1;
+  for (const c of controls) {
+    const details = extractInputDetails(c?.data);
+    if (details.length === 0) continue;
+    if (includeControlLabel) {
+      const label = c?.title || c?.type || 'contentControl';
+      parts.push(`${toTitleCase(label)}: ${details.map((d) => `${d.label}: ${d.value}`).join(', ')}`);
+    } else {
+      parts.push(details.map((d) => `${d.label}: ${d.value}`).join(' | '));
+    }
+  }
+
+  return truncateForMetadata(parts.join(' | '), 1024);
+};
+
+const buildInputDetails = ({ docType, contextName, selectedTemplate, contentControls }) => {
+  const safeControls = (Array.isArray(contentControls) ? contentControls : []).map((c) => {
+    const data = c?.data && typeof c.data === 'object' ? c.data : {};
+    // Serialize/deserialize to strip MobX wrappers and ensure plain JSON.
+    let plainData = {};
+    try {
+      plainData = JSON.parse(JSON.stringify(data));
+    } catch {
+      plainData = data;
+    }
+    return {
+      title: c?.title || '',
+      type: c?.type || '',
+      skin: c?.skin || '',
+      data: plainData,
+    };
+  });
+
+  const templateFileName = selectedTemplate?.text?.split('/')?.pop?.() || '';
+  const payload = {
+    version: 1,
+    docType: String(docType || ''),
+    contextName: String(contextName || ''),
+    template: {
+      name: templateFileName,
+      url: String(selectedTemplate?.url || ''),
+    },
+    contentControls: safeControls,
+  };
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return '';
+  }
+};
 const azureDevopsUrl = sanitizeCookie(cookies.getItem('azureDevopsUrl'));
 const azureDevopsPat = sanitizeCookie(cookies.getItem('azureDevopsPat'));
 class DocGenDataStore {
@@ -966,10 +1453,13 @@ class DocGenDataStore {
     this.loadingState.documentsLoadingState = true;
     getBucketFileList(this.ProjectBucketName, null, true)
       .then((data) => {
-        data.sort(function (a, b) {
-          return new Date(b.lastModified) - new Date(a.lastModified);
+        const safe = (Array.isArray(data) ? data : []).filter((d) => d && (d.name || d.url));
+        safe.sort((a, b) => {
+          const ta = new Date(a?.lastModified).getTime();
+          const tb = new Date(b?.lastModified).getTime();
+          return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta);
         });
-        this.documents = data;
+        this.documents = safe;
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching documents: ${err.message}`);
@@ -1317,6 +1807,18 @@ class DocGenDataStore {
         bucketName: this.ProjectBucketName,
         fileName: tempFileName,
         createdBy: this.userDetails.name,
+        inputSummary: buildInputSummary({
+          docType: this.docType,
+          contextName: this.contextName,
+          selectedTemplate: this.selectedTemplate,
+          contentControls: this.contentControls,
+        }),
+        inputDetails: buildInputDetails({
+          docType: this.docType,
+          contextName: this.contextName,
+          selectedTemplate: this.selectedTemplate,
+          contentControls: this.contentControls,
+        }),
         enableDirectDownload: false,
       },
       contentControls: this.contentControls,

@@ -128,7 +128,14 @@ const STRTableSelector = observer(
           headingLevel: 1,
           data: {
             testPlanId: selectedTestPlan.key,
+            testPlanText: selectedTestPlan.text || '',
             testSuiteArray: testSuiteIdList,
+            testSuiteTextList: Array.isArray(selectedTestSuites)
+              ? selectedTestSuites
+                  .map((s) => s?.text || s?.name || String(s?.id ?? s?.key ?? ''))
+                  .filter(Boolean)
+              : [],
+            isSuiteSpecific,
             nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
             includeConfigurations: includeConfigurations,
             includeHierarchy: includeHierarchy,
@@ -162,6 +169,7 @@ const STRTableSelector = observer(
       flatSuiteTestCases,
       contentControlIndex,
       store,
+      selectedTestPlan.text,
     ]);
 
     
