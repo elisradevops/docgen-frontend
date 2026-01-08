@@ -169,12 +169,65 @@ export const buildControlSections = ({ controlIdx, data }) => {
   const shouldSkipKey = shouldSkipKeyFactory(data);
   const hasQueriesRequest = Object.prototype.hasOwnProperty.call(data || {}, 'queriesRequest');
   const rangeType = String(data?.rangeType || '').trim().toLowerCase();
+  const pushRow = (bucket, rawKey, label, value) => {
+    if (value == null) return;
+    if (Array.isArray(value) && value.length === 0) return;
+    if (typeof value === 'string' && !value.trim()) return;
+    bucket.push({
+      key: `${controlIdx}-${rawKey}-${bucket.length}`,
+      rawKey,
+      label,
+      value,
+    });
+  };
 
   for (const [k, v] of Object.entries(data || {})) {
     if (k === 'selectedQueries' && hasQueriesRequest) continue;
     if (shouldSkipKey(k) || v == null) continue;
     if (Array.isArray(v) && v.length === 0) continue;
     if (typeof v === 'string' && !v.trim()) continue;
+
+    if (k === 'workItemFilterOptions' && v && typeof v === 'object' && !Array.isArray(v)) {
+      const enabled = !!v?.isEnabled;
+      pushRow(optionRows, 'workItemFilters', 'Work item filters', enabled ? 'Yes' : 'No');
+      if (enabled) {
+        const types = Array.isArray(v?.workItemTypes)
+          ? v.workItemTypes
+          : v?.workItemType
+          ? [v.workItemType]
+          : [];
+        const typeDetails =
+          Array.isArray(v?.workItemTypeDetails) && v.workItemTypeDetails.length > 0
+            ? v.workItemTypeDetails
+            : types;
+        const states = Array.isArray(v?.workItemStates)
+          ? v.workItemStates
+          : v?.workItemState
+          ? [v.workItemState]
+          : [];
+        const stateDetails =
+          Array.isArray(v?.workItemStateDetails) && v.workItemStateDetails.length > 0
+            ? v.workItemStateDetails
+            : states;
+        pushRow(optionRows, 'workItemTypes', 'Work item types', typeDetails.length ? typeDetails : 'All');
+        pushRow(optionRows, 'workItemStates', 'Work item states', stateDetails.length ? stateDetails : 'All');
+      }
+      continue;
+    }
+
+    if (k === 'linkedWiOptions' && v && typeof v === 'object' && !Array.isArray(v)) {
+      const enabled = !!v?.isEnabled;
+      pushRow(optionRows, 'linkedWorkItems', 'Linked work items', enabled ? 'Yes' : 'No');
+      if (enabled) {
+        const types = String(v?.linkedWiTypes || 'both');
+        const rel = String(v?.linkedWiRelationship || 'both');
+        const typesText = types === 'both' ? 'Requirements + Features' : types === 'reqOnly' ? 'Requirements only' : 'Features only';
+        const relText = rel === 'both' ? 'Covers + Affects' : rel === 'coversOnly' ? 'Covers only' : 'Affects only';
+        pushRow(optionRows, 'linkedWiTypes', 'Linked types', typesText);
+        pushRow(optionRows, 'linkedWiRelationship', 'Relationship', relText);
+      }
+      continue;
+    }
 
     const row = {
       key: `${controlIdx}-${k}`,

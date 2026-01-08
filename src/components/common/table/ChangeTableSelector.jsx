@@ -132,10 +132,28 @@ const ChangeTableSelector = observer(
             .filter(Boolean)
         )
       );
+      const workItemTypeDetails = selectedWorkItemTypes
+        .map((type) => ({
+          key: type?.key || type?.name || type?.text,
+          text: type?.text || type?.name || '',
+          icon: type?.icon,
+          color: type?.color,
+        }))
+        .filter((type) => String(type?.text || '').trim());
+      const workItemStateDetails = selectedWorkItemStates
+        .map((state) => ({
+          key: state?.key || state?.name || state?.text,
+          text: state?.text || state?.name || '',
+          color: state?.color,
+          category: state?.category,
+        }))
+        .filter((state) => String(state?.text || '').trim());
       return {
         isEnabled: includeWorkItemFilter,
         workItemTypes: normalizedTypes,
         workItemStates: normalizedStates,
+        workItemTypeDetails,
+        workItemStateDetails,
       };
     }, [includeWorkItemFilter, selectedWorkItemStates, selectedWorkItemTypes]);
     const handleClearAttachment = useCallback(() => {

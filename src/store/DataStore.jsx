@@ -269,12 +269,20 @@ const extractInputDetails = (data) => {
     const enabled = !!w?.isEnabled;
     addDetail({ key: 'workItemFilters', label: 'Work item filters', value: enabled ? 'Enabled' : 'Disabled' });
     if (enabled) {
-      const types = Array.isArray(w?.workItemTypes) ? w.workItemTypes : [];
-      const states = Array.isArray(w?.workItemStates) ? w.workItemStates : [];
-      const typesLabel = summarizeList(types.map(toTitleCase));
-      const statesLabel = summarizeList(states.map(toTitleCase));
-      if (typesLabel) addDetail({ key: 'workItemTypes', label: 'Work item types', value: typesLabel });
-      if (statesLabel) addDetail({ key: 'workItemStates', label: 'Work item states', value: statesLabel });
+      const types = Array.isArray(w?.workItemTypes)
+        ? w.workItemTypes
+        : w?.workItemType
+        ? [w.workItemType]
+        : [];
+      const states = Array.isArray(w?.workItemStates)
+        ? w.workItemStates
+        : w?.workItemState
+        ? [w.workItemState]
+        : [];
+      const typesLabel = types.length ? summarizeList(types.map(toTitleCase)) : 'All';
+      const statesLabel = states.length ? summarizeList(states.map(toTitleCase)) : 'All';
+      addDetail({ key: 'workItemTypes', label: 'Work item types', value: typesLabel });
+      addDetail({ key: 'workItemStates', label: 'Work item states', value: statesLabel });
     }
   }
 
