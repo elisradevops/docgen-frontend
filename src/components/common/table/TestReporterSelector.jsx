@@ -386,7 +386,13 @@ const TestReporterSelector = observer(
             skin: 'testReporter',
             data: {
               testPlanId: selectedTestPlan.key,
+              testPlanText: selectedTestPlan.text || '',
               testSuiteArray: testSuiteIdList,
+              testSuiteTextList: Array.isArray(selectedTestSuites)
+                ? selectedTestSuites
+                    .map((s) => s?.text || s?.name || String(s?.id ?? s?.key ?? ''))
+                    .filter(Boolean)
+                : [],
               nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
               allowCrossTestPlan: allowCrossTestPlan,
               enableRunTestCaseFilter: enableRunTestCaseFilter,
@@ -426,6 +432,7 @@ const TestReporterSelector = observer(
       isRestoring,
       restoreReady,
       store,
+      selectedTestPlan.text,
     ]);
 
     // Re-apply query-dependent parts when shared queries arrive

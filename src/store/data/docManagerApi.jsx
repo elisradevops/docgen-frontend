@@ -58,6 +58,18 @@ export const getJSONContentFromFile = async (bucketName, folderName, fileName) =
   }
 };
 
+export const getJSONContentFromObject = async (bucketName, objectName) => {
+  let url;
+  try {
+    const safeObjectName = encodeURIComponent(String(objectName || ''));
+    url = `${C.jsonDocument_url}/minio/contentFromObject/${bucketName}/${safeObjectName}`;
+    let res = await makeRequest(url, undefined, undefined, headers);
+    return res.contentFromObject;
+  } catch (e) {
+    logger.error(`Cannot get Json content for ${bucketName}/${objectName}: ${e.message}`);
+  }
+};
+
 export const createIfBucketDoesNotExist = async (bucketName) => {
   let url;
   let data = { bucketName };

@@ -92,7 +92,14 @@ const TestContentSelector = observer(
           headingLevel: 1,
           data: {
             testPlanId: selectedTestPlan.key,
+            testPlanText: selectedTestPlan.text || '',
             testSuiteArray: testSuiteIdList,
+            testSuiteTextList: Array.isArray(selectedTestSuites)
+              ? selectedTestSuites
+                  .map((s) => s?.text || s?.name || String(s?.id ?? s?.key ?? ''))
+                  .filter(Boolean)
+              : [],
+            isSuiteSpecific,
             nonRecursiveTestSuiteIdList,
             includeAttachments,
             attachmentType,
@@ -125,6 +132,7 @@ const TestContentSelector = observer(
       flatSuiteTestCases,
       contentControlIndex,
       selectedTestSuites,
+      selectedTestPlan.text,
       store,
     ]);
 

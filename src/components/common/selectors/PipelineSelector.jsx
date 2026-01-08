@@ -44,7 +44,13 @@ const PipelineSelector = observer(
           data: {
             selectedPipeline: selectedPipeline,
             from: selectedPipelineRunStart.key,
+            fromText: selectedPipelineRunStart.text
+              ? `${selectedPipelineRunStart.text} (#${selectedPipelineRunStart.key})`
+              : '',
             to: selectedPipelineRunEnd.key,
+            toText: selectedPipelineRunEnd.text
+              ? `${selectedPipelineRunEnd.text} (#${selectedPipelineRunEnd.key})`
+              : '',
             rangeType: 'pipeline',
             linkTypeFilterArray: null,
             systemOverviewQuery: queriesRequest,
@@ -64,7 +70,9 @@ const PipelineSelector = observer(
       skin,
       selectedPipeline,
       selectedPipelineRunStart.key,
+      selectedPipelineRunStart.text,
       selectedPipelineRunEnd.key,
+      selectedPipelineRunEnd.text,
       queriesRequest,
       store.attachmentWikiUrl,
       linkedWiOptions,
