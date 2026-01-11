@@ -140,6 +140,39 @@ const TestReporterSelector = observer(
       return map;
     }, [store.testSuiteList]);
 
+    const suiteOptions = useMemo(() => {
+      if (!selectedTestPlan?.key) return [];
+      return (store.testSuiteList || []).map((s) => ({
+        ...s,
+        key: s.id,
+        text: `${s.name} - (${s.id})`,
+      }));
+    }, [selectedTestPlan?.key, store.testSuiteList]);
+
+    const allSuitesSelected = useMemo(() => {
+      if (!suiteOptions.length) return false;
+      const selectedKeys = new Set((selectedTestSuites || []).map((suite) => suite?.key));
+      if (selectedKeys.size < suiteOptions.length) return false;
+      return suiteOptions.every((suite) => selectedKeys.has(suite.key));
+    }, [suiteOptions, selectedTestSuites]);
+
+    const suiteSelectionSummary = useMemo(() => {
+      if (!selectedTestPlan?.key) return 'Select a test plan to see suites';
+      if (store.loadingState?.testSuiteListLoading) return 'Loading suites...';
+      if (!suiteOptions.length) return 'No suites available for this plan';
+      if (allSuitesSelected) return `All ${suiteOptions.length} suites selected`;
+      const selectedCount = Array.isArray(selectedTestSuites) ? selectedTestSuites.length : 0;
+      return selectedCount
+        ? `${selectedCount} of ${suiteOptions.length} suites selected`
+        : `${suiteOptions.length} suites available`;
+    }, [
+      selectedTestPlan?.key,
+      store.loadingState?.testSuiteListLoading,
+      suiteOptions.length,
+      allSuitesSelected,
+      selectedTestSuites,
+    ]);
+
     const handleTestPlanChanged = useCallback(
       async (newValue) => {
         await store.fetchTestSuitesList(newValue.key);
@@ -151,6 +184,18 @@ const TestReporterSelector = observer(
         setSelectedTestPlan(newValue);
       },
       [store]
+    );
+
+    const handleSelectAllSuitesToggle = useCallback(
+      (_event, checked) => {
+        if (!selectedTestPlan?.key) return;
+        if (checked) {
+          setSelectedTestSuites(suiteOptions);
+        } else {
+          setSelectedTestSuites([]);
+        }
+      },
+      [selectedTestPlan?.key, suiteOptions]
     );
 
     const processTestPlanSelection = useCallback(
@@ -513,78 +558,105 @@ const TestReporterSelector = observer(
               title='Scope'
               description='Choose the test plan and suites to include in this report.'
             >
-              <Grid
-                container
-                spacing={1.25}
-                alignItems='flex-start'
-              >
+              <Stack spacing={2}>
+                <SmartAutocomplete
+                  size='small'
+                  disableClearable
+                  autoHighlight
+                  openOnFocus
+                  loading={store.loadingState.testPlanLoadingState}
+                  options={store.testPlansList.map((testPlan) => ({
+                    key: testPlan.id,
+                    text: testPlan.name,
+                  }))}
+                  label='Test plan'
+                  textFieldProps={{
+                    size: 'small',
+                    sx: {
+                      '& .MuiInputBase-root': { minHeight: 56 },
+                    },
+                  }}
+                  onChange={async (_event, newValue) => {
+                    await handleTestPlanChanged(newValue);
+                  }}
+                  value={selectedTestPlan}
+                />
                 <Grid
-                  size={{ xs: 12, md: 5 }}
-                  sx={{ minWidth: 0 }}
+                  container
+                  spacing={1.5}
+                  alignItems='flex-start'
                 >
-                  <SmartAutocomplete
-                    size='small'
-                    disableClearable
-                    autoHighlight
-                    openOnFocus
-                    loading={store.loadingState.testPlanLoadingState}
-                    options={store.testPlansList.map((testPlan) => ({
-                      key: testPlan.id,
-                      text: testPlan.name,
-                    }))}
-                    label='Test plan'
-                    textFieldProps={{
-                      size: 'small',
-                      sx: {
-                        '& .MuiInputBase-root': { minHeight: 56 },
-                      },
+                  <Grid
+                    size={{ xs: 12, md: 10 }}
+                    sx={{ minWidth: 0 }}
+                  >
+                    <SmartAutocomplete
+                      multiple
+                      size='small'
+                      options={suiteOptions}
+                      loading={store.loadingState.testSuiteListLoading}
+                      disableCloseOnSelect
+                      autoHighlight
+                      groupBy={(option) => {
+                        const parent = suiteById.get(option.parent);
+                        return parent ? `Parent: ${parent.name}` : 'Top Level';
+                      }}
+                      label='Test suites (descendants auto-included)'
+                      placeholder='Search suites...'
+                      textFieldProps={{
+                        size: 'small',
+                        helperText: selectedTestPlan?.key
+                          ? 'Descendants are auto-included'
+                          : 'Select a test plan first',
+                      }}
+                      showCheckbox
+                      disabled={!selectedTestPlan?.key}
+                      onChange={async (_event, newValue) => {
+                        setSelectedTestSuites(newValue);
+                      }}
+                      value={selectedTestSuites}
+                    />
+                  </Grid>
+                  <Grid
+                    size={{ xs: 12, md: 2 }}
+                    sx={{
+                      minWidth: 0,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      pt: { xs: 0, md: 1.5 },
                     }}
-                    onChange={async (_event, newValue) => {
-                      await handleTestPlanChanged(newValue);
-                    }}
-                    value={selectedTestPlan}
-                  />
+                  >
+                    <Stack
+                      spacing={0.25}
+                      alignItems='flex-start'
+                      sx={{ width: '100%' }}
+                    >
+                      <FormControlLabel
+                        sx={{ m: 0 }}
+                        control={
+                          <Switch
+                            size='small'
+                            checked={allSuitesSelected}
+                            onChange={handleSelectAllSuitesToggle}
+                            disabled={
+                              !selectedTestPlan?.key ||
+                              store.loadingState?.testSuiteListLoading ||
+                              suiteOptions.length === 0
+                            }
+                          />
+                        }
+                        label={<Typography variant='body2'>Select all suites</Typography>}
+                      />
+                      <Typography
+                        variant='caption'
+                        color='text.secondary'
+                      >
+                        {suiteSelectionSummary}
+                      </Typography>
+                    </Stack>
+                  </Grid>
                 </Grid>
-                <Grid
-                  size={{ xs: 12, md: 7 }}
-                  sx={{ minWidth: 0 }}
-                >
-                  <SmartAutocomplete
-                    multiple
-                    size='small'
-                    options={
-                      selectedTestPlan?.key
-                        ? (store.testSuiteList || []).map((s) => ({
-                            ...s,
-                            key: s.id,
-                            text: `${s.name} - (${s.id})`,
-                          }))
-                        : []
-                    }
-                    loading={store.loadingState.testSuiteListLoading}
-                    disableCloseOnSelect
-                    autoHighlight
-                    groupBy={(option) => {
-                      const parent = suiteById.get(option.parent);
-                      return parent ? `Parent: ${parent.name}` : 'Top Level';
-                    }}
-                    label='Test suites (descendants auto-included)'
-                    placeholder='Search suites...'
-                    textFieldProps={{
-                      size: 'small',
-                      helperText: selectedTestPlan?.key
-                        ? 'Descendants are auto-included'
-                        : 'Select a test plan first',
-                    }}
-                    showCheckbox
-                    disabled={!selectedTestPlan?.key}
-                    onChange={async (_event, newValue) => {
-                      setSelectedTestSuites(newValue);
-                    }}
-                    value={selectedTestSuites}
-                  />
-                </Grid>
-              </Grid>
+              </Stack>
             </SectionCard>
 
             <SectionCard
