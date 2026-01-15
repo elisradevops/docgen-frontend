@@ -9,6 +9,8 @@ const defaultSelectedItem = {
   key: '',
   text: '',
 };
+const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const compareNamesNatural = (a, b) => nameCollator.compare(String(a?.name ?? ''), String(b?.name ?? ''));
 const ReleaseSelector = observer(
   ({
     store,
@@ -54,7 +56,7 @@ const ReleaseSelector = observer(
         setSelectedReleaseHistoryStart(value);
 
         const filteredHistory = currentReleaseDefinitionHistory.filter((run) => run.id > value.key);
-        const sortedHistory = [...filteredHistory].sort((a, b) => b.name.localeCompare(a.name));
+        const sortedHistory = [...filteredHistory].sort(compareNamesNatural);
         setEndPointRunHistory(sortedHistory);
       },
       [releaseDefinitionHistory]
@@ -319,7 +321,7 @@ const ReleaseSelector = observer(
               openOnFocus
               loading={store.loadingState.releaseDefinitionLoadingState}
               options={Array.from(store.releaseDefinitionList || [])
-                .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+                .sort(compareNamesNatural)
                 .map((releaseDefinition) => {
                   return {
                     key: releaseDefinition.id,
@@ -341,9 +343,11 @@ const ReleaseSelector = observer(
                 style={{ marginBlock: 8, width: '100%' }}
                 autoHighlight
                 openOnFocus
-                options={[...releaseDefinitionHistory].map((run) => {
+                options={[...releaseDefinitionHistory]
+                  .sort(compareNamesNatural)
+                  .map((run) => {
                   return { key: run.id, text: run.name };
-                })}
+                  })}
                 label='Select start release'
                 onChange={async (event, newValue) => {
                   handleStartPointReleaseSelect(newValue);

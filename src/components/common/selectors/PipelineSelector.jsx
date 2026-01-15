@@ -8,6 +8,8 @@ const defaultSelectedItem = {
   key: '',
   text: '',
 };
+const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const compareNamesNatural = (a, b) => nameCollator.compare(String(a?.name ?? ''), String(b?.name ?? ''));
 
 const PipelineSelector = observer(
   ({
@@ -190,7 +192,7 @@ const PipelineSelector = observer(
         const filteredHistory = [...currentRunHistoryList].filter((run) => run.id > newValue.key);
 
         // Create a new array for sorting to avoid MobX errors
-        const sortedHistory = [...filteredHistory].sort((a, b) => b.name.localeCompare(a.name));
+        const sortedHistory = [...filteredHistory].sort(compareNamesNatural);
 
         setEndPointRunHistory(sortedHistory);
       },
@@ -298,7 +300,7 @@ const PipelineSelector = observer(
               loading={store.loadingState.pipelineLoadingState}
               options={Array.from(store.pipelineList || [])
                 .slice() // Create a copy first
-                .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+                .sort(compareNamesNatural)
                 .map((pipeline) => {
                   return { key: pipeline.id, text: `${pipeline.id} - ${pipeline.name}` };
                 })}
@@ -317,9 +319,11 @@ const PipelineSelector = observer(
                 style={{ marginBlock: 8, width: '100%' }}
                 autoHighlight
                 openOnFocus
-                options={[...pipelineRunHistory].map((run) => {
+                options={[...pipelineRunHistory]
+                  .sort(compareNamesNatural)
+                  .map((run) => {
                   return { key: run.id, text: run.name };
-                })}
+                  })}
                 label='Select start pipeline run'
                 onChange={async (event, newValue) => {
                   handleStartPointPipelineSelect(newValue);
