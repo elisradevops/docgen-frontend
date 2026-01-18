@@ -11,6 +11,7 @@ const defaultSelectedItem = {
 };
 const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 const compareNamesNatural = (a, b) => nameCollator.compare(String(a?.name ?? ''), String(b?.name ?? ''));
+const compareNamesNaturalDesc = (a, b) => compareNamesNatural(b, a);
 const ReleaseSelector = observer(
   ({
     store,
@@ -347,7 +348,7 @@ const ReleaseSelector = observer(
                 autoHighlight
                 openOnFocus
                 options={[...releaseDefinitionHistory]
-                  .sort(compareNamesNatural)
+                  .sort(compareNamesNaturalDesc)
                   .map((run) => {
                   return { key: run.id, text: run.name };
                   })}
