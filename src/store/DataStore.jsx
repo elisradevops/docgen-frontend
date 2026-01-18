@@ -240,9 +240,10 @@ const extractInputDetails = (data) => {
   // Common toggle options (show Yes/No when present)
   const booleanKeyLabels = [
     { key: 'includeUnlinkedCommits', label: 'Include commits without linked work items' },
+    { key: 'includePullRequestWorkItems', label: 'Include pull request work items' },
     { key: 'includeCommittedBy', label: 'Include committer' },
     { key: 'replaceTaskWithParent', label: 'Replace Task with parent item' },
-    { key: 'includePullRequests', label: 'Include pull requests' },
+    { key: 'includePullRequests', label: 'Only pull requests (date range)' },
     { key: 'includeChangeDescription', label: 'Include change description' },
     // Test/STR/STD toggles
     { key: 'isSuiteSpecific', label: inputLabelForKey('isSuiteSpecific') },

@@ -5,7 +5,8 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
-import { Grid, Button, Stack } from '@mui/material';
+import { Grid, Button, Stack, Tooltip } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { observer } from 'mobx-react';
 
 const CommitDateSelector = observer(
@@ -22,6 +23,7 @@ const CommitDateSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    includePullRequestWorkItems,
     replaceTaskWithParent,
     workItemFilterOptions,
     isRestoring,
@@ -69,6 +71,7 @@ const CommitDateSelector = observer(
             includeChangeDescription: includeChangeDescription,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            includePullRequestWorkItems,
             replaceTaskWithParent,
             systemOverviewQuery: queriesRequest,
             attachmentWikiUrl: store.attachmentWikiUrl,
@@ -92,6 +95,7 @@ const CommitDateSelector = observer(
       includeChangeDescription,
       includeCommittedBy,
       includeUnlinkedCommits,
+      includePullRequestWorkItems,
       replaceTaskWithParent,
       queriesRequest,
       store,
@@ -308,7 +312,23 @@ const CommitDateSelector = observer(
                     }}
                   />
                 }
-                label='Only Pull Requests'
+                label={
+                  <Stack
+                    direction='row'
+                    alignItems='center'
+                    spacing={0.5}
+                    component='span'
+                  >
+                    <span>Only pull requests (date range)</span>
+                    <Tooltip
+                      title='Shows only completed PRs in the selected date range. Commits and work items are excluded.'
+                      arrow
+                      placement='top'
+                    >
+                      <InfoOutlinedIcon fontSize='inherit' color='info' />
+                    </Tooltip>
+                  </Stack>
+                }
               />
               <FormControlLabel
                 sx={{ m: 0 }}

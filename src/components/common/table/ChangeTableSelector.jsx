@@ -17,6 +17,10 @@ import {
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
+import CallMergeIcon from '@mui/icons-material/CallMerge';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import SmartAutocomplete from '../SmartAutocomplete';
 import PullRequestSelector from '../selectors/PullRequestSelector';
 import QueryTree from '../QueryTree';
@@ -42,6 +46,56 @@ const defaultSelectedQueriesForChangeTableSelector = {
 };
 
 const defaultLinkedWiOptions = { isEnabled: false, linkedWiTypes: 'both', linkedWiRelationship: 'both' };
+const toggleCardSx = {
+  borderRadius: 2,
+  border: '1px solid',
+  borderColor: 'divider',
+  bgcolor: 'background.paper',
+  p: 1.5,
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 0.75,
+};
+
+const ToggleCard = ({ icon, title, description, checked, onChange, info = null }) => {
+  const Icon = icon;
+  return (
+    <Box sx={toggleCardSx}>
+      <Stack
+        direction='row'
+        alignItems='center'
+        justifyContent='space-between'
+      >
+        <Stack
+          direction='row'
+          spacing={1}
+          alignItems='center'
+        >
+          <Icon fontSize='small' />
+          <Typography
+            variant='subtitle2'
+            fontWeight={600}
+          >
+            {title}
+          </Typography>
+          {info}
+        </Stack>
+        <Checkbox
+          size='small'
+          checked={checked}
+          onChange={(_event, nextChecked) => onChange(nextChecked)}
+        />
+      </Stack>
+      <Typography
+        variant='caption'
+        color='text.secondary'
+      >
+        {description}
+      </Typography>
+    </Box>
+  );
+};
 /**
  * ChangeTableSelector (SVD)
  * Manages base data type, query selections, and filters with session/favorite restore.
@@ -67,6 +121,7 @@ const ChangeTableSelector = observer(
     const [includeKnownBugs, setIncludeKnownBugs] = useState(false);
     const [includeCommittedBy, setIncludeCommittedBy] = useState(false);
     const [includeUnlinkedCommits, setIncludeUnlinkedCommits] = useState(false);
+    const [includePullRequestWorkItems, setIncludePullRequestWorkItems] = useState(false);
     const [replaceTaskWithParent, setReplaceTaskWithParent] = useState(false);
     const [includeWorkItemFilter, setIncludeWorkItemFilter] = useState(false);
     const [selectedWorkItemTypes, setSelectedWorkItemTypes] = useState([]);
@@ -339,6 +394,7 @@ const ChangeTableSelector = observer(
           processWorkItemFilterOptions(dataToSave.workItemFilterOptions);
           setIncludeCommittedBy(dataToSave.includeCommittedBy || false);
           setIncludeUnlinkedCommits(dataToSave.includeUnlinkedCommits || false);
+          setIncludePullRequestWorkItems(dataToSave.includePullRequestWorkItems || false);
           setReplaceTaskWithParent(dataToSave.replaceTaskWithParent || false);
           processRangeTypeSelection(dataToSave);
           setLoadedData(dataToSave);
@@ -365,6 +421,7 @@ const ChangeTableSelector = observer(
       setIncludeKnownBugs(false);
       setIncludeCommittedBy(false);
       setIncludeUnlinkedCommits(false);
+      setIncludePullRequestWorkItems(false);
       setReplaceTaskWithParent(false);
       setIncludeWorkItemFilter(false);
       setSelectedWorkItemTypes([]);
@@ -484,6 +541,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      includePullRequestWorkItems={includePullRequestWorkItems}
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
@@ -506,6 +564,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      includePullRequestWorkItems={includePullRequestWorkItems}
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
@@ -527,6 +586,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      includePullRequestWorkItems={includePullRequestWorkItems}
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
@@ -548,6 +608,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      includePullRequestWorkItems={includePullRequestWorkItems}
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                       isRestoring={isRestoring || baseRestoring}
@@ -569,6 +630,7 @@ const ChangeTableSelector = observer(
                       linkedWiOptions={linkedWiOptions}
                       includeCommittedBy={includeCommittedBy}
                       includeUnlinkedCommits={includeUnlinkedCommits}
+                      includePullRequestWorkItems={includePullRequestWorkItems}
                       replaceTaskWithParent={replaceTaskWithParent}
                       workItemFilterOptions={workItemFilterOptionsPayload}
                     />
@@ -582,39 +644,46 @@ const ChangeTableSelector = observer(
                       {baseSummary}
                     </Typography>
                   </Box>
-                  <Stack
-                    direction={{ xs: 'column', md: 'row' }}
-                    spacing={1.25}
-                    alignItems='flex-start'
+                  <Grid
+                    container
+                    spacing={1.5}
+                    alignItems='stretch'
                   >
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={includeUnlinkedCommits}
-                          onChange={(_event, checked) => setIncludeUnlinkedCommits(checked)}
-                        />
-                      }
-                      label='Include commits without linked work items'
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={includeCommittedBy}
-                          onChange={(_event, checked) => setIncludeCommittedBy(checked)}
-                        />
-                      }
-                      label='Include committer'
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={replaceTaskWithParent}
-                          onChange={(_event, checked) => setReplaceTaskWithParent(checked)}
-                        />
-                      }
-                      label={
-                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-                          Replace Task with parent item (if exists)
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                      <ToggleCard
+                        icon={LinkOffIcon}
+                        title='Unlinked commits'
+                        description='Include commits without linked work items.'
+                        checked={includeUnlinkedCommits}
+                        onChange={setIncludeUnlinkedCommits}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                      <ToggleCard
+                        icon={CallMergeIcon}
+                        title='PR work items'
+                        description='Merge work items linked only to the PR.'
+                        checked={includePullRequestWorkItems}
+                        onChange={setIncludePullRequestWorkItems}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                      <ToggleCard
+                        icon={PersonOutlineIcon}
+                        title='Committer'
+                        description='Show the committer column in the table.'
+                        checked={includeCommittedBy}
+                        onChange={setIncludeCommittedBy}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                      <ToggleCard
+                        icon={AccountTreeIcon}
+                        title='Replace Task'
+                        description='Replace Task work items with their parent.'
+                        checked={replaceTaskWithParent}
+                        onChange={setReplaceTaskWithParent}
+                        info={
                           <Tooltip
                             arrow
                             placement='top'
@@ -654,10 +723,10 @@ const ChangeTableSelector = observer(
                               color='info'
                             />
                           </Tooltip>
-                        </Box>
-                      }
-                    />
-                  </Stack>
+                        }
+                      />
+                    </Grid>
+                  </Grid>
                 </Stack>
               </SectionCard>
             </Grid>
