@@ -10,6 +10,7 @@ const defaultSelectedItem = {
 };
 const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 const compareNamesNatural = (a, b) => nameCollator.compare(String(a?.name ?? ''), String(b?.name ?? ''));
+const compareNamesNaturalDesc = (a, b) => compareNamesNatural(b, a);
 
 const PipelineSelector = observer(
   ({
@@ -195,7 +196,7 @@ const PipelineSelector = observer(
         const filteredHistory = [...currentRunHistoryList].filter((run) => run.id > newValue.key);
 
         // Create a new array for sorting to avoid MobX errors
-        const sortedHistory = [...filteredHistory].sort(compareNamesNatural);
+        const sortedHistory = [...filteredHistory].sort(compareNamesNaturalDesc);
 
         setEndPointRunHistory(sortedHistory);
       },
@@ -323,7 +324,7 @@ const PipelineSelector = observer(
                 autoHighlight
                 openOnFocus
                 options={[...pipelineRunHistory]
-                  .sort(compareNamesNatural)
+                  .sort(compareNamesNaturalDesc)
                   .map((run) => {
                   return { key: run.id, text: run.name };
                   })}
