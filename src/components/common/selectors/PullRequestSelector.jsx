@@ -20,6 +20,7 @@ const PullRequestSelector = observer(
     linkedWiOptions,
     includeCommittedBy,
     includeUnlinkedCommits,
+    includePullRequestWorkItems,
     replaceTaskWithParent,
     workItemFilterOptions,
   }) => {
@@ -51,6 +52,7 @@ const PullRequestSelector = observer(
             linkedWiOptions: linkedWiOptions,
             includeCommittedBy: includeCommittedBy,
             includeUnlinkedCommits: includeUnlinkedCommits,
+            includePullRequestWorkItems,
             replaceTaskWithParent,
             workItemFilterOptions,
           },
@@ -69,6 +71,7 @@ const PullRequestSelector = observer(
       linkedWiOptions,
       includeCommittedBy,
       includeUnlinkedCommits,
+      includePullRequestWorkItems,
       replaceTaskWithParent,
       contentControlIndex,
       workItemFilterOptions,
