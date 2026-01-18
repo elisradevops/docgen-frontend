@@ -196,7 +196,7 @@ const PipelineSelector = observer(
         const filteredHistory = [...currentRunHistoryList].filter((run) => run.id > newValue.key);
 
         // Create a new array for sorting to avoid MobX errors
-        const sortedHistory = [...filteredHistory].sort(compareNamesNaturalDesc);
+        const sortedHistory = [...filteredHistory].sort(compareNamesNatural);
 
         setEndPointRunHistory(sortedHistory);
       },

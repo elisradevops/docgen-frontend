@@ -58,7 +58,7 @@ const ReleaseSelector = observer(
         setSelectedReleaseHistoryStart(value);
 
         const filteredHistory = currentReleaseDefinitionHistory.filter((run) => run.id > value.key);
-        const sortedHistory = [...filteredHistory].sort(compareNamesNaturalDesc);
+        const sortedHistory = [...filteredHistory].sort(compareNamesNatural);
         setEndPointRunHistory(sortedHistory);
       },
       [releaseDefinitionHistory]
