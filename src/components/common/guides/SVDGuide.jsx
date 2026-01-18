@@ -72,6 +72,18 @@ const SVDGuide = () => {
             secondary='Append commits without linked work items as an additional appendix.'
           />
         </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Include Pull Request Work Items'
+            secondary='When enabled, work items linked only to completed PRs are merged into the change list. These are marked with a [PR] prefix in the Work Item Title.'
+          />
+        </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Only Pull Requests (Date Range)'
+            secondary='For date ranges only: shows completed PRs in the selected window instead of commit-based changes.'
+          />
+        </ListItem>
 
         <ListItem>
           <ListItemText
