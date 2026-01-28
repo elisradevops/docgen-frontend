@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-placeholder="${BACKEND-URL-PLACEHOLDER-ContentControl:-}"
+placeholder="$(printenv 'BACKEND-URL-PLACEHOLDER-ContentControl' 2>/dev/null || true)"
 
 if [ -z "$placeholder" ]; then
   echo "BACKEND-URL-PLACEHOLDER-ContentControl is not set; aborting." >&2
@@ -39,4 +39,9 @@ else
 fi
 
 echo "Starting nginx"
+
+# Build VSIX at container startup (requires tfx)
+echo "Building VSIX (startup)..."
+/bin/sh /tmp/deployment/create-vsix.sh || true
+
 exec nginx -g "daemon off;"

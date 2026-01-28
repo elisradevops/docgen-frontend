@@ -16,10 +16,11 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
   const [loadingInputDoc, setLoadingInputDoc] = useState(null);
 
   useEffect(() => {
+    if (store?.isAdoMode && store?.adoBootStatus !== 'ready') return;
     if (selectedTeamProject) {
       store.fetchDocuments();
     }
-  }, [store, selectedTeamProject]);
+  }, [store, selectedTeamProject, store?.isAdoMode, store?.adoBootStatus]);
 
   const ensureInputDetailsLoaded = async (record) => {
     const docName = String(record?.name || '');
@@ -225,4 +226,3 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
 });
 
 export default DocumentsTab;
-
