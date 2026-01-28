@@ -29,7 +29,7 @@ RUN rm -rf /usr/share/nginx/html/*
 RUN apk add --no-cache nodejs npm file \
   && npm install -g tfx-cli
 # Copy Vite build output from stage 1
-COPY --from=builder /react-ui/dist /usr/share/nginx/html
+COPY --from=builder /react-ui/ado-extension/dist /usr/share/nginx/html
 COPY --from=builder /react-ui/ado-extension/vss-extension.json /opt/ado-extension/vss-extension.json
 COPY --from=builder /react-ui/ado-extension/dist /opt/ado-extension/dist
 COPY --from=builder /react-ui/src/deployment /tmp/deployment
