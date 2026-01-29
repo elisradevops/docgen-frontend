@@ -54,7 +54,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          file: src/deployment/dockerfile.vsix-builder
+          file: docgen-frontend/src/deployment/dockerfile.vsix-builder
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-vsix.outputs.tags }}
