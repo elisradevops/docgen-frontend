@@ -20,6 +20,7 @@ FROM nginx:alpine
 RUN rm -rf /usr/share/nginx/html/*
 # Copy Vite build output from stage 1
 COPY --from=builder /react-ui/ado-extension/dist /usr/share/nginx/html
+COPY --from=builder /react-ui/ado-extension/vss-extension.json /opt/ado-extension/vss-extension.json
 COPY --from=builder /react-ui/src/deployment /tmp/deployment
 EXPOSE 80
 ENTRYPOINT ["/bin/sh","/tmp/deployment/env-uri-init.sh"]
