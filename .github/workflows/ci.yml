@@ -53,7 +53,7 @@ jobs:
       - name: Build and push (vsix-builder)
         uses: docker/build-push-action@v2
         with:
-          context: docgen-frontend
+          context: .
           file: src/deployment/dockerfile.vsix-builder
           platforms: linux/amd64,linux/arm64
           push: true

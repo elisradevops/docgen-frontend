@@ -1,0 +1,15 @@
+FROM node:22-alpine
+
+RUN apk add --no-cache bash \
+  && npm install -g tfx-cli
+
+WORKDIR /opt/ado-extension
+
+COPY docgen-frontend/src/deployment /tmp/deployment
+
+ENV VSIX_ROOT_DIR=/opt/ado-extension
+ENV VSIX_OUT_DIR=/opt/ado-extension/out
+ENV VSIX_SRC_DIST=/work/dist
+ENV VSIX_SRC_MANIFEST=/work/vss-extension.json
+
+ENTRYPOINT ["/bin/sh", "/tmp/deployment/run-vsix-builder.sh"]
