@@ -2,12 +2,11 @@ import axios from 'axios';
 import C from '../constants';
 import { v4 as uuidV4 } from 'uuid';
 import logger from '../../utils/logger';
+import { setLastApiError } from '../../utils/debug';
+import { enqueueRequest } from '../../utils/requestQueue';
 const DEFAULT_TIMEOUT = 10000; // 10 seconds
-const headers = {
-  headers: {
-    'Access-Control-Allow-Origin': '*',
-    'Content-Type': 'application/json',
-  },
+const baseHeaders = {
+  'Content-Type': 'application/json',
 };
 
 export const getBucketFileList = async (
@@ -19,12 +18,15 @@ export const getBucketFileList = async (
 ) => {
   let url;
   try {
+    if (!bucketName) {
+      return [];
+    }
     url =
       docType !== null
         ? `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?docType=${docType}&isExternalUrl=${isExternalUrl}&recurse=${recurse}`
         : `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}&recurse=${recurse}`;
     const urlToSend = projectName === null ? url : `${url}&projectName=${projectName}`;
-    let res = await makeRequest(urlToSend, undefined, undefined, headers);
+    let res = await makeRequest(urlToSend, undefined, undefined, baseHeaders);
     return res.bucketFileList;
   } catch (err) {
     if (err.response) {
@@ -51,7 +53,7 @@ export const getJSONContentFromFile = async (bucketName, folderName, fileName) =
   let url;
   try {
     url = `${C.jsonDocument_url}/minio/ContentFromFile/${bucketName}/${folderName}/${fileName}`;
-    let res = await makeRequest(url, undefined, undefined, headers);
+    let res = await makeRequest(url, undefined, undefined, baseHeaders);
     return res.contentFromFile;
   } catch (e) {
     logger.error(`Cannot get Json content for ${bucketName}/${folderName}/${fileName}: ${e.message}`);
@@ -63,7 +65,7 @@ export const getJSONContentFromObject = async (bucketName, objectName) => {
   try {
     const safeObjectName = encodeURIComponent(String(objectName || ''));
     url = `${C.jsonDocument_url}/minio/contentFromObject/${bucketName}/${safeObjectName}`;
-    let res = await makeRequest(url, undefined, undefined, headers);
+    let res = await makeRequest(url, undefined, undefined, baseHeaders);
     return res.contentFromObject;
   } catch (e) {
     logger.error(`Cannot get Json content for ${bucketName}/${objectName}: ${e.message}`);
@@ -75,7 +77,7 @@ export const createIfBucketDoesNotExist = async (bucketName) => {
   let data = { bucketName };
   try {
     url = `${C.jsonDocument_url}/minio/createBucket`;
-    return await makeRequest(url, 'post', data, headers);
+    return await makeRequest(url, 'post', data, baseHeaders);
   } catch (e) {
     if (e.code === 'ECONNABORTED') {
       logger.error(`Request timeout while creating bucket`);
@@ -97,12 +99,31 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
   };
   let json;
   try {
-    let result = await axios(url, config);
+    const isMinio = url.includes('/minio/');
+    const isDocs = url.includes('/jsonDocument/');
+    const isContentFetch =
+      url.includes('/minio/ContentFromFile') || url.includes('/minio/contentFromObject');
+    const isBucketList = url.includes('/minio/bucketFileList');
+    const isDocFormsList =
+      isBucketList && /\/minio\/bucketFileList\/document-forms\b/.test(url);
+    const isRecursiveList = isBucketList && /[?&]recurse=true\b/.test(url);
+    const queueKey = isDocs ? 'docs' : isDocFormsList ? 'minioForms' : isMinio ? 'minio' : 'default';
+    const priority = isContentFetch ? 'high' : isDocFormsList ? 'high' : isRecursiveList ? 'low' : 'normal';
+    let result = await enqueueRequest(() => axios(url, config), { key: queueKey, priority });
     json = JSON.parse(JSON.stringify(result.data));
   } catch (e) {
     logger.error(`API Request Error for ${url}: ${e.message}`);
     logger.error('Error stack:');
     logger.error(e.stack);
+    try {
+      setLastApiError({
+        url,
+        message: e?.message || 'Request failed',
+        status: e?.response?.status,
+      });
+    } catch {
+      /* empty */
+    }
   }
   return json;
 };
@@ -110,7 +131,13 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
 export const sendDocumentToGenerator = async (docJson) => {
   try {
     docJson.documentId = uuidV4();
-    let res = await axios.post(`${C.jsonDocument_url}/jsonDocument/create`, docJson, headers);
+    let res = await enqueueRequest(
+      () =>
+        axios.post(`${C.jsonDocument_url}/jsonDocument/create`, docJson, {
+          headers: baseHeaders,
+        }),
+      { key: 'docs', priority: 'high' }
+    );
     window.currentdoc = docJson.documentId;
     return res.data;
   } catch (err) {
@@ -144,7 +171,7 @@ export const getFavoriteList = async (userId, docType, teamProjectId) => {
   try {
     let res = await axios.get(`${C.jsonDocument_url}/dataBase/getFavorites`, {
       params: { userId, docType, teamProjectId },
-      headers,
+      headers: baseHeaders,
       timeout: DEFAULT_TIMEOUT,
     });
     return res.data.favorites || [];
@@ -184,7 +211,7 @@ export const createFavorite = async (userId, name, docType, dataToSave, teamProj
     let res = await axios.post(
       `${C.jsonDocument_url}/dataBase/createFavorite`,
       { userId, name, docType, dataToSave, teamProjectId, isShared },
-      { headers, timeout: DEFAULT_TIMEOUT }
+      { headers: baseHeaders, timeout: DEFAULT_TIMEOUT }
     );
 
     return res.data;
@@ -215,7 +242,7 @@ export const createFavorite = async (userId, name, docType, dataToSave, teamProj
 export const deleteFavoriteFromDb = async (id) => {
   try {
     let res = await axios.delete(`${C.jsonDocument_url}/dataBase/deleteFavorite/${id}`, {
-      headers,
+      headers: baseHeaders,
       timeout: DEFAULT_TIMEOUT,
     });
 
@@ -244,7 +271,6 @@ export const uploadFileToStorage = async (formData) => {
     // Iterate through formData to check if the file was appended correctly
     return await axios.post(`${C.jsonDocument_url}/minio/files/uploadFile`, formData, {
       headers: {
-        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'multipart/form-data',
       },
     });
@@ -267,7 +293,7 @@ export const deleteFile = async (file, projectName, bucketName) => {
   try {
     return await axios.delete(
       `${C.jsonDocument_url}/minio/files/deleteFile/${bucketName}/${projectName}/${file.etag}`,
-      headers
+      { headers: baseHeaders }
     );
   } catch (err) {
     if (err.response) {
@@ -308,7 +334,7 @@ export const testSharePointConnection = async (siteUrl, library, folder, auth) =
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/test-connection`,
       body,
-      { headers, timeout: DEFAULT_TIMEOUT }
+      { headers: baseHeaders, timeout: DEFAULT_TIMEOUT }
     );
     return res.data;
   } catch (err) {
@@ -333,7 +359,7 @@ export const listSharePointFiles = async (siteUrl, library, folder, auth) => {
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/list-files`,
       body,
-      { headers, timeout: 30000 } // 30 second timeout for listing files
+      { headers: baseHeaders, timeout: 30000 } // 30 second timeout for listing files
     );
     return res.data;
   } catch (err) {
@@ -358,7 +384,7 @@ export const checkSharePointConflicts = async (siteUrl, library, folder, auth, b
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/check-conflicts`,
       body,
-      { headers, timeout: 60000 } // 60 second timeout
+      { headers: baseHeaders, timeout: 60000 } // 60 second timeout
     );
     return res.data;
   } catch (err) {
@@ -383,7 +409,7 @@ export const syncSharePointTemplates = async (siteUrl, library, folder, auth, bu
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/sync-templates`,
       body,
-      { headers, timeout: 300000 } // 5 minute timeout for sync
+      { headers: baseHeaders, timeout: 300000 } // 5 minute timeout for sync
     );
     return res.data;
   } catch (err) {
@@ -400,7 +426,7 @@ export const saveSharePointConfig = async (userId, projectName, siteUrl, library
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/config`,
       { userId, projectName, siteUrl, library, folder, displayName },
-      { headers, timeout: DEFAULT_TIMEOUT }
+      { headers: baseHeaders, timeout: DEFAULT_TIMEOUT }
     );
     return res.data;
   } catch (err) {
@@ -420,7 +446,7 @@ export const getSharePointConfig = async (userId, projectName) => {
     const res = await axios.get(`${C.jsonDocument_url}/sharepoint/config`, {
       params,
       headers: {
-        ...headers.headers,
+        ...baseHeaders,
         'X-User-Id': userId || '',
       },
       timeout: DEFAULT_TIMEOUT,
@@ -442,7 +468,7 @@ export const getAllSharePointConfigs = async (userId) => {
   try {
     const res = await axios.get(`${C.jsonDocument_url}/sharepoint/configs/all`, {
       headers: {
-        ...headers.headers,
+        ...baseHeaders,
         'X-User-Id': userId || '',
       },
       timeout: DEFAULT_TIMEOUT,
@@ -462,7 +488,7 @@ export const deleteSharePointConfig = async (userId, projectName) => {
     const res = await axios.delete(`${C.jsonDocument_url}/sharepoint/config`, {
       params: { projectName },
       headers: {
-        ...headers.headers,
+        ...baseHeaders,
         'X-User-Id': userId || '',
       },
       timeout: DEFAULT_TIMEOUT,
