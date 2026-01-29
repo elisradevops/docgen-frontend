@@ -16,6 +16,7 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine
+RUN apk add --no-cache file
 ## Remove default nginx index page
 RUN rm -rf /usr/share/nginx/html/*
 # Copy Vite build output from stage 1
