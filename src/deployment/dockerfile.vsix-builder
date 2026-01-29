@@ -1,11 +1,14 @@
-FROM node:22-alpine
+FROM node:22-slim
 
-RUN apk add --no-cache bash \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
   && npm install -g tfx-cli
 
 WORKDIR /opt/ado-extension
 
 COPY src/deployment /tmp/deployment
+RUN chmod +x /tmp/deployment/*.sh
 
 ENV VSIX_ROOT_DIR=/opt/ado-extension
 ENV VSIX_OUT_DIR=/opt/ado-extension/out
