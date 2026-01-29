@@ -46,3 +46,13 @@ jobs:
           tags: |
             elisradevops/docgen-frontend:${{steps.package-version.outputs.current-version}}
             elisradevops/docgen-frontend:latest
+      - name: Build and push (vsix-builder)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/deployment/dockerfile.vsix-builder
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            elisradevops/docgen-vsix-builder:${{steps.package-version.outputs.current-version}}
+            elisradevops/docgen-vsix-builder:latest
