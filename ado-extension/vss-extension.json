@@ -1,0 +1,73 @@
+{
+  "manifestVersion": 1,
+  "id": "docgen-ado-extension",
+  "version": "0.0.20",
+  "name": "DocGen",
+  "publisher": "elisradeveops",
+  "description": "DocGen packaged as an Azure DevOps extension.",
+  "public": false,
+  "categories": [
+    "Azure Boards"
+  ],
+  "icons": {
+    "default": "dist/logo192.png"
+  },
+  "scopes": [
+    "vso.profile",
+    "vso.identity",
+    "vso.project",
+    "vso.work",
+    "vso.code",
+    "vso.build",
+    "vso.release",
+    "vso.test"
+  ],
+  "targets": [
+    {
+      "id": "Microsoft.VisualStudio.Services"
+    }
+  ],
+  "contributions": [
+    {
+      "id": "docgen-hub-group",
+      "type": "ms.vss-web.hub-group",
+      "targets": [
+        "ms.vss-web.project-hub-groups-collection"
+      ],
+      "properties": {
+        "name": "DocGen",
+        "order": 120,
+        "icon": "dist/favicon.ico"
+      }
+    },
+    {
+      "id": "docgen-hub",
+      "type": "ms.vss-web.hub",
+      "targets": [
+        ".docgen-hub-group"
+      ],
+      "properties": {
+        "name": "DocGen",
+        "order": 99,
+        "uri": "dist/index.html"
+      }
+    },
+    {
+      "id": "docgen-toolbar",
+      "type": "ms.vss-web.menu",
+      "targets": [
+        "ms.vss-web.project-overview-header-toolbar"
+      ],
+      "properties": {
+        "text": "DocGen",
+        "uri": "dist/index.html"
+      }
+    }
+  ],
+  "files": [
+    {
+      "path": "dist",
+      "addressable": true
+    }
+  ]
+}

@@ -27,6 +27,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [templatesLoading, setTemplatesLoading] = useState(false);
 
   useEffect(() => {
+    if (store?.isAdoMode && store?.adoBootStatus !== 'ready') return;
     if (docType !== '') {
       logger.debug(`Fetching doc forms templates for docType: ${docType}`);
       store.setDocType(docType);
@@ -56,7 +57,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           setLoadingForm(false);
         });
     }
-  }, [store, docType, setDocFormsControls]);
+  }, [store, docType, setDocFormsControls, store?.isAdoMode, store?.adoBootStatus]);
 
   // Automatically select the first doc template when docTemplates change
   useEffect(() => {
@@ -69,14 +70,16 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   }, [docFormsControls]);
 
   useEffect(() => {
+    if (store?.isAdoMode && store?.adoBootStatus !== 'ready') return;
     if (selectedTeamProject) {
       store.fetchSharedQueries();
     }
-  }, [selectedTeamProject, store]);
+  }, [selectedTeamProject, store, store?.isAdoMode, store?.adoBootStatus]);
 
   // Auto-select default template when none is selected: pick first 'shared' template (fallback to first)
   useEffect(() => {
     const pickDefaultTemplate = async () => {
+      if (store?.isAdoMode && store?.adoBootStatus !== 'ready') return;
       if (!docType) return;
       if (store.selectedTemplate?.url) return;
       setTemplatesLoading(true);
@@ -147,7 +150,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       }
     };
     pickDefaultTemplate();
-  }, [docType, selectedTeamProject, store, store.selectedTemplate]);
+  }, [docType, selectedTeamProject, store, store.selectedTemplate, store?.isAdoMode, store?.adoBootStatus]);
 
   // Pre-seed validation as invalid for all currently rendered content controls to avoid initial flicker
   useEffect(() => {

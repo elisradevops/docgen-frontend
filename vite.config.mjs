@@ -4,6 +4,7 @@ import autoprefixer from 'autoprefixer';
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './',
   plugins: [
     react({
       babel: {
@@ -21,6 +22,8 @@ export default defineConfig({
     port: 5173,
   },
   build: {
+    outDir: 'ado-extension/dist',
+    emptyOutDir: true,
     target: ['es2015', 'edge92', 'chrome92'], // Explicit Edge 92 target
     cssTarget: 'chrome61', // CSS compatibility for older browsers
     minify: 'terser', // Better compatibility than esbuild for old browsers

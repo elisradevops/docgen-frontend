@@ -16,10 +16,23 @@ import {
 import { toast } from 'react-toastify';
 import logger from '../utils/logger';
 import { makeKey, trySessionStorageGet, trySessionStorageSet, trySessionStorageRemove } from '../utils/storage';
+import { setRequestQueueConfig } from '../utils/requestQueue';
+import { isAccessToken } from '../utils/tokenUtils';
+import C from './constants';
 const sanitizeCookie = (v) => {
   if (v == null) return '';
   const s = String(v).trim();
   return s === 'null' || s === 'undefined' ? '' : s;
+};
+
+const shouldDebugLogs = () => {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = params.get('debug');
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
 };
 
 const isAllowedTemplateFileName = (objectKeyOrName) => {
@@ -527,8 +540,27 @@ const buildInputDetails = ({ docType, contextName, selectedTemplate, contentCont
 };
 const azureDevopsUrl = sanitizeCookie(cookies.getItem('azureDevopsUrl'));
 const azureDevopsPat = sanitizeCookie(cookies.getItem('azureDevopsPat'));
+const normalizeProjectName = (value) => {
+  let raw = String(value || '').trim();
+  if (!raw) return '';
+  for (let i = 0; i < 3; i += 1) {
+    if (!/%[0-9A-Fa-f]{2}/.test(raw)) break;
+    try {
+      const decoded = decodeURIComponent(raw);
+      if (decoded === raw) break;
+      raw = decoded;
+    } catch {
+      break;
+    }
+  }
+  raw = raw.replace(/(?:\u00a0|\u200b|\u200c|\u200d|\uFEFF)/g, ' ');
+  raw = raw.replace(/\s+/g, ' ').trim();
+  return raw;
+};
 class DocGenDataStore {
   azureRestClient = new RestApi(azureDevopsUrl, azureDevopsPat);
+  adoOrgUrl = azureDevopsUrl;
+  adoToken = azureDevopsPat;
 
   constructor() {
     makeObservable(this, {
@@ -568,6 +600,9 @@ class DocGenDataStore {
       // auth-related
       isAuthenticated: observable,
       lastAuthErrorStatus: observable,
+      isAdoMode: observable,
+      adoBootStatus: observable,
+      adoBootError: observable,
       requestJson: computed,
       fetchTeamProjects: action,
       setTeamProject: action,
@@ -609,6 +644,7 @@ class DocGenDataStore {
       fetchUserDetails: action,
       testCredentials: action,
       setCredentials: action,
+      resolveTeamProjectByName: action,
       fetchFavoritesList: action,
       deleteFavorite: action,
       saveFavorite: action,
@@ -622,6 +658,8 @@ class DocGenDataStore {
       // debug-docs actions
       setShowDebugDocs: action,
       recomputeDocumentTypes: action,
+      setAdoMode: action,
+      setAdoBootStatus: action,
     });
     makeLoggable(this);
     // Global 401 handler -> set flags and dispatch event for UI to react
@@ -669,9 +707,10 @@ class DocGenDataStore {
     } catch {
       /* empty */
     }
-    this.fetchDocFolders();
-    this.fetchTeamProjects();
-    this.fetchCollectionLinkTypes();
+    if (this.hasAdoCredentials() && !isAccessToken(this.adoToken)) {
+      this.fetchTeamProjects();
+      this.fetchCollectionLinkTypes();
+    }
   }
 
   documentTypeTitle = '';
@@ -681,6 +720,15 @@ class DocGenDataStore {
   teamProject = '';
   teamProjectName = '';
   ProjectBucketName = '';
+  adoProjectResolveAttemptedName = '';
+  adoProjectResolveInFlight = false;
+  docFoldersPromise = null;
+  adoBootStatus = 'idle';
+  adoBootError = '';
+  fetchUserDetailsPromise = null;
+  fetchCollectionLinkTypesPromise = null;
+  adoBootstrapPromise = null;
+  adoBootstrapProjectKey = '';
   templateList = [];
   templateForDownload = [];
   contentControls = [];
@@ -730,6 +778,7 @@ class DocGenDataStore {
   // auth-related state
   isAuthenticated = false;
   lastAuthErrorStatus = null; // e.g., 401 when PAT is invalid/expired
+  isAdoMode = false;
   formattingSettings = {
     trimAdditionalSpacingInDescriptions: false,
     trimAdditionalSpacingInTables: false,
@@ -740,6 +789,8 @@ class DocGenDataStore {
   showDebugDocs = false;
   // Metadata per document type (tabIndex, isDebug)
   docTypeMeta = {};
+  documentsPromise = null;
+  templatesForDownloadPromise = null;
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -749,10 +800,69 @@ class DocGenDataStore {
     this.formattingSettings = formattingSettings;
   }
 
+  setAdoMode(value) {
+    this.isAdoMode = !!value;
+    if (!this.isAdoMode) {
+      this.adoBootStatus = 'idle';
+      this.adoBootError = '';
+    }
+    this.applyQueuePolicy(this.isAdoMode);
+  }
+
+  applyQueuePolicy(isAdoMode) {
+    // Limit concurrency in ADO mode to reduce gateway timeouts.
+    setRequestQueueConfig({
+      globalMaxConcurrent: isAdoMode ? 1 : null,
+      queues: {
+        ado: { maxConcurrent: isAdoMode ? 1 : 6 },
+        minioForms: { maxConcurrent: isAdoMode ? 1 : 6 },
+        minio: { maxConcurrent: isAdoMode ? 1 : 6 },
+        docs: { maxConcurrent: 2 },
+        default: { maxConcurrent: 6 },
+      },
+    });
+  }
+
+  encodeObjectPath(objectPath) {
+    return String(objectPath || '')
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+  }
+
+  resolveObjectName(item, bucketName) {
+    if (item?.name) return String(item.name);
+    if (item?.text) return String(item.text);
+    if (item?.url) {
+      try {
+        const parsed = new URL(item.url);
+        const path = parsed.pathname.replace(/^\/+/, '');
+        if (bucketName && path.startsWith(`${bucketName}/`)) {
+          return path.slice(bucketName.length + 1);
+        }
+        return path;
+      } catch {
+        return '';
+      }
+    }
+    return '';
+  }
+
+  setAdoBootStatus(status, errorMessage = '') {
+    this.adoBootStatus = status || 'idle';
+    this.adoBootError = errorMessage || '';
+  }
+
   // Update the underlying Azure DevOps client when credentials change (e.g., after login)
   setCredentials(orgUrl, pat) {
     const normalizedUrl = (orgUrl || '').endsWith('/') ? orgUrl : `${orgUrl || ''}/`;
     this.azureRestClient = new RestApi(normalizedUrl, pat);
+    this.adoOrgUrl = normalizedUrl;
+    this.adoToken = pat;
+  }
+
+  hasAdoCredentials() {
+    return !!(this.adoOrgUrl && this.adoToken);
   }
 
   // Toggle visibility of debug document types and recompute the visible list
@@ -782,11 +892,17 @@ class DocGenDataStore {
     this.documentTypes = visible;
   }
 
-  fetchDocFolders() {
+  fetchDocFolders(options = {}) {
+    const sequential = !!options.sequential;
+    const force = !!options.force;
+    if (this.docFoldersPromise && !force) {
+      return this.docFoldersPromise;
+    }
     //Add loading state
     this.loadingState.contentControlsLoadingState = true;
-    getBucketFileList('document-forms')
-      .then(async (data = []) => {
+    this.docFoldersPromise = (async () => {
+      try {
+        const data = await getBucketFileList('document-forms');
         // Collect docTypes from prefixes
         const docTypes = (data || [])
           .filter((file) => file && file.prefix != null)
@@ -794,62 +910,69 @@ class DocGenDataStore {
             return file.prefix.replace('/', '');
           });
 
-        // Build a tabIndex map by inspecting each folder's request JSON
-        const metaList = await Promise.all(
-          docTypes.map(async (dt) => {
-            try {
-              const list = await getBucketFileList('document-forms', dt);
-              const jsonFiles = (list || []).filter(
-                (it) => it?.name && it.name.toLowerCase().endsWith('.json')
-              );
-              const norm = (s) => (s || '').toLowerCase().replace(/[\s_-]/g, '');
-              const dtNorm = norm(dt);
-              const pick =
-                jsonFiles.find((f) => f.name.toLowerCase().includes('-request.json')) ||
-                jsonFiles.find((f) => {
-                  const base = (f.name.split('/').pop() || '').replace(/\.json$/i, '');
-                  return norm(base) === dtNorm;
-                }) ||
-                jsonFiles[0];
+        const resolveMeta = async (dt) => {
+          try {
+            const list = await getBucketFileList('document-forms', dt);
+            const jsonFiles = (list || []).filter(
+              (it) => it?.name && it.name.toLowerCase().endsWith('.json')
+            );
+            const norm = (s) => (s || '').toLowerCase().replace(/[\s_-]/g, '');
+            const dtNorm = norm(dt);
+            const pick =
+              jsonFiles.find((f) => f.name.toLowerCase().includes('-request.json')) ||
+              jsonFiles.find((f) => {
+                const base = (f.name.split('/').pop() || '').replace(/\.json$/i, '');
+                return norm(base) === dtNorm;
+              }) ||
+              jsonFiles[0];
 
-              let tabIndex = Number.POSITIVE_INFINITY;
-              let isDebug = false;
-              if (pick && pick.name && pick.name.includes('/')) {
-                const [folderName, fileName] = pick.name.split('/');
-                try {
-                  const reqJson = await getJSONContentFromFile('document-forms', folderName, fileName);
-                  if (reqJson && typeof reqJson.tabIndex === 'number') {
-                    tabIndex = reqJson.tabIndex;
-                  }
-                  if (reqJson && reqJson.isDebug === true) {
-                    isDebug = true;
-                  }
-                  // eslint-disable-next-line no-unused-vars
-                } catch (e) {
-                  /* empty */
+            let tabIndex = Number.POSITIVE_INFINITY;
+            let isDebug = false;
+            if (pick && pick.name && pick.name.includes('/')) {
+              const [folderName, fileName] = pick.name.split('/');
+              try {
+                const reqJson = await getJSONContentFromFile('document-forms', folderName, fileName);
+                if (reqJson && typeof reqJson.tabIndex === 'number') {
+                  tabIndex = reqJson.tabIndex;
                 }
+                if (reqJson && reqJson.isDebug === true) {
+                  isDebug = true;
+                }
+                // eslint-disable-next-line no-unused-vars
+              } catch (e) {
+                /* empty */
               }
-              return { docType: dt, tabIndex, isDebug };
-              // eslint-disable-next-line no-unused-vars
-            } catch (e) {
-              return { docType: dt, tabIndex: Number.POSITIVE_INFINITY, isDebug: false };
             }
-          })
-        );
+            return { docType: dt, tabIndex, isDebug };
+            // eslint-disable-next-line no-unused-vars
+          } catch (e) {
+            return { docType: dt, tabIndex: Number.POSITIVE_INFINITY, isDebug: false };
+          }
+        };
+
+        let metaList = [];
+        if (sequential) {
+          for (const dt of docTypes) {
+            metaList.push(await resolveMeta(dt));
+          }
+        } else {
+          metaList = await Promise.all(docTypes.map((dt) => resolveMeta(dt)));
+        }
 
         // Map meta and recompute filtered documentTypes by tabIndex (and hide debug by default)
         this.docTypeMeta = this.docTypeMeta || {};
         metaList.forEach((m) => (this.docTypeMeta[m.docType] = m));
         this.recomputeDocumentTypes();
-      })
-      .catch((err) => {
+      } catch (err) {
         logger.error(`Error occurred while fetching bucket file list: ${err.message}`);
         logger.error('Error stack: ');
         logger.error(err.stack);
-      })
-      .finally(() => {
+      } finally {
         this.loadingState.contentControlsLoadingState = false;
-      });
+        this.docFoldersPromise = null;
+      }
+    })();
+    return this.docFoldersPromise;
   }
 
   // Every time selecting a tab of a certain doctype, all the specified files from that type are returned
@@ -862,24 +985,30 @@ class DocGenDataStore {
       // Fetch the list of document forms for the specified docType
       const data = await getBucketFileList('document-forms', docType);
 
-      // Process each form in the fetched data
-      await Promise.all(
-        (data || []).map(async (form) => {
-          let fileName = '';
-          let folderName = '';
-          if (form.name.includes('/')) {
-            const formNameSections = form.name.split('/');
-            if (formNameSections.length > 2) {
-              return; // Skip if there are more than 2 sections
-            }
-            folderName = formNameSections[0];
-            fileName = formNameSections[1];
+      const loadForm = async (form) => {
+        let fileName = '';
+        let folderName = '';
+        if (form.name.includes('/')) {
+          const formNameSections = form.name.split('/');
+          if (formNameSections.length > 2) {
+            return; // Skip if there are more than 2 sections
           }
-          // Fetch the content for each form and add it to the documentTemplates
-          let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
-          this.documentTemplates.push(jsonFormTemplate);
-        })
-      );
+          folderName = formNameSections[0];
+          fileName = formNameSections[1];
+        }
+        // Fetch the content for each form and add it to the documentTemplates
+        let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
+        this.documentTemplates.push(jsonFormTemplate);
+      };
+
+      // Process each form in the fetched data
+      if (this.isAdoMode) {
+        for (const form of data || []) {
+          await loadForm(form);
+        }
+      } else {
+        await Promise.all((data || []).map((form) => loadForm(form)));
+      }
 
       // Return the documentTemplates after fetching is complete
       return this.documentTemplates;
@@ -896,13 +1025,15 @@ class DocGenDataStore {
 
   //for fetching teamProjects
   fetchTeamProjects() {
-    if (azureDevopsUrl && azureDevopsPat) {
+    if (this.isAdoMode) return;
+    if (this.hasAdoCredentials()) {
       this.loadingState.teamProjectsLoadingState = true;
       this.azureRestClient
         .getTeamProjects()
         .then((data) => {
+          const list = Array.isArray(data?.value) ? data.value : Array.isArray(data) ? data : [];
           this.teamProjectsList =
-            data.value.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())) || [];
+            list.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())) || [];
         })
         .catch((err) => {
           logger.error(`Error occurred while fetching team projects: ${err.message}`);
@@ -914,25 +1045,121 @@ class DocGenDataStore {
         });
     }
   }
+
+  async resolveTeamProjectByName(projectName) {
+    if (!this.hasAdoCredentials()) return null;
+    const normalizedName = String(projectName || '').trim();
+    if (!normalizedName) return null;
+    if (shouldDebugLogs()) {
+      console.debug('[ado] resolveTeamProjectByName:start', {
+        projectName,
+        normalizedName,
+        length: normalizedName.length,
+        codePoints: Array.from(normalizedName).map((c) => c.charCodeAt(0)),
+      });
+    }
+    if (this.isAdoMode) {
+      if (this.adoProjectResolveInFlight) return null;
+      if (
+        this.adoProjectResolveAttemptedName &&
+        this.adoProjectResolveAttemptedName.toLowerCase() === normalizedName.toLowerCase() &&
+        this.adoBootStatus === 'loading'
+      ) {
+        return null;
+      }
+      this.adoProjectResolveAttemptedName = normalizedName;
+    }
+    this.loadingState.teamProjectsLoadingState = true;
+    if (this.isAdoMode) this.adoProjectResolveInFlight = true;
+    if (this.isAdoMode && this.adoBootStatus !== 'loading') {
+      this.setAdoBootStatus('loading');
+    }
+    try {
+      const data = await this.azureRestClient.getTeamProjects();
+      const list =
+        (Array.isArray(data?.value) ? data.value : Array.isArray(data) ? data : []).sort((a, b) =>
+          a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+        ) || [];
+      this.teamProjectsList = list;
+      if (shouldDebugLogs()) {
+        console.debug('[ado] resolveTeamProjectByName:projects', {
+          count: list.length,
+          first: list[0]?.name,
+          sample: list.slice(0, 5).map((p) => p?.name),
+        });
+      }
+      const match = list.find(
+        (project) =>
+          normalizeProjectName(project?.name || '').toLowerCase() === normalizedName.toLowerCase()
+      );
+      if (match?.id && match?.name) {
+        if (shouldDebugLogs()) {
+          console.debug('[ado] resolveTeamProjectByName:match', {
+            id: match.id,
+            name: match.name,
+          });
+        }
+        this.setTeamProject(match.id, match.name);
+        return match;
+      }
+      if (this.isAdoMode) {
+        this.setAdoBootStatus('error', `Could not resolve project ID for ${normalizedName}.`);
+      }
+      if (shouldDebugLogs()) {
+        console.debug('[ado] resolveTeamProjectByName:no-match', {
+          normalizedName,
+          listNames: list.map((p) => p?.name),
+        });
+      }
+    } catch (err) {
+      logger.error(`Error occurred while resolving team project: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      if (this.isAdoMode) {
+        this.setAdoBootStatus('error', 'Failed to resolve project ID from Azure DevOps.');
+      }
+      if (shouldDebugLogs()) {
+        console.debug('[ado] resolveTeamProjectByName:error', {
+          message: err?.message,
+          status: err?.response?.status,
+        });
+      }
+    } finally {
+      this.loadingState.teamProjectsLoadingState = false;
+      if (this.isAdoMode) this.adoProjectResolveInFlight = false;
+    }
+    return null;
+  }
   //for setting focused teamProject
   setTeamProject(teamProjectId, teamProjectName) {
     const prevTeamProject = this.teamProject;
+    const normalizedName = normalizeProjectName(teamProjectName);
     this.teamProject = teamProjectId;
-    this.teamProjectName = teamProjectName;
+    this.teamProjectName = normalizedName;
+    if (shouldDebugLogs()) {
+      console.debug('[ado] setTeamProject', {
+        teamProjectId,
+        teamProjectName,
+        normalizedName,
+        prevTeamProject,
+      });
+    }
     // Set the project bucket name
-    if (teamProjectId !== '' && teamProjectName !== '') {
-      this.ProjectBucketName = teamProjectName.toLowerCase();
+    if (teamProjectId !== '' && normalizedName !== '') {
+      this.ProjectBucketName = normalizedName.toLowerCase();
       this.ProjectBucketName = this.ProjectBucketName.replace('_', '-');
       this.ProjectBucketName = this.ProjectBucketName.replace(/[^a-z0-9-]/g, '');
       if (this.ProjectBucketName.length < 3) {
         this.ProjectBucketName = this.ProjectBucketName + '-bucket';
       }
-      this.fetchDocuments();
-      this.fetchTestPlans();
-      this.fetchGitRepoList();
-      this.fetchPipelineList();
-      this.fetchReleaseDefinitionList();
-      this.fetchWorkItemTypeList();
+      if (this.isAdoMode) {
+        if (prevTeamProject !== teamProjectId || this.adoBootStatus !== 'ready') {
+          this.setAdoBootStatus('loading');
+        }
+        this.bootstrapProjectData();
+      } else {
+        this.bootstrapProjectData();
+      }
     }
     // Clear session tab states whenever selecting a non-empty project and it's different from previous
     // This includes the first selection after a refresh (prevTeamProject is empty),
@@ -946,7 +1173,89 @@ class DocGenDataStore {
     }
     if (!teamProjectId) {
       this.workItemTypes = [];
+      if (this.isAdoMode) {
+        this.setAdoBootStatus('idle');
+      }
     }
+  }
+
+  async bootstrapProjectData() {
+    if (this.isAdoMode) {
+      return this.bootstrapAdoProjectData();
+    }
+    return this.bootstrapStandaloneProjectData();
+  }
+
+  async bootstrapStandaloneProjectData() {
+    if (!this.teamProject) return false;
+    await Promise.all([
+      this.fetchDocuments(),
+      this.fetchTestPlans(),
+      this.fetchGitRepoList(),
+      this.fetchPipelineList(),
+      this.fetchReleaseDefinitionList(),
+      this.fetchWorkItemTypeList(),
+    ]);
+    return true;
+  }
+
+  async bootstrapAdoProjectData() {
+    if (!this.isAdoMode || !this.teamProject) return false;
+    const key = `${this.teamProject}|${this.teamProjectName || ''}`;
+    if (this.adoBootstrapPromise && this.adoBootstrapProjectKey === key) {
+      return this.adoBootstrapPromise;
+    }
+    if (shouldDebugLogs()) {
+      console.debug('[ado] bootstrap:start', {
+        teamProject: this.teamProject,
+        teamProjectName: this.teamProjectName,
+      });
+    }
+    if (this.adoBootStatus !== 'loading') {
+      runInAction(() => {
+        this.adoBootStatus = 'loading';
+        this.adoBootError = '';
+      });
+    }
+    this.adoBootstrapProjectKey = key;
+    this.adoBootstrapPromise = (async () => {
+      const ok = await this.fetchUserDetails();
+      if (!ok) return false;
+      await this.fetchCollectionLinkTypes();
+      await this.fetchWorkItemTypeList();
+      await this.fetchTestPlans();
+      await this.fetchGitRepoList();
+      await this.fetchPipelineList();
+      await this.fetchReleaseDefinitionList();
+      await this.fetchDocFolders({ sequential: true });
+      return true;
+    })();
+    const result = await this.adoBootstrapPromise;
+    if (result) {
+      runInAction(() => {
+        this.adoBootStatus = 'ready';
+        this.adoBootError = '';
+      });
+    } else {
+      const status = this.lastAuthErrorStatus;
+      const message =
+        status === 401
+          ? 'Authentication failed. Please re-open the extension or sign in again.'
+          : 'Could not load Azure DevOps project data. Please retry.';
+      runInAction(() => {
+        this.adoBootStatus = 'error';
+        this.adoBootError = message;
+      });
+    }
+    if (shouldDebugLogs()) {
+      console.debug('[ado] bootstrap:result', {
+        ok: result,
+        status: this.adoBootStatus,
+        error: this.adoBootError,
+      });
+    }
+    this.adoBootstrapPromise = null;
+    return result;
   }
 
   // For fetching template files list
@@ -976,10 +1285,30 @@ class DocGenDataStore {
   }
 
   //for fetching all the collections links
-  fetchCollectionLinkTypes() {
-    this.azureRestClient.getCollectionLinkTypes().then((data) => {
-      this.linkTypes = data || [];
-    });
+  async fetchCollectionLinkTypes(force = false) {
+    if (!this.hasAdoCredentials()) return [];
+    if (!force && Array.isArray(this.linkTypes) && this.linkTypes.length > 0) {
+      return this.linkTypes;
+    }
+    if (this.fetchCollectionLinkTypesPromise) {
+      return this.fetchCollectionLinkTypesPromise;
+    }
+    this.fetchCollectionLinkTypesPromise = this.azureRestClient
+      .getCollectionLinkTypes()
+      .then((data) => {
+        this.linkTypes = data || [];
+        return this.linkTypes;
+      })
+      .catch((err) => {
+        logger.error(`Error occurred while fetching link types: ${err.message}`);
+        logger.error('Error stack:');
+        logger.error(err.stack);
+        return [];
+      })
+      .finally(() => {
+        this.fetchCollectionLinkTypesPromise = null;
+      });
+    return this.fetchCollectionLinkTypesPromise;
   }
 
   // Validate credentials without mutating global store credentials.
@@ -1038,50 +1367,61 @@ class DocGenDataStore {
   // Attempts to fetch and cache user details for current store credentials.
   // Returns true on success, false on failure. On failure, sets lastAuthErrorStatus (e.g., 401).
   async fetchUserDetails() {
-    try {
-      const data = await this.azureRestClient.getUserDetails();
-      if (data?.identity) {
-        const { DisplayName: name, TeamFoundationId: userId } = data.identity;
-        logger.debug(`User details: ${name} - ${userId}`);
-        this.userDetails = { name, userId };
-        this.isAuthenticated = true;
-        this.lastAuthErrorStatus = null;
-        return true;
-      }
-      this.isAuthenticated = false;
-      this.lastAuthErrorStatus = null;
-      return false;
-    } catch (err) {
-      const status =
-        err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
-      this.isAuthenticated = false;
-      this.lastAuthErrorStatus = status ?? null;
-      logger.error(
-        `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
-      );
-      logger.error('Error stack:');
-      logger.error(err?.stack);
-      // Proactively emit unauthorized when we can infer it (covers CORS-masked 401s after PAT revoke)
-      try {
-        const raw = `${err?.message || ''}`;
-        const isNetworkErr = /(Network\s?Error|Failed to fetch|NetworkError|ERR_FAILED)/i.test(raw);
-        const urlFromCookies = sanitizeCookie(cookies.getItem('azureDevopsUrl')).toLowerCase();
-        const patFromCookies = sanitizeCookie(cookies.getItem('azureDevopsPat'));
-        const looksLikeAzdoOrTfs = /dev\.azure\.com|visualstudio\.com|\/tfs/i.test(urlFromCookies);
-        if (
-          status === 401 ||
-          status === 302 ||
-          (!status && isNetworkErr && looksLikeAzdoOrTfs && patFromCookies)
-        ) {
-          // Dispatch global event; App/MainTabs listeners will clear cookies and show login
-          window.dispatchEvent(new CustomEvent('auth-unauthorized'));
-        }
-        // eslint-disable-next-line no-unused-vars
-      } catch (e) {
-        /* empty */
-      }
+    if (!this.hasAdoCredentials()) {
       return false;
     }
+    if (this.fetchUserDetailsPromise) {
+      return this.fetchUserDetailsPromise;
+    }
+    this.fetchUserDetailsPromise = (async () => {
+      try {
+        const data = await this.azureRestClient.getUserDetails();
+        if (data?.identity) {
+          const { DisplayName: name, TeamFoundationId: userId } = data.identity;
+          logger.debug(`User details: ${name} - ${userId}`);
+          this.userDetails = { name, userId };
+          this.isAuthenticated = true;
+          this.lastAuthErrorStatus = null;
+          return true;
+        }
+        this.isAuthenticated = false;
+        this.lastAuthErrorStatus = null;
+        return false;
+      } catch (err) {
+        const status =
+          err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
+        this.isAuthenticated = false;
+        this.lastAuthErrorStatus = status ?? null;
+        logger.error(
+          `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
+        );
+        logger.error('Error stack:');
+        logger.error(err?.stack);
+        // Proactively emit unauthorized when we can infer it (covers CORS-masked 401s after PAT revoke)
+        try {
+          const raw = `${err?.message || ''}`;
+          const isNetworkErr = /(Network\s?Error|Failed to fetch|NetworkError|ERR_FAILED)/i.test(raw);
+          const urlFromCookies = sanitizeCookie(cookies.getItem('azureDevopsUrl')).toLowerCase();
+          const patFromCookies = sanitizeCookie(cookies.getItem('azureDevopsPat'));
+          const looksLikeAzdoOrTfs = /dev\.azure\.com|visualstudio\.com|\/tfs/i.test(urlFromCookies);
+          if (
+            status === 401 ||
+            status === 302 ||
+            (!status && isNetworkErr && looksLikeAzdoOrTfs && patFromCookies)
+          ) {
+            // Dispatch global event; App/MainTabs listeners will clear cookies and show login
+            window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+          }
+          // eslint-disable-next-line no-unused-vars
+        } catch (e) {
+          /* empty */
+        }
+        return false;
+      } finally {
+        this.fetchUserDetailsPromise = null;
+      }
+    })();
+    return this.fetchUserDetailsPromise;
   }
 
   //for setting the selected link type filters
@@ -1205,7 +1545,7 @@ class DocGenDataStore {
   //for fetching repo list
   fetchGitRepoList() {
     this.loadingState.gitRepoLoadingState = true;
-    this.azureRestClient
+    return this.azureRestClient
       .getGitRepoList(this.teamProject)
       .then((data) => {
         this.setGitRepoList(data);
@@ -1290,7 +1630,7 @@ class DocGenDataStore {
   //for fetching pipeline list
   fetchPipelineList() {
     this.loadingState.pipelineLoadingState = true;
-    this.azureRestClient
+    return this.azureRestClient
       .getPipelineList(this.teamProject)
       .then((data) => {
         this.setPipelineList(data);
@@ -1323,7 +1663,7 @@ class DocGenDataStore {
   //for fetching release list
   fetchReleaseDefinitionList() {
     this.loadingState.releaseDefinitionLoadingState = true;
-    this.azureRestClient
+    return this.azureRestClient
       .getReleaseDefinitionList(this.teamProject)
       .then((data) => {
         this.setReleaseDefinitionList(data);
@@ -1347,7 +1687,7 @@ class DocGenDataStore {
     }
 
     this.loadingState.workItemTypesLoadingState = true;
-    this.azureRestClient
+    return this.azureRestClient
       .getWorkItemTypeList(this.teamProject)
       .then((data) => {
         const types = Array.isArray(data?.value) ? data.value : Array.isArray(data) ? data : [];
@@ -1365,12 +1705,14 @@ class DocGenDataStore {
                 }))
               : [],
           }));
+        return this.workItemTypes;
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching work item types: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
         this.workItemTypes = [];
+        return [];
       })
       .finally(() => {
         this.loadingState.workItemTypesLoadingState = false;
@@ -1403,7 +1745,7 @@ class DocGenDataStore {
   //for fetching test plans
   fetchTestPlans() {
     this.loadingState.testPlanListLoading = true;
-    this.azureRestClient
+    return this.azureRestClient
       .getTestPlansList(this.teamProject)
       .then((data) => {
         if (data.count > 0) {
@@ -1412,11 +1754,13 @@ class DocGenDataStore {
           );
           this.setTestPlansList(sortedTestPlans);
         }
+        return this.testPlansList;
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching test plans: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+        return [];
       })
       .finally(() => {
         this.loadingState.testPlanListLoading = false;
@@ -1433,14 +1777,16 @@ class DocGenDataStore {
     this.azureRestClient
       .getTestSuiteByPlanList(this.teamProject, testPlanId)
       .then((data) => {
-        data.sort(function (a, b) {
-          return a.parent - b.parent;
+        const list = Array.isArray(data?.value) ? data.value : Array.isArray(data) ? data : [];
+        list.sort(function (a, b) {
+          return (a?.parent ?? 0) - (b?.parent ?? 0);
         });
-        this.setTestSuitesList(data);
+        this.setTestSuitesList(list);
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching test suites list: ${err.message}`);
         logger.error('Error stack:', err.stack);
+        this.setTestSuitesList([]);
       })
       .finally(() => {
         runInAction(() => {
@@ -1459,8 +1805,15 @@ class DocGenDataStore {
 
   //for fetching documents
   fetchDocuments() {
+    if (!this.ProjectBucketName) {
+      this.documents = [];
+      return Promise.resolve([]);
+    }
+    if (this.documentsPromise) {
+      return this.documentsPromise;
+    }
     this.loadingState.documentsLoadingState = true;
-    getBucketFileList(this.ProjectBucketName, null, true)
+    this.documentsPromise = getBucketFileList(this.ProjectBucketName, null, true)
       .then((data) => {
         const safe = (Array.isArray(data) ? data : []).filter((d) => d && (d.name || d.url));
         safe.sort((a, b) => {
@@ -1468,23 +1821,46 @@ class DocGenDataStore {
           const tb = new Date(b?.lastModified).getTime();
           return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta);
         });
+        const bucketName = this.ProjectBucketName;
+        if (bucketName) {
+          safe.forEach((item) => {
+            const objectName = this.resolveObjectName(item, bucketName);
+            if (!objectName) return;
+            item.url = `${C.jsonDocument_url}/minio/download/${bucketName}/${this.encodeObjectPath(
+              objectName
+            )}`;
+          });
+        }
         this.documents = safe;
+        return safe;
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching documents: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+        return [];
       })
       .finally(() => {
         this.loadingState.documentsLoadingState = false;
+        this.documentsPromise = null;
       });
+    return this.documentsPromise;
   }
 
   //for fetching documents
   fetchTemplatesListForDownload(projectNameOverride = undefined) {
     this.loadingState.templatesLoadingState = true;
     const effectiveProjectName = projectNameOverride !== undefined ? projectNameOverride : this.teamProjectName;
-    getBucketFileList('templates', null, true, effectiveProjectName, true)
+    if (this.templatesForDownloadPromise) {
+      return this.templatesForDownloadPromise;
+    }
+    this.templatesForDownloadPromise = getBucketFileList(
+      'templates',
+      null,
+      true,
+      effectiveProjectName,
+      true
+    )
       .then((data) => {
         // Process the data to fix the URLs
         const processedData = (data || [])
@@ -1499,16 +1875,29 @@ class DocGenDataStore {
           })
           .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
 
+        const bucketName = 'templates';
+        processedData.forEach((item) => {
+          const objectName = this.resolveObjectName(item, bucketName);
+          if (!objectName) return;
+          item.url = `${C.jsonDocument_url}/minio/download/${bucketName}/${this.encodeObjectPath(
+            objectName
+          )}`;
+        });
+
         this.templateForDownload = processedData;
+        return processedData;
       })
       .catch((err) => {
         logger.error(`Error occurred while fetching templates: ${err.message}`);
         logger.error('Error stack:');
         logger.error(err.stack);
+        return [];
       })
       .finally(() => {
         this.loadingState.templatesLoadingState = false;
+        this.templatesForDownloadPromise = null;
       });
+    return this.templatesForDownloadPromise;
   }
 
   //Delete template file
@@ -1805,9 +2194,11 @@ class DocGenDataStore {
       : this.contextName
       ? `${this.teamProjectName}-${this.docType}-${this.contextName}-${this.getFormattedDate()}`
       : `${this.teamProjectName}-${this.docType}-${this.getFormattedDate()}`;
+    const orgUrl = this.adoOrgUrl || azureDevopsUrl;
+    const token = this.adoToken || azureDevopsPat;
     return {
-      tfsCollectionUri: azureDevopsUrl,
-      PAT: azureDevopsPat,
+      tfsCollectionUri: orgUrl,
+      PAT: token,
       teamProjectName: this.teamProjectName,
       // For flows like Test-Reporter (Excel), there may be no selected template.
       // Avoid accessing .url on null and let the API handle an empty template when appropriate.
