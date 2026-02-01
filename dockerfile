@@ -23,5 +23,8 @@ RUN rm -rf /usr/share/nginx/html/*
 COPY --from=builder /react-ui/ado-extension/dist /usr/share/nginx/html
 COPY --from=builder /react-ui/ado-extension/vss-extension.json /opt/ado-extension/vss-extension.json
 COPY --from=builder /react-ui/src/deployment /tmp/deployment
+
+RUN chmod +x /tmp/deployment/*.sh
+
 EXPOSE 80
 ENTRYPOINT ["/bin/sh","/tmp/deployment/env-uri-init.sh"]
