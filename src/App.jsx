@@ -14,6 +14,7 @@ import {
   trySessionStorageSet,
   trySessionStorageRemove,
 } from './utils/storage';
+import { normalizeAdoOrgUrl } from './utils/adoUrlUtils';
 
 const shouldLogDebug = () => {
   try {
@@ -23,35 +24,6 @@ const shouldLogDebug = () => {
   } catch {
     return false;
   }
-};
-
-const normalizeAdoOrgUrl = (value, collectionName, projectName) => {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const withSlash = raw.endsWith('/') ? raw : `${raw}/`;
-  try {
-    const url = new URL(withSlash);
-    const segments = url.pathname.split('/').filter(Boolean);
-    if (collectionName) {
-      const idx = segments.findIndex(
-        (seg) => seg.toLowerCase() === String(collectionName).toLowerCase()
-      );
-      if (idx !== -1) {
-        url.pathname = `/${segments.slice(0, idx + 1).join('/')}/`;
-        return url.toString();
-      }
-    }
-    if (projectName) {
-      const last = segments[segments.length - 1] || '';
-      if (last.toLowerCase() === String(projectName).toLowerCase()) {
-        url.pathname = `/${segments.slice(0, -1).join('/')}/`;
-        return url.toString();
-      }
-    }
-  } catch {
-    /* empty */
-  }
-  return withSlash;
 };
 
 function App({ store }) {

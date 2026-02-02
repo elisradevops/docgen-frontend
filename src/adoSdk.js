@@ -1,3 +1,5 @@
+import { deriveNamesFromUrl, normalizeCollectionUri } from './utils/adoUrlUtils';
+
 let sdkPromise;
 let initPromise;
 
@@ -133,24 +135,6 @@ export const initAdoContext = async () => {
       }
     }
 
-    const deriveNamesFromUrl = (value) => {
-      const raw = String(value || '').trim();
-      if (!raw) return { collectionName: '', projectName: '' };
-      try {
-        const url = new URL(raw);
-        const segments = url.pathname.split('/').filter(Boolean);
-        const appsIndex = segments.indexOf('_apps');
-        const collectionName = segments[0] || '';
-        let projectName = '';
-        if (appsIndex > 1) {
-          projectName = segments[appsIndex - 1] || '';
-        }
-        return { collectionName, projectName };
-      } catch {
-        return { collectionName: '', projectName: '' };
-      }
-    };
-
     let collectionName = webContext?.collection?.name || '';
     if (!collectionName || !project?.name) {
       const fromLocation =
@@ -167,36 +151,6 @@ export const initAdoContext = async () => {
         project = { name: fromRef.projectName };
       }
     }
-
-    const normalizeCollectionUri = (value, inputCollectionName, projectName) => {
-      const raw = String(value || '').trim();
-      if (!raw) return raw;
-      let uri = raw.endsWith('/') ? raw : `${raw}/`;
-      try {
-        const url = new URL(uri);
-        const segments = url.pathname.split('/').filter(Boolean);
-        const normalizedCollection = inputCollectionName || collectionName;
-        if (normalizedCollection) {
-          const idx = segments.findIndex(
-            (seg) => seg.toLowerCase() === normalizedCollection.toLowerCase()
-          );
-          if (idx !== -1 && idx < segments.length - 1) {
-            url.pathname = `/${segments.slice(0, idx + 1).join('/')}/`;
-            return url.toString();
-          }
-        }
-        if (projectName && segments.length > 1) {
-          const last = segments[segments.length - 1];
-          if (last.toLowerCase() === projectName.toLowerCase()) {
-            url.pathname = `/${segments.slice(0, -1).join('/')}/`;
-            return url.toString();
-          }
-        }
-        return url.toString();
-      } catch {
-        return uri;
-      }
-    };
 
     let accessToken = '';
     try {
