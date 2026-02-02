@@ -48,10 +48,6 @@ const normalizeAdoOrgUrl = (value, collectionName, projectName) => {
         return url.toString();
       }
     }
-    if (segments.length > 1) {
-      url.pathname = `/${segments.slice(0, -1).join('/')}/`;
-      return url.toString();
-    }
   } catch {
     /* empty */
   }
