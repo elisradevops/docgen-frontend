@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { enqueueRequest } from '../../utils/requestQueue';
 import C from '../constants';
 import logger from '../../utils/logger';
+import { setLastApiError } from '../../utils/debug';
 
 let globalAuthErrorHandler = null;
 export function setAuthErrorHandler(fn) {
@@ -16,7 +18,6 @@ export default class AzureDevopsRestApi {
 
   _headers() {
     return {
-      'Access-Control-Allow-Origin': '*',
       'Content-Type': 'application/json',
       // Pass org and PAT to the API gateway; adjust header names to what your gateway expects
       'X-Ado-Org-Url': this.orgUrl || '',
@@ -24,12 +25,37 @@ export default class AzureDevopsRestApi {
     };
   }
 
-  async _wrap(callFn) {
+  _normalizeTeamProjectId(value) {
+    let raw = String(value || '').trim();
+    if (!raw) return '';
+    for (let i = 0; i < 3; i += 1) {
+      if (!/%[0-9A-Fa-f]{2}/.test(raw)) break;
+      try {
+        const decoded = decodeURIComponent(raw);
+        if (decoded === raw) break;
+        raw = decoded;
+      } catch {
+        break;
+      }
+    }
+    return raw;
+  }
+
+  async _wrap(callFn, options = {}) {
     try {
-      return await callFn();
+      return await enqueueRequest(callFn, { key: 'ado', ...options });
     } catch (err) {
       const status =
         err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
+      try {
+        setLastApiError({
+          url: err?.config?.url,
+          message: err?.message || 'Request failed',
+          status,
+        });
+      } catch {
+        /* empty */
+      }
       // Some environments return 302 (redirect to interactive sign-in) for invalid creds; treat as auth failure too
       if ((status === 401 || status === 302) && globalAuthErrorHandler) {
         try {
@@ -58,7 +84,7 @@ export default class AzureDevopsRestApi {
         headers: this._headers(),
         //Add my Queries for debugging
         // params: { teamProjectId, docType, path: 'My Queries' },
-        params: { teamProjectId, docType, path: '' },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), docType, path: '' },
       });
       return res.data;
     });
@@ -68,7 +94,7 @@ export default class AzureDevopsRestApi {
     return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/fields`, {
         headers: this._headers(),
-        params: { teamProjectId, type: itemType },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), type: itemType },
       });
       return res.data;
     });
@@ -80,7 +106,7 @@ export default class AzureDevopsRestApi {
         `${C.jsonDocument_url}/azure/queries/${encodeURIComponent(queryId || '')}/results`,
         {
           headers: this._headers(),
-          params: { teamProjectId },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
         }
       );
       return res.data;
@@ -91,7 +117,7 @@ export default class AzureDevopsRestApi {
     return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/tests/plans`, {
         headers: this._headers(),
-        params: { teamProjectId },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
       });
       return res.data;
     });
@@ -103,7 +129,7 @@ export default class AzureDevopsRestApi {
         `${C.jsonDocument_url}/azure/tests/plans/${encodeURIComponent(testPlanId || '')}/suites`,
         {
           headers: this._headers(),
-          params: { teamProjectId, includeChildren: true },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), includeChildren: true },
         }
       );
       return res.data;
@@ -113,7 +139,7 @@ export default class AzureDevopsRestApi {
     return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/git/repos`, {
         headers: this._headers(),
-        params: { teamProjectId },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
       });
       return res.data;
     });
@@ -125,7 +151,7 @@ export default class AzureDevopsRestApi {
         `${C.jsonDocument_url}/azure/git/repos/${encodeURIComponent(RepoId || '')}/branches`,
         {
           headers: this._headers(),
-          params: { teamProjectId },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
         }
       );
       return res.data;
@@ -138,7 +164,7 @@ export default class AzureDevopsRestApi {
         `${C.jsonDocument_url}/azure/git/repos/${encodeURIComponent(RepoId || '')}/commits`,
         {
           headers: this._headers(),
-          params: { teamProjectId, versionIdentifier },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), versionIdentifier },
         }
       );
       return res.data;
@@ -146,51 +172,63 @@ export default class AzureDevopsRestApi {
   }
 
   async getReleaseDefinitionList(teamProjectId = '') {
-    return this._wrap(async () => {
+    return this._wrap(
+      async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/pipelines/releases/definitions`, {
         headers: this._headers(),
-        params: { teamProjectId },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
       });
       return res.data;
-    });
+      },
+      { priority: 'low' }
+    );
   }
 
   async getPipelineList(teamProjectId = '') {
-    return this._wrap(async () => {
+    return this._wrap(
+      async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/pipelines`, {
         headers: this._headers(),
-        params: { teamProjectId },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
       });
       return res.data;
-    });
+      },
+      { priority: 'low' }
+    );
   }
 
   async getReleaseDefinitionHistory(definitionId = '', teamProjectId = '') {
-    return this._wrap(async () => {
+    return this._wrap(
+      async () => {
       const res = await axios.get(
         `${C.jsonDocument_url}/azure/pipelines/releases/definitions/${encodeURIComponent(
           definitionId || ''
         )}/history`,
         {
           headers: this._headers(),
-          params: { teamProjectId },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
         }
       );
       return res.data;
-    });
+      },
+      { priority: 'low' }
+    );
   }
 
   async getPipelineRunHistory(pipelineId = '', teamProjectId = '') {
-    return this._wrap(async () => {
+    return this._wrap(
+      async () => {
       const res = await axios.get(
         `${C.jsonDocument_url}/azure/pipelines/${encodeURIComponent(pipelineId || '')}/runs`,
         {
           headers: this._headers(),
-          params: { teamProjectId },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
         }
       );
       return res.data;
-    });
+      },
+      { priority: 'low' }
+    );
   }
   async getRepoPullRequests(RepoId = '', teamProjectId = '') {
     return this._wrap(async () => {
@@ -198,7 +236,7 @@ export default class AzureDevopsRestApi {
         `${C.jsonDocument_url}/azure/git/repos/${encodeURIComponent(RepoId || '')}/pull-requests`,
         {
           headers: this._headers(),
-          params: { teamProjectId },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
         }
       );
       return res.data;
@@ -209,7 +247,7 @@ export default class AzureDevopsRestApi {
     return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/work-item-types`, {
         headers: this._headers(),
-        params: { teamProjectId },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
       });
       return res.data;
     });
@@ -225,7 +263,7 @@ export default class AzureDevopsRestApi {
         `${C.jsonDocument_url}/azure/git/repos/${encodeURIComponent(RepoId || '')}/refs`,
         {
           headers: this._headers(),
-          params: { teamProjectId, type: gitObjectType },
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), type: gitObjectType },
         }
       );
       return res.data;
@@ -233,7 +271,7 @@ export default class AzureDevopsRestApi {
   }
 
   async getCollectionLinkTypes() {
-    try {
+    return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/link-types`, {
         headers: this._headers(),
       });
@@ -261,14 +299,15 @@ export default class AzureDevopsRestApi {
               'Test Case',
             ].includes(link.text)
         );
-    } catch {
+    }).catch(() => {
       logger.warn(`no linkTypes found - this could mean azure devops connection problems`);
       return [];
-    }
+    });
   }
 
   async getUserDetails() {
-    return this._wrap(async () => {
+    return this._wrap(
+      async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/user/profile`, {
         headers: this._headers(),
       });
@@ -281,14 +320,16 @@ export default class AzureDevopsRestApi {
         throw err;
       }
       return res.data;
-    });
+      },
+      { priority: 'high' }
+    );
   }
 
   async getWorkItemTypes(teamProjectId = '') {
     return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/work-item-types`, {
         headers: this._headers(),
-        params: { teamProjectId },
+        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
       });
       return res.data;
     });

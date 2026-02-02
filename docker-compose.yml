@@ -9,6 +9,8 @@ services:
     image: elisradevops/docgen-frontend:latest
     ports:
       - '80:80'
+    volumes:
+      - ./vsix-out:/opt/ado-extension/out
     environment:
       BACKEND-URL-PLACEHOLDER-ContentControl: 'http://dg-api-gate:30001'
   dg-init-job:

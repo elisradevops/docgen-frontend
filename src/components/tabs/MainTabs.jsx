@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { observer } from 'mobx-react';
 import { useCookies } from 'react-cookie';
 
@@ -9,7 +9,7 @@ import DeveloperModeIcon from '@mui/icons-material/DeveloperMode';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Button from '@mui/material/Button';
-import { styled, alpha } from '@mui/material/styles';
+import { styled, alpha, keyframes } from '@mui/material/styles';
 import {
   Box,
   Grid,
@@ -41,6 +41,8 @@ import ActionBar from '../layout/ActionBar';
 import DocumentScannerOutlinedIcon from '@mui/icons-material/DocumentScannerOutlined';
 import TemplateFileSelectDialog from '../dialogs/TemplateFileSelectDialog';
 import FavoriteDialog from '../dialogs/FavoriteDialog';
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import { isAccessToken } from '../../utils/tokenUtils';
 
 const defaultItem = { key: '', text: '' };
 const StyledTabs = styled((props) => (
@@ -98,28 +100,103 @@ const StyledButton = styled(Button)(({ theme }) => ({
   },
 }));
 
+const bootPulse = keyframes`
+  0%, 70%, 100% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  35% {
+    transform: scale(1);
+    opacity: 1;
+  }
+`;
+
+const bootSweep = keyframes`
+  0% {
+    transform: translateX(-60%);
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(60%);
+    opacity: 0.2;
+  }
+`;
+
+const shouldDebugLogs = () => {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = params.get('debug');
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
+};
+
+const normalizeProjectName = (value) => {
+  let raw = String(value || '').trim();
+  if (!raw) return '';
+  for (let i = 0; i < 3; i += 1) {
+    if (!/%[0-9A-Fa-f]{2}/.test(raw)) break;
+    try {
+      const decoded = decodeURIComponent(raw);
+      if (decoded === raw) break;
+      raw = decoded;
+    } catch {
+      break;
+    }
+  }
+  raw = raw.replace(/[\u00a0\u200b\u200c\u200d\uFEFF]/g, ' ');
+  raw = raw.replace(/\s+/g, ' ').trim();
+  return raw;
+};
+
 // Centralized tab identifiers to avoid collisions
 const TAB_DOCS = 'docs';
 const TAB_TEMPLATES = 'templates';
 const TAB_DEVELOPER = 'developer';
 
-const MainTabs = observer(({ store }) => {
+const MainTabs = observer(({ store, adoContext }) => {
   const [selectedTab, setSelectedTab] = useState(TAB_DOCS);
   // eslint-disable-next-line no-unused-vars
   const [cookies, setCookie, removeCookie] = useCookies(['azureDevopsUrl', 'azureDevopsPat']);
   const [selectedTeamProject, setSelectedTeamProject] = useState(defaultItem);
   const [projectClearable, setProjectClearable] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const isAdoMode = !!adoContext?.isAdo;
+  const adoProjectId = adoContext?.project?.id || '';
+  const adoProjectName = adoContext?.project?.name || '';
+  const normalizedAdoProjectName = normalizeProjectName(adoProjectName);
+  const adoBootStatus = store.adoBootStatus;
+  const adoBootError = store.adoBootError;
+  const adoBooting = isAdoMode && adoBootStatus !== 'ready';
+  const debugEnabled = useMemo(() => shouldDebugLogs(), []);
+  const isAdoAccessToken = useMemo(() => isAccessToken(store.adoToken), [store.adoToken]);
+  const adoProjectItem =
+    adoContext?.project?.id && normalizedAdoProjectName
+      ? { key: adoContext.project.id, text: normalizedAdoProjectName }
+      : null;
   // Track the initial tabs loading phase (document types fetch). We only show the loading screen for the first load
   const [tabsLoadedOnce, setTabsLoadedOnce] = useState(false);
   // Track if the user has manually changed tabs before the initial load completes
   const [tabManuallyChanged, setTabManuallyChanged] = useState(false);
   const logout = useCallback(() => {
+    if (isAdoMode) return;
     removeCookie('azureDevopsUrl', { path: '/' });
     removeCookie('azureDevopsPat', { path: '/' });
-  }, [removeCookie]);
+  }, [isAdoMode, removeCookie]);
 
   useEffect(() => {
+    if (isAdoMode) {
+      if (!isAdoAccessToken) {
+        (async () => {
+          await store.fetchUserDetails();
+        })();
+      }
+      return;
+    }
     if (cookies.azureDevopsUrl && cookies.azureDevopsPat) {
       (async () => {
         const ok = await store.fetchUserDetails();
@@ -133,17 +210,58 @@ const MainTabs = observer(({ store }) => {
         }
       })();
     }
-  }, [cookies, logout, store]);
+  }, [cookies, isAdoMode, isAdoAccessToken, logout, store]);
 
   // Global 401 handling via browser event dispatched from DataStore handler
   useEffect(() => {
     const onUnauthorized = () => {
       toast.error('Your session has expired (401). Please sign in again.');
-      logout();
+      if (!isAdoMode) {
+        logout();
+      }
     };
     window.addEventListener('auth-unauthorized', onUnauthorized);
     return () => window.removeEventListener('auth-unauthorized', onUnauthorized);
-  }, [logout]);
+  }, [isAdoMode, logout]);
+
+  useEffect(() => {
+    if (!isAdoMode) return;
+    if (!normalizedAdoProjectName) return;
+    const projectKey = adoProjectId || '';
+    if (debugEnabled) {
+      console.debug('[ado] MainTabs project context', {
+        adoProjectId,
+        adoProjectName,
+        normalizedAdoProjectName,
+        projectKey,
+        storeTeamProject: store.teamProject,
+        adoBootStatus,
+      });
+    }
+    setSelectedTeamProject({ key: projectKey || normalizedAdoProjectName, text: normalizedAdoProjectName });
+    if (projectKey) {
+      if (store.teamProject !== projectKey || store.adoBootStatus === 'idle') {
+        store.setTeamProject(projectKey, normalizedAdoProjectName);
+      }
+    } else {
+      if (store.adoBootStatus === 'idle' && !store.adoProjectResolveInFlight) {
+        store.resolveTeamProjectByName(normalizedAdoProjectName);
+      }
+    }
+    setProjectClearable(false);
+  }, [
+    adoProjectItem?.key,
+    adoProjectItem?.text,
+    adoProjectId,
+    adoProjectName,
+    normalizedAdoProjectName,
+    isAdoMode,
+    store,
+    store.teamProject,
+    store.adoBootStatus,
+    store.adoProjectResolveInFlight,
+    debugEnabled,
+  ]);
 
   // Keep selected tab in sync with available document types
   // Note: Do not override manual selection of special tabs (Docs/Templates/Developer).
@@ -167,6 +285,7 @@ const MainTabs = observer(({ store }) => {
   // Auto-select the first doc type after the initial tab list finishes loading.
   // Also notify via toast if tabs failed to load (no doc types after load completes).
   useEffect(() => {
+    if (adoBooting) return;
     const loading = !!store.loadingState?.contentControlsLoadingState;
     const types = store.documentTypes || [];
     if (!tabsLoadedOnce && !loading) {
@@ -187,6 +306,7 @@ const MainTabs = observer(({ store }) => {
     selectedTab,
     tabsLoadedOnce,
     tabManuallyChanged,
+    adoBooting,
   ]);
 
   // Derive syncing state from store loading flags
@@ -217,6 +337,7 @@ const MainTabs = observer(({ store }) => {
   }
 
   const handleSync = () => {
+    if (adoBooting) return;
     // Re-apply the currently selected project to trigger store loaders
     if (selectedTeamProject?.key && selectedTeamProject?.text) {
       store.setTeamProject(selectedTeamProject.key, selectedTeamProject.text);
@@ -241,6 +362,7 @@ const MainTabs = observer(({ store }) => {
     <StyledTabs
       value={selectedTab}
       onChange={(event, newValue) => {
+        if (adoBooting) return;
         setTabManuallyChanged(true);
         setSelectedTab(newValue);
         // Check if the selected tab is the templates tab
@@ -282,7 +404,7 @@ const MainTabs = observer(({ store }) => {
     </StyledTabs>
   );
 
-  const headerActions = (
+  const headerActions = isAdoMode ? null : (
     <>
       <StyledButton
         startIcon={<DeveloperModeIcon />}
@@ -300,7 +422,7 @@ const MainTabs = observer(({ store }) => {
 
   const selectedTemplateInfo = store.selectedTemplate;
   const isTestReporterTab = (selectedTab || '').toLowerCase() === 'test-reporter';
-  const showDocControls = isDocTypeTab;
+  const showDocControls = isDocTypeTab && !adoBooting;
 
   const filterControls = (
     <Box
@@ -326,29 +448,85 @@ const MainTabs = observer(({ store }) => {
           gridRow: '1 / 2',
         }}
       >
-        <SmartAutocomplete
-          disableClearable
-          sx={{ width: { xs: '100%', sm: 260, md: 300 } }}
-          autoHighlight
-          openOnFocus
-          loading={store.loadingState.teamProjectsLoadingState}
-          options={store.teamProjectsList.map((teamProject) => ({
-            key: teamProject.id,
-            text: teamProject.name,
-          }))}
-          label='Team Project'
-          placeholder={
-            store.loadingState.teamProjectsLoadingState ? 'Loading projects…' : 'Start typing to search'
-          }
-          value={selectedTeamProject?.key ? selectedTeamProject : null}
-          onChange={async (_e, newValue) => {
-            const nextValue = newValue || defaultItem;
-            setSelectedTeamProject(nextValue);
-            store.setTeamProject(nextValue.key || '', nextValue.text || '');
-            // Clear selected template so defaults can be re-evaluated for the new project
-            store.setSelectedTemplate(null);
-          }}
-        />
+        {isAdoMode ? (
+          <Paper
+            variant='outlined'
+            sx={{
+              width: { xs: '100%', sm: 300, md: 340 },
+              px: 2,
+              py: 1.5,
+              borderRadius: 2,
+              borderColor: (theme) => alpha(theme.palette.primary.main, 0.25),
+              background: (theme) =>
+                `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.12)}, ${alpha(
+                  theme.palette.secondary.main,
+                  0.12
+                )})`,
+            }}
+          >
+            <Stack
+              direction='row'
+              alignItems='center'
+              spacing={1.25}
+            >
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 1.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.18),
+                  color: 'primary.main',
+                }}
+              >
+                <AccountTreeOutlinedIcon fontSize='small' />
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  variant='caption'
+                  color='text.secondary'
+                  sx={{ letterSpacing: 0.5, textTransform: 'uppercase' }}
+                >
+                  Azure DevOps Project
+                </Typography>
+                <Typography
+                  variant='subtitle1'
+                  sx={{ fontWeight: 700, textOverflow: 'ellipsis', overflow: 'hidden' }}
+                >
+                  {normalizedAdoProjectName || 'Unknown project'}
+                </Typography>
+              </Box>
+            </Stack>
+          </Paper>
+        ) : (
+          <SmartAutocomplete
+            disableClearable
+            sx={{ width: { xs: '100%', sm: 260, md: 300 } }}
+            autoHighlight
+            openOnFocus
+            loading={store.loadingState.teamProjectsLoadingState}
+            disabled={isAdoMode}
+            options={store.teamProjectsList.map((teamProject) => ({
+              key: teamProject.id,
+              text: teamProject.name,
+            }))}
+            label='Team Project'
+            placeholder={
+              store.loadingState.teamProjectsLoadingState ? 'Loading projects…' : 'Start typing to search'
+            }
+            value={selectedTeamProject?.key ? selectedTeamProject : null}
+            onChange={async (_e, newValue) => {
+              if (isAdoMode) return;
+              const nextValue = newValue || defaultItem;
+              setSelectedTeamProject(nextValue);
+              store.setTeamProject(nextValue.key || '', nextValue.text || '');
+              // Clear selected template so defaults can be re-evaluated for the new project
+              store.setSelectedTemplate(null);
+            }}
+          />
+        )}
         <Box
           sx={{
             display: 'flex',
@@ -399,7 +577,7 @@ const MainTabs = observer(({ store }) => {
                   aria-label='sync'
                   color='info'
                   onClick={handleSync}
-                  disabled={syncing || !isProjectSelected}
+                  disabled={syncing || !isProjectSelected || adoBooting}
                   size='small'
                 >
                   <SyncOutlined spin={syncing} />
@@ -407,7 +585,7 @@ const MainTabs = observer(({ store }) => {
               </span>
             </Tooltip>
           )}
-          {projectClearable ? (
+          {projectClearable && !isAdoMode ? (
             <Tooltip
               title='Clear the selected TeamProject (optional)'
               placement='top'
@@ -552,6 +730,171 @@ const MainTabs = observer(({ store }) => {
   );
 
   const isDeveloperTab = selectedTab === TAB_DEVELOPER;
+
+  if (adoBooting) {
+    const bootTitle =
+      adoBootStatus === 'error' ? 'Unable to initialize Azure DevOps data' : 'Preparing Azure DevOps data';
+    const bootSubtitle =
+      adoBootStatus === 'idle'
+        ? 'Waiting for Azure DevOps context...'
+        : !store.teamProject
+        ? 'Resolving project identity...'
+        : 'Loading profile, project metadata, and permissions...';
+    return (
+      <AppLayout
+        navigation={navigation}
+        actions={headerActions}
+      >
+        <Box
+          role='status'
+          aria-live='polite'
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: (theme) => theme.zIndex.modal + 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: (theme) => theme.palette.background.default,
+            background: (theme) =>
+              `radial-gradient(1200px 600px at 20% 10%, ${alpha(
+                theme.palette.primary.main,
+                0.12
+              )}, transparent 60%), radial-gradient(900px 480px at 80% 20%, ${alpha(
+                theme.palette.secondary.main,
+                0.14
+              )}, transparent 60%)`,
+          }}
+        >
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              opacity: 0.4,
+              backgroundImage:
+                'linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px)',
+              backgroundSize: '28px 28px',
+              pointerEvents: 'none',
+            }}
+          />
+          <Paper
+            elevation={0}
+            sx={{
+              position: 'relative',
+              zIndex: 1,
+              width: 'min(560px, 90vw)',
+              px: { xs: 3, md: 4.5 },
+              py: { xs: 3.5, md: 4.5 },
+              borderRadius: 3,
+              border: (theme) => `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+              background: (theme) =>
+                `linear-gradient(180deg, ${alpha(theme.palette.common.white, 0.9)}, ${alpha(
+                  theme.palette.background.paper,
+                  0.95
+                )})`,
+              boxShadow: (theme) => theme.shadows[6],
+            }}
+          >
+            <Stack
+              spacing={2}
+              alignItems='center'
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.2,
+                }}
+              >
+                {[0, 1, 2].map((idx) => (
+                  <Box
+                    key={`boot-dot-${idx}`}
+                    sx={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      bgcolor: (theme) =>
+                        idx === 1 ? theme.palette.secondary.main : theme.palette.primary.main,
+                      animation: `${bootPulse} 1.2s ease-in-out ${idx * 0.2}s infinite`,
+                    }}
+                  />
+                ))}
+              </Box>
+              <Typography
+                variant='overline'
+                sx={{ letterSpacing: 2, color: 'text.secondary' }}
+              >
+                Azure DevOps Bootstrap
+              </Typography>
+              <Typography
+                variant='h6'
+                sx={{ fontWeight: 700 }}
+              >
+                {bootTitle}
+              </Typography>
+              <Typography
+                variant='body2'
+                color='text.secondary'
+                sx={{ textAlign: 'center', maxWidth: 420 }}
+              >
+                {bootSubtitle}
+              </Typography>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: 6,
+                  borderRadius: 999,
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '60%',
+                    mx: 'auto',
+                    borderRadius: 999,
+                    background: (theme) =>
+                      `linear-gradient(90deg, transparent, ${alpha(
+                        theme.palette.primary.main,
+                        0.6
+                      )}, transparent)`,
+                    animation: `${bootSweep} 1.6s ease-in-out infinite`,
+                  }}
+                />
+              </Box>
+              {adoBootError ? (
+                <Typography
+                  variant='body2'
+                  color='error'
+                  sx={{ fontWeight: 600, textAlign: 'center' }}
+                >
+                  {adoBootError}
+                </Typography>
+              ) : null}
+              {adoBootStatus === 'error' ? (
+                <Button
+                  variant='contained'
+                  onClick={() => {
+                    if (!store.teamProject && normalizedAdoProjectName) {
+                      store.resolveTeamProjectByName(normalizedAdoProjectName);
+                      return;
+                    }
+                    store.bootstrapAdoProjectData();
+                  }}
+                  disabled={!store.teamProject && !normalizedAdoProjectName}
+                >
+                  Retry
+                </Button>
+              ) : null}
+            </Stack>
+          </Paper>
+        </Box>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout

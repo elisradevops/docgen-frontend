@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import MainTabs from './components/tabs/MainTabs';
 import SettingsPage from './components/settings/SettingPage';
 import { Slide, ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './toast.css';
 import { useCookies } from 'react-cookie';
+import { initAdoContext } from './adoSdk';
+import DebugPanel from './components/common/DebugPanel';
 import {
   makeKey,
   tryLocalStorageSet,
@@ -12,9 +14,23 @@ import {
   trySessionStorageSet,
   trySessionStorageRemove,
 } from './utils/storage';
+import { normalizeAdoOrgUrl } from './utils/adoUrlUtils';
+
+const shouldLogDebug = () => {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = params.get('debug');
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
+};
 
 function App({ store }) {
   const [cookies, setCookie, removeCookie] = useCookies(['azureDevopsUrl', 'azureDevopsPat']);
+  const [adoContext, setAdoContext] = useState({ isAdo: false });
+  const [adoReady, setAdoReady] = useState(false);
+  const isAdoMode = !!adoContext?.isAdo;
 
   const login = async (selectedUrl, selectedPat) => {
     // Validate credentials first
@@ -88,10 +104,84 @@ function App({ store }) {
     return () => window.removeEventListener('auth-unauthorized', onUnauthorized);
   }, [removeCookie, store]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const context = await initAdoContext();
+      if (!mounted) return;
+      if (shouldLogDebug()) {
+        console.debug('[ado] initAdoContext', {
+          isAdo: !!context?.isAdo,
+          collectionUri: context?.collectionUri,
+          project: context?.project?.name || null,
+          collectionName: context?.webContext?.collection?.name || null,
+        });
+      }
+      setAdoContext(context);
+      if (context?.isAdo && context.collectionUri && context.accessToken) {
+        try {
+          const rawToken = String(context.accessToken || '').trim();
+          const bearerToken = rawToken
+            ? /^bearer[:\s]/i.test(rawToken)
+              ? rawToken
+              : `bearer:${rawToken}`
+            : '';
+          store.setAdoMode(true);
+          const normalizedOrgUrl = normalizeAdoOrgUrl(
+            context.collectionUri,
+            context.webContext?.collection?.name,
+            context.project?.name
+          );
+          if (shouldLogDebug()) {
+            console.debug('[ado] setCredentials', {
+              collectionUri: context.collectionUri,
+              normalizedOrgUrl,
+              project: context.project?.name || null,
+              collectionName: context.webContext?.collection?.name || null,
+              tokenLength: bearerToken.length,
+            });
+          }
+          store.setCredentials(normalizedOrgUrl, bearerToken);
+        } catch {
+          /* empty */
+        }
+      } else {
+        try {
+          store.setAdoMode(false);
+        } catch {
+          /* empty */
+        }
+      }
+      setAdoReady(true);
+      try {
+        if (context?.isAdo && typeof context?.sdk?.notifyLoadSucceeded === 'function') {
+          context.sdk.notifyLoadSucceeded();
+        }
+      } catch {
+        /* empty */
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [store]);
+
+  // Load document form metadata for standalone mode as early as possible.
+  useEffect(() => {
+    if (!isAdoMode) {
+      store.fetchDocFolders();
+    }
+  }, [isAdoMode, store]);
+
   // Keep the store's API client in sync with cookies (handles refresh/autofill cases)
   useEffect(() => {
     try {
-      if (cookies.azureDevopsUrl && cookies.azureDevopsPat && typeof store?.setCredentials === 'function') {
+      if (
+        !isAdoMode &&
+        cookies.azureDevopsUrl &&
+        cookies.azureDevopsPat &&
+        typeof store?.setCredentials === 'function'
+      ) {
         store.setCredentials(cookies.azureDevopsUrl, cookies.azureDevopsPat);
       }
     } catch {
@@ -126,11 +216,36 @@ function App({ store }) {
         pauseOnHover
         transition={Slide}
       />
-      {cookies.azureDevopsUrl && cookies.azureDevopsPat ? (
-        <MainTabs store={store} />
+      {!adoReady ? (
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 16,
+            fontWeight: 600,
+          }}
+        >
+          Loading Azure DevOps context...
+        </div>
+      ) : isAdoMode ? (
+        <MainTabs
+          store={store}
+          adoContext={adoContext}
+        />
+      ) : cookies.azureDevopsUrl && cookies.azureDevopsPat ? (
+        <MainTabs
+          store={store}
+          adoContext={adoContext}
+        />
       ) : (
         <SettingsPage login={login.bind(this)} />
       )}
+      <DebugPanel
+        store={store}
+        adoContext={adoContext}
+      />
     </div>
   );
 }
