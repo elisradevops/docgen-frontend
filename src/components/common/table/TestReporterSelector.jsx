@@ -41,6 +41,15 @@ const defaultSelectedQueries = {
   includeCommonColumnsMode: 'both',
 };
 
+const isMewpProjectName = (selectedTeamProject) => {
+  if (typeof selectedTeamProject === 'string') {
+    return selectedTeamProject.trim().toLowerCase() === 'mewp';
+  }
+  const projectName =
+    selectedTeamProject?.text || selectedTeamProject?.name || selectedTeamProject?.key || '';
+  return String(projectName).trim().toLowerCase() === 'mewp';
+};
+
 // Checkboxes for multi-select in suites are rendered internally by SmartAutocomplete when showCheckbox=true
 
 const BASE_FIELDS = [
@@ -75,6 +84,17 @@ const TestReporterSelector = observer(
     const [selectedFields, setSelectedFields] = useState([]);
     const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
     const [includeAllHistory, setIncludeAllHistory] = useState(false);
+    const [includeMewpL2Coverage, setIncludeMewpL2Coverage] = useState(false);
+    const isMewpProject = useMemo(
+      () => isMewpProjectName(selectedTeamProject),
+      [selectedTeamProject]
+    );
+    const hasSelectedProject = useMemo(() => {
+      if (typeof selectedTeamProject === 'string') {
+        return selectedTeamProject.trim() !== '';
+      }
+      return !!String(selectedTeamProject?.text || selectedTeamProject?.name || '').trim();
+    }, [selectedTeamProject]);
 
     // isRestoring/restoreReady provided by useTabStatePersistence
     const savedDataRef = useRef(null);
@@ -115,6 +135,10 @@ const TestReporterSelector = observer(
     const [queryTrees, setQueryTrees] = useState({
       testAssociatedTree: [],
     });
+
+    useEffect(() => {
+      setIncludeMewpL2Coverage(isMewpProject);
+    }, [isMewpProject]);
 
     useEffect(() => {
       if (!store.sharedQueries) return;
@@ -263,6 +287,7 @@ const TestReporterSelector = observer(
       const savedRunFilterMode = dataToSave?.runFilterMode;
       const savedRunStepFilterMode = dataToSave?.runStepFilterMode;
       const savedIncludeAllHistory = dataToSave?.includeAllHistory;
+      const savedIncludeMewpL2Coverage = dataToSave?.includeMewpL2Coverage;
       if (allowCrossTestPlan) {
         setAllowCrossTestPlan(allowCrossTestPlan);
       }
@@ -286,6 +311,9 @@ const TestReporterSelector = observer(
       }
       if (savedIncludeAllHistory !== undefined) {
         setIncludeAllHistory(!!savedIncludeAllHistory);
+      }
+      if (savedIncludeMewpL2Coverage !== undefined) {
+        setIncludeMewpL2Coverage(!!savedIncludeMewpL2Coverage);
       }
     }, []);
 
@@ -364,6 +392,7 @@ const TestReporterSelector = observer(
       setSelectedFields([]);
       setLinkedQueryRequest(defaultSelectedQueries);
       setIncludeAllHistory(false);
+      setIncludeMewpL2Coverage(false);
       savedDataRef.current = null;
     }, []);
 
@@ -449,6 +478,7 @@ const TestReporterSelector = observer(
               selectedFields: selectedFields,
               linkedQueryRequest: linkedQueryRequest,
               includeAllHistory,
+              includeMewpL2Coverage: isMewpProject ? includeMewpL2Coverage : false,
             },
             isExcelSpreadsheet: true,
           },
@@ -474,6 +504,8 @@ const TestReporterSelector = observer(
       errorFilterMode,
       linkedQueryRequest,
       includeAllHistory,
+      includeMewpL2Coverage,
+      isMewpProject,
       isRestoring,
       restoreReady,
       store,
@@ -546,7 +578,7 @@ const TestReporterSelector = observer(
     return (
       <>
         <Collapse
-          in={selectedTeamProject?.key !== ''}
+          in={hasSelectedProject}
           timeout='auto'
           unmountOnExit
         >
@@ -733,6 +765,20 @@ const TestReporterSelector = observer(
                       }
                       label='Only include executed steps'
                     />
+                    {isMewpProject ? (
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            size='small'
+                            checked={includeMewpL2Coverage}
+                            onChange={(_event, checked) => {
+                              setIncludeMewpL2Coverage(checked);
+                            }}
+                          />
+                        }
+                        label='Include MEWP L2 coverage sheet'
+                      />
+                    ) : null}
                     <Collapse
                       in={enableRunStepStatusFilter}
                       timeout='auto'
