@@ -89,12 +89,6 @@ const TestReporterSelector = observer(
       () => isMewpProjectName(selectedTeamProject),
       [selectedTeamProject]
     );
-    const hasSelectedProject = useMemo(() => {
-      if (typeof selectedTeamProject === 'string') {
-        return selectedTeamProject.trim() !== '';
-      }
-      return !!String(selectedTeamProject?.text || selectedTeamProject?.name || '').trim();
-    }, [selectedTeamProject]);
 
     // isRestoring/restoreReady provided by useTabStatePersistence
     const savedDataRef = useRef(null);
@@ -577,15 +571,10 @@ const TestReporterSelector = observer(
 
     return (
       <>
-        <Collapse
-          in={hasSelectedProject}
-          timeout='auto'
-          unmountOnExit
+        <Stack
+          spacing={1.5}
+          sx={{ my: 1 }}
         >
-          <Stack
-            spacing={1.5}
-            sx={{ my: 1 }}
-          >
             <SectionCard
               title='Scope'
               description='Choose the test plan and suites to include in this report.'
@@ -765,20 +754,6 @@ const TestReporterSelector = observer(
                       }
                       label='Only include executed steps'
                     />
-                    {isMewpProject ? (
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            size='small'
-                            checked={includeMewpL2Coverage}
-                            onChange={(_event, checked) => {
-                              setIncludeMewpL2Coverage(checked);
-                            }}
-                          />
-                        }
-                        label='Include MEWP L2 coverage sheet'
-                      />
-                    ) : null}
                     <Collapse
                       in={enableRunStepStatusFilter}
                       timeout='auto'
@@ -979,8 +954,34 @@ const TestReporterSelector = observer(
                 />
               </Stack>
             </SectionCard>
+            {isMewpProject ? (
+              <SectionCard
+                title='L2 Coverage'
+                description='MEWP-only: adds a parallel L2 coverage worksheet using the same plan and suites.'
+              >
+                <Stack spacing={1}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size='small'
+                        checked={includeMewpL2Coverage}
+                        onChange={(_event, checked) => {
+                          setIncludeMewpL2Coverage(checked);
+                        }}
+                      />
+                    }
+                    label='Include L2 coverage sheet'
+                  />
+                  <Typography
+                    variant='caption'
+                    color='text.secondary'
+                  >
+                    Regular Test Reporter output remains unchanged; this appends an additional sheet.
+                  </Typography>
+                </Stack>
+              </SectionCard>
+            ) : null}
           </Stack>
-        </Collapse>
         <RestoreBackdrop
           open={!!isRestoring}
           label='Restoring Test Reporter selection…'
