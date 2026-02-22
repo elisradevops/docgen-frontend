@@ -9,6 +9,7 @@ import {
   createIfBucketDoesNotExist,
   uploadFileToStorage,
   deleteFile,
+  validateMewpExternalFiles,
   getFavoriteList,
   deleteFavoriteFromDb,
   createFavorite,
@@ -557,6 +558,14 @@ const normalizeProjectName = (value) => {
   raw = raw.replace(/\s+/g, ' ').trim();
   return raw;
 };
+
+const MEWP_EXTERNAL_INGESTION_BUCKET = 'mewp-external-ingestion';
+const MEWP_EXTERNAL_INGESTION_PREFIX = 'mewp-external-ingestion';
+
+const toSafeDate = (value) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+};
 class DocGenDataStore {
   azureRestClient = new RestApi(azureDevopsUrl, azureDevopsPat);
   adoOrgUrl = azureDevopsUrl;
@@ -640,6 +649,11 @@ class DocGenDataStore {
       setContextName: action,
       fetchLoadingState: action,
       uploadFile: action,
+      fetchMewpExternalIngestionFiles: action,
+      findMewpExternalIngestionFileByName: action,
+      getLatestMewpExternalIngestionFile: action,
+      deleteMewpExternalIngestionFile: action,
+      validateMewpExternalIngestionFiles: action,
       addContentControlToDocument: action,
       fetchUserDetails: action,
       testCredentials: action,
@@ -2145,15 +2159,136 @@ class DocGenDataStore {
     this.attachmentWikiUrl = fixedUrl;
   }
 
-  async uploadFile(file, bucketName) {
+  async uploadFile(file, bucketName, options = {}) {
+    return this.uploadFileWithOptions(file, bucketName, options);
+  }
+
+  async uploadFileWithOptions(file, bucketName, options = {}) {
     const formData = new FormData();
-    await createIfBucketDoesNotExist(bucketName);
+    const effectiveBucket = String(bucketName || '').trim() || this.ProjectBucketName;
+    if (!effectiveBucket) {
+      throw new Error('No target bucket was provided');
+    }
+    await createIfBucketDoesNotExist(effectiveBucket);
     formData.append('file', file);
-    formData.append('docType', this.docType);
+    formData.append('docType', options?.docTypeOverride || this.docType);
     formData.append('teamProjectName', this.teamProjectName);
     formData.append('isExternal', false);
-    formData.append('bucketName', bucketName);
+    formData.append('bucketName', effectiveBucket);
+    if (this.userDetails?.name) {
+      formData.append('createdBy', this.userDetails.name);
+    }
+    if (this.userDetails?.userId) {
+      formData.append('createdById', this.userDetails.userId);
+    }
+    if (options?.purpose) {
+      formData.append('purpose', options.purpose);
+    }
     return await uploadFileToStorage(formData);
+  }
+
+  getMewpExternalIngestionBucketName() {
+    return MEWP_EXTERNAL_INGESTION_BUCKET;
+  }
+
+  isMewpIngestionFileOwnedByCurrentUser(fileItem) {
+    const currentUserId = String(this.userDetails?.userId || '')
+      .trim()
+      .toLowerCase();
+    const currentUserName = String(this.userDetails?.name || '')
+      .trim()
+      .toLowerCase();
+    const fileOwnerId = String(fileItem?.createdById || '')
+      .trim()
+      .toLowerCase();
+    const fileOwnerName = String(fileItem?.createdBy || '')
+      .trim()
+      .toLowerCase();
+    if (currentUserId && fileOwnerId) {
+      return currentUserId === fileOwnerId;
+    }
+    if (currentUserName && fileOwnerName) {
+      return currentUserName === fileOwnerName;
+    }
+    return false;
+  }
+
+  async fetchMewpExternalIngestionFiles(docType, options = {}) {
+    const normalizedDocType = String(docType || '')
+      .trim()
+      .toLowerCase();
+    if (!['bugs', 'l3l4'].includes(normalizedDocType)) {
+      return [];
+    }
+    if (!this.teamProjectName) {
+      return [];
+    }
+    const prefixDocType = `${MEWP_EXTERNAL_INGESTION_PREFIX}/${normalizedDocType}`;
+    const files = await getBucketFileList(
+      this.getMewpExternalIngestionBucketName(),
+      prefixDocType,
+      false,
+      this.teamProjectName,
+      true
+    );
+
+    const normalized = (files || [])
+      .filter((item) => {
+        const objectName = String(item?.name || item?.text || '').toLowerCase();
+        if (!objectName.includes(`/${MEWP_EXTERNAL_INGESTION_PREFIX}/${normalizedDocType}/`)) return false;
+        return ['.xlsx', '.xls', '.csv'].some((ext) => objectName.endsWith(ext));
+      })
+      .sort((a, b) => toSafeDate(b?.lastModified).getTime() - toSafeDate(a?.lastModified).getTime());
+    const mineOnly = !!options?.mineOnly;
+    if (!mineOnly) {
+      return normalized;
+    }
+    return normalized.filter((item) => this.isMewpIngestionFileOwnedByCurrentUser(item));
+  }
+
+  async getLatestMewpExternalIngestionFile(docType, options = {}) {
+    const files = await this.fetchMewpExternalIngestionFiles(docType, options);
+    return files.length > 0 ? files[0] : null;
+  }
+
+  async findMewpExternalIngestionFileByName(docType, fileName, options = {}) {
+    const normalizedName = String(fileName || '')
+      .trim()
+      .toLowerCase();
+    if (!normalizedName) return null;
+    const files = await this.fetchMewpExternalIngestionFiles(docType, options);
+    return (
+      files.find((item) => {
+        const candidate = String(item?.name || item?.text || '')
+          .split('/')
+          .pop()
+          ?.toLowerCase();
+        return candidate === normalizedName;
+      }) || null
+    );
+  }
+
+  async deleteMewpExternalIngestionFile(fileItem) {
+    return await deleteFile(
+      fileItem,
+      this.teamProjectName,
+      this.getMewpExternalIngestionBucketName()
+    );
+  }
+
+  async validateMewpExternalIngestionFiles(options = {}) {
+    const request = this.requestJson || {};
+    const payload = {
+      tfsCollectionUri: request.tfsCollectionUri,
+      PAT: request.PAT,
+      teamProjectName: request.teamProjectName,
+      templateFile: request.templateFile || '',
+      uploadProperties: request.uploadProperties,
+      formattingSettings: request.formattingSettings,
+      externalBugsFile: options?.externalBugsFile || null,
+      externalL3L4File: options?.externalL3L4File || null,
+    };
+    return await validateMewpExternalFiles(payload);
   }
 
   setDocType(docType) {

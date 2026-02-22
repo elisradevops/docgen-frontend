@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Button, Divider, Paper, Stack, Typography } from '@mui/material';
 import C from '../../store/constants';
-import { getLastApiError } from '../../utils/debug';
 
 const parseDebugFlag = () => {
   try {
@@ -26,25 +25,15 @@ const normalizeProjectName = (value) => {
       break;
     }
   }
-  raw = raw.replace(/[\u00a0\u200b\u200c\u200d\uFEFF]/g, ' ');
+  raw = raw.replace(/[\u00A0\u200B-\u200D\uFEFF]/g, ' ');
   raw = raw.replace(/\s+/g, ' ').trim();
   return raw;
 };
 
-const DebugPanel = ({ store, adoContext }) => {
+const DebugPanel = ({ adoContext }) => {
   const enabled = useMemo(() => parseDebugFlag(), []);
   const [open, setOpen] = useState(enabled);
-  const [lastError, setLastError] = useState(() => getLastApiError());
   const normalizedProjectName = normalizeProjectName(adoContext?.project?.name || '');
-
-  useEffect(() => {
-    if (!enabled) return undefined;
-    const handler = (event) => {
-      setLastError(event?.detail || getLastApiError());
-    };
-    window.addEventListener('docgen:debug-error', handler);
-    return () => window.removeEventListener('docgen:debug-error', handler);
-  }, [enabled]);
 
   if (!enabled) return null;
 
