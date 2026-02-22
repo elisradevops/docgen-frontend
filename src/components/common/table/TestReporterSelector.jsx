@@ -72,6 +72,18 @@ const buildExternalValidationMessage = (result) => {
   return 'External source files are invalid';
 };
 
+const resolveExternalTableValidationDetails = (validationState, tableType) => {
+  const details = validationState?.details;
+  if (!details || typeof details !== 'object') return null;
+  if (details?.[tableType] && typeof details[tableType] === 'object') {
+    return details[tableType];
+  }
+  if (details?.details?.[tableType] && typeof details.details[tableType] === 'object') {
+    return details.details[tableType];
+  }
+  return null;
+};
+
 // Checkboxes for multi-select in suites are rendered internally by SmartAutocomplete when showCheckbox=true
 
 const BASE_FIELDS = [
@@ -1505,6 +1517,78 @@ const TestReporterSelector = observer(
                 External source files passed schema validation.
               </Typography>
             ) : null}
+            {(() => {
+              const tableType = 'bugs';
+              const title = 'Bugs table validation';
+              const hasFile = !!externalBugsFile;
+              const tableDetails = resolveExternalTableValidationDetails(externalValidationState, tableType);
+              const missingColumns = Array.isArray(tableDetails?.missingRequiredColumns)
+                ? tableDetails.missingRequiredColumns
+                : [];
+              const isValid = tableDetails?.valid === true;
+              const isInvalid = tableDetails?.valid === false;
+              const isValidating = externalValidationState.status === 'validating' && hasFile;
+              const captionColor = isValidating
+                ? 'warning.main'
+                : isValid
+                ? 'success.main'
+                : isInvalid
+                ? 'error.main'
+                : 'text.secondary';
+
+              return (
+                <Stack
+                  spacing={0.25}
+                  sx={{
+                    px: 1.25,
+                    py: 0.75,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    backgroundColor: 'background.paper',
+                  }}
+                >
+                  <Typography variant='caption' sx={{ fontWeight: 600 }}>
+                    {title}
+                  </Typography>
+                  {!hasFile ? (
+                    <Typography variant='caption' color='text.secondary'>
+                      No file provided.
+                    </Typography>
+                  ) : isValidating ? (
+                    <Typography variant='caption' color='warning.main'>
+                      Validation in progress...
+                    </Typography>
+                  ) : tableDetails ? (
+                    <>
+                      <Typography variant='caption' color={captionColor}>
+                        {isValid ? 'Valid format' : 'Invalid format'}
+                      </Typography>
+                      <Typography variant='caption' color='text.secondary'>
+                        Header row: {tableDetails.headerRow || 'n/a'} | Matched columns:{' '}
+                        {Number(tableDetails.matchedRequiredColumns || 0)}/
+                        {Number(tableDetails.totalRequiredColumns || 0)} | Data rows:{' '}
+                        {Number(tableDetails.rowCount || 0)}
+                      </Typography>
+                      {missingColumns.length > 0 ? (
+                        <Typography variant='caption' color='error.main'>
+                          Missing columns: {missingColumns.join(', ')}
+                        </Typography>
+                      ) : null}
+                      {tableDetails.message ? (
+                        <Typography variant='caption' color={isInvalid ? 'error.main' : 'text.secondary'}>
+                          {tableDetails.message}
+                        </Typography>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Typography variant='caption' color='text.secondary'>
+                      Validation details are not available yet.
+                    </Typography>
+                  )}
+                </Stack>
+              );
+            })()}
             <Stack
               direction={{ xs: 'column', md: 'row' }}
               spacing={1}
@@ -1563,6 +1647,78 @@ const TestReporterSelector = observer(
                 </Button>
               </Stack>
             </Stack>
+            {(() => {
+              const tableType = 'l3l4';
+              const title = 'L3/L4 table validation';
+              const hasFile = !!externalL3L4File;
+              const tableDetails = resolveExternalTableValidationDetails(externalValidationState, tableType);
+              const missingColumns = Array.isArray(tableDetails?.missingRequiredColumns)
+                ? tableDetails.missingRequiredColumns
+                : [];
+              const isValid = tableDetails?.valid === true;
+              const isInvalid = tableDetails?.valid === false;
+              const isValidating = externalValidationState.status === 'validating' && hasFile;
+              const captionColor = isValidating
+                ? 'warning.main'
+                : isValid
+                ? 'success.main'
+                : isInvalid
+                ? 'error.main'
+                : 'text.secondary';
+
+              return (
+                <Stack
+                  spacing={0.25}
+                  sx={{
+                    px: 1.25,
+                    py: 0.75,
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    backgroundColor: 'background.paper',
+                  }}
+                >
+                  <Typography variant='caption' sx={{ fontWeight: 600 }}>
+                    {title}
+                  </Typography>
+                  {!hasFile ? (
+                    <Typography variant='caption' color='text.secondary'>
+                      No file provided.
+                    </Typography>
+                  ) : isValidating ? (
+                    <Typography variant='caption' color='warning.main'>
+                      Validation in progress...
+                    </Typography>
+                  ) : tableDetails ? (
+                    <>
+                      <Typography variant='caption' color={captionColor}>
+                        {isValid ? 'Valid format' : 'Invalid format'}
+                      </Typography>
+                      <Typography variant='caption' color='text.secondary'>
+                        Header row: {tableDetails.headerRow || 'n/a'} | Matched columns:{' '}
+                        {Number(tableDetails.matchedRequiredColumns || 0)}/
+                        {Number(tableDetails.totalRequiredColumns || 0)} | Data rows:{' '}
+                        {Number(tableDetails.rowCount || 0)}
+                      </Typography>
+                      {missingColumns.length > 0 ? (
+                        <Typography variant='caption' color='error.main'>
+                          Missing columns: {missingColumns.join(', ')}
+                        </Typography>
+                      ) : null}
+                      {tableDetails.message ? (
+                        <Typography variant='caption' color={isInvalid ? 'error.main' : 'text.secondary'}>
+                          {tableDetails.message}
+                        </Typography>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Typography variant='caption' color='text.secondary'>
+                      Validation details are not available yet.
+                    </Typography>
+                  )}
+                </Stack>
+              );
+            })()}
             <Stack
               direction={{ xs: 'column', md: 'row' }}
               spacing={1}

@@ -324,9 +324,11 @@ export const validateMewpExternalFiles = async (payload) => {
   } catch (err) {
     if (err.response) {
       const data = err.response.data || {};
-      const wrapped = new Error(data.message || 'MEWP external validation failed');
+      const fallbackMessage = [data?.bugs?.message, data?.l3l4?.message].filter(Boolean).join(' | ');
+      const wrapped = new Error(data.message || fallbackMessage || 'MEWP external validation failed');
       wrapped.code = data.code;
-      wrapped.details = data.details;
+      // Keep full payload so UI can render per-table validation details even on 422.
+      wrapped.details = data?.details || data;
       throw wrapped;
     }
     throw new Error(err.message);
