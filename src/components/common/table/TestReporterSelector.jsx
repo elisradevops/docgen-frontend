@@ -61,6 +61,8 @@ const getFileDisplayName = (fileItem) =>
     .pop()
     .trim();
 const isAtpReleasePlanName = (planName) => String(planName || '').trim().toLowerCase() === 'atp release';
+const MEWP_EXTERNAL_VALIDATION_CACHE_PREFIX = 'mewpExternalValidationCache';
+const EXTERNAL_VALIDATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const buildExternalValidationMessage = (result) => {
   if (!result || result.valid !== false) return '';
@@ -83,6 +85,56 @@ const resolveExternalTableValidationDetails = (validationState, tableType) => {
     return details.details[tableType];
   }
   return null;
+};
+
+const buildExternalValidationSignature = (fileItem) => {
+  const bucket = String(fileItem?.bucketName || '').trim();
+  const objectName = String(fileItem?.objectName || fileItem?.text || fileItem?.name || '').trim();
+  const etag = String(fileItem?.etag || '').trim();
+  const size = String(fileItem?.sizeBytes || '').trim();
+  if (!bucket && !objectName && !etag && !size) return '';
+  return [bucket, objectName, etag, size].join('|').toLowerCase();
+};
+
+const buildExternalValidationCacheKey = (projectName, tableType, signature) => {
+  const normalizedProject = String(projectName || '').trim().toLowerCase() || 'unknown-project';
+  return `${MEWP_EXTERNAL_VALIDATION_CACHE_PREFIX}:${normalizedProject}:${tableType}:${signature}`;
+};
+
+const readExternalValidationCache = (projectName, tableType, signature) => {
+  try {
+    if (!signature) return null;
+    const key = buildExternalValidationCacheKey(projectName, tableType, signature);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const createdAt = Number(parsed?.createdAt || 0);
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt > EXTERNAL_VALIDATION_CACHE_TTL_MS) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    const details = parsed?.details;
+    if (!details || details.valid !== true) return null;
+    return details;
+  } catch {
+    return null;
+  }
+};
+
+const writeExternalValidationCache = (projectName, tableType, signature, details) => {
+  try {
+    if (!signature || !details || details.valid !== true) return;
+    const key = buildExternalValidationCacheKey(projectName, tableType, signature);
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        createdAt: Date.now(),
+        details,
+      })
+    );
+  } catch {
+    // no-op
+  }
 };
 
 // Checkboxes for multi-select in suites are rendered internally by SmartAutocomplete when showCheckbox=true
@@ -766,25 +818,61 @@ const TestReporterSelector = observer(
           setExternalValidationState({ status: 'idle', message: '', details: null });
           return { valid: true };
         }
+        const projectNameForCache = String(store.teamProjectName || selectedTeamProject?.text || '').trim();
+        const bugsSignature = buildExternalValidationSignature(bugsFileRef);
+        const l3l4Signature = buildExternalValidationSignature(l3l4FileRef);
+        const cachedBugsDetails = bugsFileRef
+          ? readExternalValidationCache(projectNameForCache, 'bugs', bugsSignature)
+          : undefined;
+        const cachedL3L4Details = l3l4FileRef
+          ? readExternalValidationCache(projectNameForCache, 'l3l4', l3l4Signature)
+          : undefined;
+        const needBugsValidation = !!bugsFileRef && !cachedBugsDetails;
+        const needL3L4Validation = !!l3l4FileRef && !cachedL3L4Details;
+
+        if (!needBugsValidation && !needL3L4Validation) {
+          const fromCache = {
+            valid: true,
+            bugs: cachedBugsDetails,
+            l3l4: cachedL3L4Details,
+          };
+          setExternalValidationState({ status: 'valid', message: '', details: fromCache });
+          return fromCache;
+        }
         try {
           setExternalValidationState({ status: 'validating', message: '', details: null });
           const response = await store.validateMewpExternalIngestionFiles({
-            externalBugsFile: bugsFileRef || null,
-            externalL3L4File: l3l4FileRef || null,
+            externalBugsFile: needBugsValidation ? bugsFileRef || null : null,
+            externalL3L4File: needL3L4Validation ? l3l4FileRef || null : null,
           });
-          if (response?.valid) {
-            setExternalValidationState({ status: 'valid', message: '', details: response });
+          const combined = {
+            valid: true,
+            bugs: cachedBugsDetails || response?.bugs,
+            l3l4: cachedL3L4Details || response?.l3l4,
+          };
+          combined.valid = [combined.bugs, combined.l3l4]
+            .filter(Boolean)
+            .every((item) => item?.valid === true);
+
+          if (combined?.bugs?.valid && bugsSignature) {
+            writeExternalValidationCache(projectNameForCache, 'bugs', bugsSignature, combined.bugs);
+          }
+          if (combined?.l3l4?.valid && l3l4Signature) {
+            writeExternalValidationCache(projectNameForCache, 'l3l4', l3l4Signature, combined.l3l4);
+          }
+          if (combined?.valid) {
+            setExternalValidationState({ status: 'valid', message: '', details: combined });
             if (!silent) {
               toast.success('External source files are valid');
             }
-            return response;
+            return combined;
           }
-          const message = buildExternalValidationMessage(response);
-          setExternalValidationState({ status: 'invalid', message, details: response });
+          const message = buildExternalValidationMessage(combined);
+          setExternalValidationState({ status: 'invalid', message, details: combined });
           if (!silent) {
             toast.error(message, { autoClose: false });
           }
-          return response;
+          return combined;
         } catch (error) {
           const message = String(error?.message || error || '').trim() || 'External source validation failed';
           setExternalValidationState({
@@ -798,7 +886,7 @@ const TestReporterSelector = observer(
           return { valid: false };
         }
       },
-      [isMewpCoverageMode, store]
+      [isMewpCoverageMode, store, selectedTeamProject?.text]
     );
 
     const restoreLatestExternalByType = useCallback(
