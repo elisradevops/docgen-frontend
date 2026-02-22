@@ -148,7 +148,7 @@ const normalizeProjectName = (value) => {
       break;
     }
   }
-  raw = raw.replace(/[\u00a0\u200b\u200c\u200d\uFEFF]/g, ' ');
+  raw = raw.replace(/[\u00A0\u200B-\u200D\uFEFF]/g, ' ');
   raw = raw.replace(/\s+/g, ' ').trim();
   return raw;
 };
