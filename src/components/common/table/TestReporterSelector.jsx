@@ -60,6 +60,7 @@ const getFileDisplayName = (fileItem) =>
     .split('/')
     .pop()
     .trim();
+const isAtpReleasePlanName = (planName) => String(planName || '').trim().toLowerCase() === 'atp release';
 
 const buildExternalValidationMessage = (result) => {
   if (!result || result.valid !== false) return '';
@@ -125,6 +126,10 @@ const TestReporterSelector = observer(
     const [externalBugsFile, setExternalBugsFile] = useState(null);
     const [externalL3L4File, setExternalL3L4File] = useState(null);
     const [externalSourcesBusy, setExternalSourcesBusy] = useState(false);
+    const [externalUploadResetVersion, setExternalUploadResetVersion] = useState({
+      bugs: 0,
+      l3l4: 0,
+    });
     const [externalValidationState, setExternalValidationState] = useState({
       status: 'idle',
       message: '',
@@ -136,6 +141,11 @@ const TestReporterSelector = observer(
     );
     const showMewpViews = isMewpProject;
     const isMewpCoverageMode = showMewpViews && reportMode === 'mewpStandalone';
+    const isAtpReleasePlan = useMemo(
+      () => isMewpCoverageMode && isAtpReleasePlanName(selectedTestPlan?.text),
+      [isMewpCoverageMode, selectedTestPlan?.text]
+    );
+    const isSingleRelSuiteMode = isAtpReleasePlan;
     const availableTestPlans = useMemo(() => store.testPlansList || [], [store.testPlansList]);
     const suiteSource = useMemo(() => store.testSuiteList || [], [store.testSuiteList]);
 
@@ -243,15 +253,19 @@ const TestReporterSelector = observer(
 
     const visibleSuiteOptions = useMemo(() => {
       if (!isMewpCoverageMode) return suiteOptions;
-      return suiteOptions.filter((suite) => isRelSuiteOption(suite));
-    }, [isMewpCoverageMode, suiteOptions, isRelSuiteOption]);
+      const relSuites = suiteOptions.filter((suite) => isRelSuiteOption(suite));
+      if (!isSingleRelSuiteMode) return relSuites;
+      const relSuiteIds = new Set(relSuites.map((suite) => suite.id));
+      return relSuites.filter((suite) => !suite?.parent || !relSuiteIds.has(suite.parent));
+    }, [isMewpCoverageMode, suiteOptions, isRelSuiteOption, isSingleRelSuiteMode]);
 
     const allSuitesSelected = useMemo(() => {
+      if (isSingleRelSuiteMode) return false;
       if (!visibleSuiteOptions.length) return false;
       const selectedKeys = new Set((selectedTestSuites || []).map((suite) => suite?.key));
       if (selectedKeys.size < visibleSuiteOptions.length) return false;
       return visibleSuiteOptions.every((suite) => selectedKeys.has(suite.key));
-    }, [visibleSuiteOptions, selectedTestSuites]);
+    }, [visibleSuiteOptions, selectedTestSuites, isSingleRelSuiteMode]);
 
     const suiteSelectionSummary = useMemo(() => {
       if (!selectedTestPlan?.key) return 'Select a test plan to see suites';
@@ -260,6 +274,12 @@ const TestReporterSelector = observer(
         return isMewpCoverageMode
           ? 'No Rel suites available for this plan'
           : 'No suites available for this plan';
+      }
+      if (isSingleRelSuiteMode) {
+        const selectedCount = Array.isArray(selectedTestSuites) ? selectedTestSuites.length : 0;
+        return selectedCount
+          ? `${selectedCount} of 1 top-level Rel suite selected`
+          : 'Select one top-level Rel suite';
       }
       if (allSuitesSelected) return `All ${visibleSuiteOptions.length} suites selected`;
       const selectedCount = Array.isArray(selectedTestSuites) ? selectedTestSuites.length : 0;
@@ -273,7 +293,23 @@ const TestReporterSelector = observer(
       allSuitesSelected,
       selectedTestSuites,
       isMewpCoverageMode,
+      isSingleRelSuiteMode,
     ]);
+
+    useEffect(() => {
+      if (!Array.isArray(selectedTestSuites)) return;
+      const visibleKeys = new Set(visibleSuiteOptions.map((suite) => suite.key));
+      let nextSelection = selectedTestSuites.filter((suite) => visibleKeys.has(suite?.key));
+      if (isSingleRelSuiteMode && nextSelection.length > 1) {
+        nextSelection = [nextSelection[nextSelection.length - 1]];
+      }
+      const changed =
+        nextSelection.length !== selectedTestSuites.length ||
+        nextSelection.some((suite, index) => suite?.key !== selectedTestSuites[index]?.key);
+      if (changed) {
+        setSelectedTestSuites(nextSelection);
+      }
+    }, [selectedTestSuites, visibleSuiteOptions, isSingleRelSuiteMode]);
 
     const handleTestPlanChanged = useCallback(
       async (newValue) => {
@@ -549,6 +585,9 @@ const TestReporterSelector = observer(
         } else if (externalValidationState.status === 'invalid') {
           isValid = false;
           message = externalValidationState.message || 'External source files are invalid';
+        } else if (externalValidationState.status !== 'valid') {
+          isValid = false;
+          message = 'External source files must pass schema validation before generating';
         }
       }
       try {
@@ -923,6 +962,8 @@ const TestReporterSelector = observer(
         name: 'file',
         maxCount: 1,
         accept: '.csv,.xlsx,.xls',
+        showUploadList: false,
+        fileList: [],
         beforeUpload: async (file) => uploadExternalMewpSource(file, docType, onSuccess),
       }),
       [uploadExternalMewpSource]
@@ -1010,17 +1051,32 @@ const TestReporterSelector = observer(
                   const parent = suiteById.get(option.parent);
                   return parent ? `Parent: ${parent.name}` : 'Top Level';
                 }}
-                label='Test suites (descendants auto-included)'
+                label={
+                  isSingleRelSuiteMode
+                    ? 'Top-level Rel suite (descendants auto-included)'
+                    : 'Test suites (descendants auto-included)'
+                }
                 placeholder='Search suites...'
                 textFieldProps={{
                   size: 'small',
                   helperText: selectedTestPlan?.key
-                    ? 'Descendants are auto-included'
+                    ? isSingleRelSuiteMode
+                      ? 'ATP Release mode: pick one top-level Rel suite'
+                      : 'Descendants are auto-included'
                     : 'Select a test plan first',
                 }}
-                showCheckbox
+                showCheckbox={!isSingleRelSuiteMode}
                 disabled={!selectedTestPlan?.key}
                 onChange={async (_event, newValue) => {
+                  if (isSingleRelSuiteMode) {
+                    const nextSelection = Array.isArray(newValue)
+                      ? newValue.length
+                        ? [newValue[newValue.length - 1]]
+                        : []
+                      : [];
+                    setSelectedTestSuites(nextSelection);
+                    return;
+                  }
                   setSelectedTestSuites(newValue);
                 }}
                 value={selectedTestSuites}
@@ -1048,13 +1104,18 @@ const TestReporterSelector = observer(
                       checked={allSuitesSelected}
                       onChange={handleSelectAllSuitesToggle}
                       disabled={
+                        isSingleRelSuiteMode ||
                         !selectedTestPlan?.key ||
                         store.loadingState?.testSuiteListLoading ||
                         visibleSuiteOptions.length === 0
                       }
                     />
                   }
-                  label={<Typography variant='body2'>Select all suites</Typography>}
+                  label={
+                    <Typography variant='body2'>
+                      {isSingleRelSuiteMode ? 'Single suite mode' : 'Select all suites'}
+                    </Typography>
+                  }
                 />
                 <Typography
                   variant='caption'
@@ -1134,6 +1195,122 @@ const TestReporterSelector = observer(
         </Stack>
       </SectionCard>
     );
+
+    const renderExternalSourcePanel = ({
+      docType,
+      title,
+      label,
+      uploadButtonLabel,
+      fileItem,
+      setFileItem,
+    }) => {
+      const tableDetails = resolveExternalTableValidationDetails(externalValidationState, docType);
+      const missingColumns = Array.isArray(tableDetails?.missingRequiredColumns)
+        ? tableDetails.missingRequiredColumns
+        : [];
+      const hasFile = !!fileItem;
+      const isValid = tableDetails?.valid === true;
+      const isInvalid = tableDetails?.valid === false;
+      const isValidating = externalValidationState.status === 'validating' && hasFile;
+      const statusLabel = !hasFile
+        ? 'No file provided'
+        : isValidating
+        ? 'Validation in progress...'
+        : isValid
+        ? 'Valid format'
+        : isInvalid
+        ? 'Invalid format'
+        : 'Awaiting validation';
+      const statusColor = !hasFile
+        ? 'text.secondary'
+        : isValidating
+        ? 'warning.main'
+        : isValid
+        ? 'success.main'
+        : isInvalid
+        ? 'error.main'
+        : 'text.secondary';
+
+      return (
+        <Stack
+          spacing={1.1}
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1.5,
+            p: 1.25,
+            backgroundColor: 'background.paper',
+            height: '100%',
+            minHeight: 220,
+          }}
+        >
+          <Typography variant='subtitle2'>{title}</Typography>
+          <Typography variant='caption' color={statusColor}>
+            {statusLabel}
+          </Typography>
+          {hasFile && tableDetails ? (
+            <Typography variant='caption' color='text.secondary'>
+              Header row: {tableDetails.headerRow || 'n/a'} | Matched columns:{' '}
+              {Number(tableDetails.matchedRequiredColumns || 0)}/
+              {Number(tableDetails.totalRequiredColumns || 0)} | Data rows:{' '}
+              {Number(tableDetails.rowCount || 0)}
+            </Typography>
+          ) : null}
+          {missingColumns.length > 0 ? (
+            <Typography variant='caption' color='error.main'>
+              Missing columns: {missingColumns.join(', ')}
+            </Typography>
+          ) : null}
+          {tableDetails?.message ? (
+            <Typography variant='caption' color={isInvalid ? 'error.main' : 'text.secondary'}>
+              {tableDetails.message}
+            </Typography>
+          ) : null}
+          <Stack spacing={1}>
+            <Typography variant='body2'>{label}</Typography>
+            <Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap' }}>
+              <Upload
+                key={`${docType}-${externalUploadResetVersion[docType] || 0}`}
+                {...createExternalUploadProps(docType, (uploadedFileItem) => setFileItem(uploadedFileItem))}
+              >
+                <Button icon={<UploadOutlined />} loading={externalSourcesBusy}>
+                  {uploadButtonLabel}
+                </Button>
+              </Upload>
+              <Button
+                size='small'
+                icon={<ReloadOutlined />}
+                onClick={() => restoreLatestExternalByType(docType)}
+                loading={externalSourcesBusy}
+              >
+                Recover Mine
+              </Button>
+              <Button
+                size='small'
+                danger
+                icon={<DeleteOutlined />}
+                disabled={!fileItem}
+                loading={externalSourcesBusy}
+                onClick={() =>
+                  deleteExternalMewpSource(docType, fileItem, () => {
+                    setFileItem(null);
+                    setExternalUploadResetVersion((prev) => ({
+                      ...prev,
+                      [docType]: Number(prev?.[docType] || 0) + 1,
+                    }));
+                  })
+                }
+              >
+                Delete
+              </Button>
+            </Stack>
+            <Typography variant='caption' color='text.secondary'>
+              {getFileDisplayName(fileItem) || 'No file uploaded'}
+            </Typography>
+          </Stack>
+        </Stack>
+      );
+    };
 
     const modeSpecificSections = !isMewpCoverageMode ? (
       <>
@@ -1494,289 +1671,42 @@ const TestReporterSelector = observer(
               label='Merge duplicate L2 cells (layout hint)'
             />
             {externalValidationState.status === 'validating' ? (
-              <Typography
-                variant='caption'
-                color='warning.main'
-              >
+              <Typography variant='caption' color='warning.main'>
                 Validating external source files...
               </Typography>
             ) : null}
             {externalValidationState.status === 'invalid' ? (
-              <Typography
-                variant='caption'
-                color='error.main'
-              >
+              <Typography variant='caption' color='error.main'>
                 {externalValidationState.message}
               </Typography>
             ) : null}
             {externalValidationState.status === 'valid' ? (
-              <Typography
-                variant='caption'
-                color='success.main'
-              >
+              <Typography variant='caption' color='success.main'>
                 External source files passed schema validation.
               </Typography>
             ) : null}
-            {(() => {
-              const tableType = 'bugs';
-              const title = 'Bugs table validation';
-              const hasFile = !!externalBugsFile;
-              const tableDetails = resolveExternalTableValidationDetails(externalValidationState, tableType);
-              const missingColumns = Array.isArray(tableDetails?.missingRequiredColumns)
-                ? tableDetails.missingRequiredColumns
-                : [];
-              const isValid = tableDetails?.valid === true;
-              const isInvalid = tableDetails?.valid === false;
-              const isValidating = externalValidationState.status === 'validating' && hasFile;
-              const captionColor = isValidating
-                ? 'warning.main'
-                : isValid
-                ? 'success.main'
-                : isInvalid
-                ? 'error.main'
-                : 'text.secondary';
-
-              return (
-                <Stack
-                  spacing={0.25}
-                  sx={{
-                    px: 1.25,
-                    py: 0.75,
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    backgroundColor: 'background.paper',
-                  }}
-                >
-                  <Typography variant='caption' sx={{ fontWeight: 600 }}>
-                    {title}
-                  </Typography>
-                  {!hasFile ? (
-                    <Typography variant='caption' color='text.secondary'>
-                      No file provided.
-                    </Typography>
-                  ) : isValidating ? (
-                    <Typography variant='caption' color='warning.main'>
-                      Validation in progress...
-                    </Typography>
-                  ) : tableDetails ? (
-                    <>
-                      <Typography variant='caption' color={captionColor}>
-                        {isValid ? 'Valid format' : 'Invalid format'}
-                      </Typography>
-                      <Typography variant='caption' color='text.secondary'>
-                        Header row: {tableDetails.headerRow || 'n/a'} | Matched columns:{' '}
-                        {Number(tableDetails.matchedRequiredColumns || 0)}/
-                        {Number(tableDetails.totalRequiredColumns || 0)} | Data rows:{' '}
-                        {Number(tableDetails.rowCount || 0)}
-                      </Typography>
-                      {missingColumns.length > 0 ? (
-                        <Typography variant='caption' color='error.main'>
-                          Missing columns: {missingColumns.join(', ')}
-                        </Typography>
-                      ) : null}
-                      {tableDetails.message ? (
-                        <Typography variant='caption' color={isInvalid ? 'error.main' : 'text.secondary'}>
-                          {tableDetails.message}
-                        </Typography>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Typography variant='caption' color='text.secondary'>
-                      Validation details are not available yet.
-                    </Typography>
-                  )}
-                </Stack>
-              );
-            })()}
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={1}
-              alignItems={{ xs: 'stretch', md: 'center' }}
-            >
-              <Typography
-                variant='body2'
-                sx={{ minWidth: { md: 180 } }}
-              >
-                External Bugs table (CSV/XLSX)
-              </Typography>
-              <Upload
-                {...createExternalUploadProps(
-                  'bugs',
-                  (fileItem) => setExternalBugsFile(fileItem),
-                )}
-              >
-                <Button
-                  icon={<UploadOutlined />}
-                  loading={externalSourcesBusy}
-                >
-                  Upload Bugs File
-                </Button>
-              </Upload>
-              <Typography
-                variant='caption'
-                color='text.secondary'
-              >
-                {getFileDisplayName(externalBugsFile) || 'No file uploaded'}
-              </Typography>
-              <Stack
-                direction='row'
-                spacing={1}
-              >
-                <Button
-                  size='small'
-                  icon={<ReloadOutlined />}
-                  onClick={() => restoreLatestExternalByType('bugs')}
-                  loading={externalSourcesBusy}
-                >
-                  Recover Mine
-                </Button>
-                <Button
-                  size='small'
-                  danger
-                  icon={<DeleteOutlined />}
-                  disabled={!externalBugsFile}
-                  loading={externalSourcesBusy}
-                  onClick={() =>
-                    deleteExternalMewpSource('bugs', externalBugsFile, () =>
-                      setExternalBugsFile(null)
-                    )
-                  }
-                >
-                  Delete
-                </Button>
-              </Stack>
-            </Stack>
-            {(() => {
-              const tableType = 'l3l4';
-              const title = 'L3/L4 table validation';
-              const hasFile = !!externalL3L4File;
-              const tableDetails = resolveExternalTableValidationDetails(externalValidationState, tableType);
-              const missingColumns = Array.isArray(tableDetails?.missingRequiredColumns)
-                ? tableDetails.missingRequiredColumns
-                : [];
-              const isValid = tableDetails?.valid === true;
-              const isInvalid = tableDetails?.valid === false;
-              const isValidating = externalValidationState.status === 'validating' && hasFile;
-              const captionColor = isValidating
-                ? 'warning.main'
-                : isValid
-                ? 'success.main'
-                : isInvalid
-                ? 'error.main'
-                : 'text.secondary';
-
-              return (
-                <Stack
-                  spacing={0.25}
-                  sx={{
-                    px: 1.25,
-                    py: 0.75,
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    backgroundColor: 'background.paper',
-                  }}
-                >
-                  <Typography variant='caption' sx={{ fontWeight: 600 }}>
-                    {title}
-                  </Typography>
-                  {!hasFile ? (
-                    <Typography variant='caption' color='text.secondary'>
-                      No file provided.
-                    </Typography>
-                  ) : isValidating ? (
-                    <Typography variant='caption' color='warning.main'>
-                      Validation in progress...
-                    </Typography>
-                  ) : tableDetails ? (
-                    <>
-                      <Typography variant='caption' color={captionColor}>
-                        {isValid ? 'Valid format' : 'Invalid format'}
-                      </Typography>
-                      <Typography variant='caption' color='text.secondary'>
-                        Header row: {tableDetails.headerRow || 'n/a'} | Matched columns:{' '}
-                        {Number(tableDetails.matchedRequiredColumns || 0)}/
-                        {Number(tableDetails.totalRequiredColumns || 0)} | Data rows:{' '}
-                        {Number(tableDetails.rowCount || 0)}
-                      </Typography>
-                      {missingColumns.length > 0 ? (
-                        <Typography variant='caption' color='error.main'>
-                          Missing columns: {missingColumns.join(', ')}
-                        </Typography>
-                      ) : null}
-                      {tableDetails.message ? (
-                        <Typography variant='caption' color={isInvalid ? 'error.main' : 'text.secondary'}>
-                          {tableDetails.message}
-                        </Typography>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Typography variant='caption' color='text.secondary'>
-                      Validation details are not available yet.
-                    </Typography>
-                  )}
-                </Stack>
-              );
-            })()}
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={1}
-              alignItems={{ xs: 'stretch', md: 'center' }}
-            >
-              <Typography
-                variant='body2'
-                sx={{ minWidth: { md: 180 } }}
-              >
-                External L3/L4 table (CSV/XLSX)
-              </Typography>
-              <Upload
-                {...createExternalUploadProps(
-                  'l3l4',
-                  (fileItem) => setExternalL3L4File(fileItem),
-                )}
-              >
-                <Button
-                  icon={<UploadOutlined />}
-                  loading={externalSourcesBusy}
-                >
-                  Upload L3/L4 File
-                </Button>
-              </Upload>
-              <Typography
-                variant='caption'
-                color='text.secondary'
-              >
-                {getFileDisplayName(externalL3L4File) || 'No file uploaded'}
-              </Typography>
-              <Stack
-                direction='row'
-                spacing={1}
-              >
-                <Button
-                  size='small'
-                  icon={<ReloadOutlined />}
-                  onClick={() => restoreLatestExternalByType('l3l4')}
-                  loading={externalSourcesBusy}
-                >
-                  Recover Mine
-                </Button>
-                <Button
-                  size='small'
-                  danger
-                  icon={<DeleteOutlined />}
-                  disabled={!externalL3L4File}
-                  loading={externalSourcesBusy}
-                  onClick={() =>
-                    deleteExternalMewpSource('l3l4', externalL3L4File, () =>
-                      setExternalL3L4File(null)
-                    )
-                  }
-                >
-                  Delete
-                </Button>
-              </Stack>
-            </Stack>
+            <Grid container spacing={1.25} alignItems='stretch'>
+              <Grid size={{ xs: 12, md: 6 }}>
+                {renderExternalSourcePanel({
+                  docType: 'bugs',
+                  title: 'Bugs table validation',
+                  label: 'External Bugs table (CSV/XLSX)',
+                  uploadButtonLabel: 'Upload Bugs File',
+                  fileItem: externalBugsFile,
+                  setFileItem: setExternalBugsFile,
+                })}
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                {renderExternalSourcePanel({
+                  docType: 'l3l4',
+                  title: 'L3/L4 table validation',
+                  label: 'External L3/L4 table (CSV/XLSX)',
+                  uploadButtonLabel: 'Upload L3/L4 File',
+                  fileItem: externalL3L4File,
+                  setFileItem: setExternalL3L4File,
+                })}
+              </Grid>
+            </Grid>
           </Stack>
         </SectionCard>
       </>
