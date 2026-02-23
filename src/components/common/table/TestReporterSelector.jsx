@@ -174,7 +174,7 @@ const TestReporterSelector = observer(
     const [reportMode, setReportMode] = useState('regular');
     const [includeMewpL2Coverage, setIncludeMewpL2Coverage] = useState(false);
     const [includeInternalValidationReport, setIncludeInternalValidationReport] = useState(false);
-    const [mergeDuplicateL2Cells, setMergeDuplicateL2Cells] = useState(false);
+    const [mergeDuplicateRequirementCells, setMergeDuplicateRequirementCells] = useState(false);
     const [externalBugsFile, setExternalBugsFile] = useState(null);
     const [externalL3L4File, setExternalL3L4File] = useState(null);
     const [externalSourcesBusy, setExternalSourcesBusy] = useState(false);
@@ -248,7 +248,7 @@ const TestReporterSelector = observer(
     useEffect(() => {
       if (!showMewpViews) {
         setIncludeInternalValidationReport(false);
-        setMergeDuplicateL2Cells(false);
+        setMergeDuplicateRequirementCells(false);
         setReportMode('regular');
       }
     }, [showMewpViews]);
@@ -465,7 +465,7 @@ const TestReporterSelector = observer(
       const savedIncludeAllHistory = dataToSave?.includeAllHistory;
       const savedIncludeMewpL2Coverage = dataToSave?.includeMewpL2Coverage;
       const savedIncludeInternalValidationReport = dataToSave?.includeInternalValidationReport;
-      const savedMergeDuplicateL2Cells = dataToSave?.mergeDuplicateL2Cells;
+      const savedMergeDuplicateRequirementCells = dataToSave?.mergeDuplicateRequirementCells;
       const savedReportMode = dataToSave?.reportMode;
       const savedExternalBugsFile = dataToSave?.externalBugsFile;
       const savedExternalL3L4File = dataToSave?.externalL3L4File;
@@ -499,8 +499,8 @@ const TestReporterSelector = observer(
       if (savedIncludeInternalValidationReport !== undefined) {
         setIncludeInternalValidationReport(!!savedIncludeInternalValidationReport);
       }
-      if (savedMergeDuplicateL2Cells !== undefined) {
-        setMergeDuplicateL2Cells(!!savedMergeDuplicateL2Cells);
+      if (savedMergeDuplicateRequirementCells !== undefined) {
+        setMergeDuplicateRequirementCells(!!savedMergeDuplicateRequirementCells);
       }
       if (savedReportMode && showMewpViews && ['regular', 'mewpStandalone'].includes(savedReportMode)) {
         setReportMode(savedReportMode);
@@ -595,7 +595,7 @@ const TestReporterSelector = observer(
       setReportMode('regular');
       setIncludeMewpL2Coverage(false);
       setIncludeInternalValidationReport(false);
-      setMergeDuplicateL2Cells(false);
+      setMergeDuplicateRequirementCells(false);
       setExternalBugsFile(null);
       setExternalL3L4File(null);
       savedDataRef.current = null;
@@ -690,7 +690,7 @@ const TestReporterSelector = observer(
             : [],
           nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
           includeInternalValidationReport: showMewpViews ? includeInternalValidationReport : false,
-          mergeDuplicateL2Cells: showMewpViews ? mergeDuplicateL2Cells : false,
+          mergeDuplicateRequirementCells: showMewpViews ? mergeDuplicateRequirementCells : false,
           reportMode,
         };
 
@@ -759,7 +759,7 @@ const TestReporterSelector = observer(
       includeAllHistory,
       includeMewpL2Coverage,
       includeInternalValidationReport,
-      mergeDuplicateL2Cells,
+      mergeDuplicateRequirementCells,
       reportMode,
       isMewpProject,
       showMewpViews,
@@ -1752,11 +1752,11 @@ const TestReporterSelector = observer(
               control={
                 <Checkbox
                   size='small'
-                  checked={mergeDuplicateL2Cells}
-                  onChange={(_event, checked) => setMergeDuplicateL2Cells(checked)}
+                  checked={mergeDuplicateRequirementCells}
+                  onChange={(_event, checked) => setMergeDuplicateRequirementCells(checked)}
                 />
               }
-              label='Merge duplicate L2 cells (layout hint)'
+              label='Merge duplicate requirement cells (L2/L3 layout hint)'
             />
             {externalValidationState.status === 'validating' ? (
               <Typography variant='caption' color='warning.main'>
