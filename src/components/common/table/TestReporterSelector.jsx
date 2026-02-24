@@ -55,6 +55,15 @@ const isMewpProjectName = (selectedTeamProject) => {
 
 const REL_PATTERN = /(?:^|[^a-z0-9])rel\s*([0-9]+)/i;
 const hasRelNumber = (value) => REL_PATTERN.test(String(value || ''));
+const isUiDebugModeEnabled = () => {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = params.get('debug');
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
+};
 const getFileDisplayName = (fileItem) =>
   String(fileItem?.name || fileItem?.objectName || fileItem?.text || '')
     .split('/')
@@ -187,6 +196,7 @@ const TestReporterSelector = observer(
       message: '',
       details: null,
     });
+    const uiDebugMode = useMemo(() => isUiDebugModeEnabled(), []);
     const isMewpProject = useMemo(
       () => isMewpProjectName(selectedTeamProject),
       [selectedTeamProject]
@@ -692,6 +702,7 @@ const TestReporterSelector = observer(
           includeInternalValidationReport: showMewpViews ? includeInternalValidationReport : false,
           mergeDuplicateRequirementCells: showMewpViews ? mergeDuplicateRequirementCells : false,
           reportMode,
+          debugMode: uiDebugMode,
         };
 
         if (isMewpCoverageMode) {
@@ -702,7 +713,6 @@ const TestReporterSelector = observer(
               skin: 'testReporter',
               data: {
                 ...sharedData,
-                useRelFallback: true,
                 linkedQueryRequest,
                 externalBugsFile,
                 externalL3L4File,
@@ -764,6 +774,7 @@ const TestReporterSelector = observer(
       isMewpProject,
       showMewpViews,
       isMewpCoverageMode,
+      uiDebugMode,
       externalBugsFile,
       externalL3L4File,
       isRestoring,
