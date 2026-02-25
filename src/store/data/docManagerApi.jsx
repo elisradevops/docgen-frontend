@@ -280,7 +280,12 @@ export const uploadFileToStorage = async (formData) => {
       logger.error(
         `Error response while uploading template to storage: ${JSON.stringify(err.response.data)}`
       );
-      throw new Error(err.response.data.error);
+      throw new Error(
+        err.response.data?.message ||
+          err.response.data?.error ||
+          err.response.data?.code ||
+          'Upload failed'
+      );
     } else {
       // Something else happened during the request setup
       logger.error(`Error while uploading template to storage: ${err.message}`);
@@ -306,6 +311,27 @@ export const deleteFile = async (file, projectName, bucketName) => {
       logger.error(`Error while deleting file: ${err.message}`);
       throw new Error(err.message);
     }
+  }
+};
+
+export const validateMewpExternalFiles = async (payload) => {
+  try {
+    const res = await axios.post(`${C.jsonDocument_url}/jsonDocument/validate-mewp-external-files`, payload, {
+      headers: baseHeaders,
+      timeout: 45000,
+    });
+    return res.data;
+  } catch (err) {
+    if (err.response) {
+      const data = err.response.data || {};
+      const fallbackMessage = [data?.bugs?.message, data?.l3l4?.message].filter(Boolean).join(' | ');
+      const wrapped = new Error(data.message || fallbackMessage || 'MEWP external validation failed');
+      wrapped.code = data.code;
+      // Keep full payload so UI can render per-table validation details even on 422.
+      wrapped.details = data?.details || data;
+      throw wrapped;
+    }
+    throw new Error(err.message);
   }
 };
 

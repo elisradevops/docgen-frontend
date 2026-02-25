@@ -3,6 +3,47 @@ import { deriveNamesFromUrl, normalizeCollectionUri } from './utils/adoUrlUtils'
 let sdkPromise;
 let initPromise;
 
+const hasAnySearchParam = (params, names) => names.some((name) => params.has(name));
+
+const isAzureDevOpsHost = (value) => {
+  try {
+    const url = new URL(String(value || ''));
+    const host = (url.hostname || '').toLowerCase();
+    return host === 'dev.azure.com' || host.endsWith('.visualstudio.com');
+  } catch {
+    return false;
+  }
+};
+
+const hasAdoHostSignals = () => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+
+  const params = new URLSearchParams(window.location.search || '');
+  if (
+    hasAnySearchParam(params, [
+      'hostorigin',
+      'hostOrigin',
+      'extensionId',
+      'instanceId',
+      'ms.vss-web.extension-data',
+    ])
+  ) {
+    return true;
+  }
+
+  const href = String(window.location.href || '').toLowerCase();
+  if (href.includes('/_apps/hub/') || href.includes('/_apis/public/gallery/')) {
+    return true;
+  }
+
+  // Azure DevOps extensions run in an iframe and referrer is usually the host page.
+  if (window.self !== window.top && isAzureDevOpsHost(document.referrer || '')) {
+    return true;
+  }
+
+  return false;
+};
+
 const shouldDebugLogs = () => {
   try {
     const params = new URLSearchParams(window.location.search || '');
@@ -53,12 +94,31 @@ export const loadAdoSdk = async () => {
 export const initAdoContext = async () => {
   if (initPromise) return initPromise;
   initPromise = (async () => {
+    if (!hasAdoHostSignals()) {
+      return { isAdo: false };
+    }
+
     const SDK = await loadAdoSdk();
     if (!SDK || typeof SDK.init !== 'function') {
       return { isAdo: false };
     }
 
-    SDK.init({ loaded: false, applyTheme: true });
+    let initialized = true;
+    try {
+      const initResult = SDK.init({ loaded: false, applyTheme: true });
+      if (initResult && typeof initResult.then === 'function') {
+        initialized = await Promise.race([
+          initResult.then(() => true).catch(() => false),
+          new Promise((resolve) => setTimeout(() => resolve(false), 1500)),
+        ]);
+      }
+    } catch {
+      initialized = false;
+    }
+    if (!initialized) {
+      return { isAdo: false };
+    }
+
     let ready = true;
     if (typeof SDK.ready === 'function') {
       ready = await Promise.race([
