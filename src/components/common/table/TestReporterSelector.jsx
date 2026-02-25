@@ -111,6 +111,14 @@ const buildExternalValidationCacheKey = (projectName, tableType, signature) => {
   return `${MEWP_EXTERNAL_VALIDATION_CACHE_PREFIX}:${normalizedProject}:${tableType}:${signature}`;
 };
 
+const isValidationRequestContextReady = (store, selectedTeamProject) => {
+  const request = store?.requestJson || {};
+  const orgUrl = String(request?.tfsCollectionUri || '').trim();
+  const token = String(request?.PAT || '').trim();
+  const projectName = String(request?.teamProjectName || selectedTeamProject?.text || '').trim();
+  return !!orgUrl && !!token && !!projectName;
+};
+
 const readExternalValidationCache = (projectName, tableType, signature) => {
   try {
     if (!signature) return null;
@@ -182,7 +190,6 @@ const TestReporterSelector = observer(
     const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
     const [includeAllHistory, setIncludeAllHistory] = useState(false);
     const [reportMode, setReportMode] = useState('regular');
-    const [includeMewpL2Coverage, setIncludeMewpL2Coverage] = useState(false);
     const [includeInternalValidationReport, setIncludeInternalValidationReport] = useState(false);
     const [mergeDuplicateRequirementCells, setMergeDuplicateRequirementCells] = useState(false);
     const [externalBugsFile, setExternalBugsFile] = useState(null);
@@ -202,6 +209,10 @@ const TestReporterSelector = observer(
       [selectedTeamProject]
     );
     const debugModeEnabled = useMemo(() => isUiDebugModeEnabled(), []);
+    const validationContextReady = useMemo(
+      () => isValidationRequestContextReady(store, selectedTeamProject),
+      [store, selectedTeamProject]
+    );
     const showMewpViews = isMewpProject;
     const isMewpCoverageMode = showMewpViews && reportMode === 'mewpStandalone';
     const isAtpReleasePlan = useMemo(
@@ -251,10 +262,6 @@ const TestReporterSelector = observer(
     const [queryTrees, setQueryTrees] = useState({
       testAssociatedTree: [],
     });
-
-    useEffect(() => {
-      setIncludeMewpL2Coverage(isMewpProject);
-    }, [isMewpProject]);
 
     useEffect(() => {
       if (!showMewpViews) {
@@ -474,7 +481,6 @@ const TestReporterSelector = observer(
       const savedRunFilterMode = dataToSave?.runFilterMode;
       const savedRunStepFilterMode = dataToSave?.runStepFilterMode;
       const savedIncludeAllHistory = dataToSave?.includeAllHistory;
-      const savedIncludeMewpL2Coverage = dataToSave?.includeMewpL2Coverage;
       const savedIncludeInternalValidationReport = dataToSave?.includeInternalValidationReport;
       const savedMergeDuplicateRequirementCells = dataToSave?.mergeDuplicateRequirementCells;
       const savedReportMode = dataToSave?.reportMode;
@@ -503,9 +509,6 @@ const TestReporterSelector = observer(
       }
       if (savedIncludeAllHistory !== undefined) {
         setIncludeAllHistory(!!savedIncludeAllHistory);
-      }
-      if (savedIncludeMewpL2Coverage !== undefined) {
-        setIncludeMewpL2Coverage(!!savedIncludeMewpL2Coverage);
       }
       if (savedIncludeInternalValidationReport !== undefined) {
         setIncludeInternalValidationReport(!!savedIncludeInternalValidationReport);
@@ -604,7 +607,6 @@ const TestReporterSelector = observer(
       setLinkedQueryRequest(defaultSelectedQueries);
       setIncludeAllHistory(false);
       setReportMode('regular');
-      setIncludeMewpL2Coverage(false);
       setIncludeInternalValidationReport(false);
       setMergeDuplicateRequirementCells(false);
       setExternalBugsFile(null);
@@ -700,8 +702,10 @@ const TestReporterSelector = observer(
                 .filter(Boolean)
             : [],
           nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
-          includeInternalValidationReport: showMewpViews ? includeInternalValidationReport : false,
-          mergeDuplicateRequirementCells: showMewpViews ? mergeDuplicateRequirementCells : false,
+          includeInternalValidationReport:
+            showMewpViews && reportMode === 'mewpStandalone' ? includeInternalValidationReport : false,
+          mergeDuplicateRequirementCells:
+            showMewpViews && reportMode === 'mewpStandalone' ? mergeDuplicateRequirementCells : false,
           debugMode: debugModeEnabled,
           reportMode,
         };
@@ -742,7 +746,7 @@ const TestReporterSelector = observer(
               selectedFields: selectedFields,
               linkedQueryRequest: linkedQueryRequest,
               includeAllHistory,
-              includeMewpL2Coverage: showMewpViews ? includeMewpL2Coverage : false,
+              includeMewpL2Coverage: false,
             },
             isExcelSpreadsheet: true,
           },
@@ -768,11 +772,9 @@ const TestReporterSelector = observer(
       errorFilterMode,
       linkedQueryRequest,
       includeAllHistory,
-      includeMewpL2Coverage,
       includeInternalValidationReport,
       mergeDuplicateRequirementCells,
       reportMode,
-      isMewpProject,
       showMewpViews,
       debugModeEnabled,
       isMewpCoverageMode,
@@ -829,6 +831,14 @@ const TestReporterSelector = observer(
         if (!isMewpCoverageMode || !hasSources) {
           setExternalValidationState({ status: 'idle', message: '', details: null });
           return { valid: true };
+        }
+        if (!validationContextReady) {
+          setExternalValidationState({
+            status: 'validating',
+            message: 'Waiting for project/session context before validating external source files...',
+            details: null,
+          });
+          return { valid: false, deferred: true };
         }
         const projectNameForCache = String(store.teamProjectName || selectedTeamProject?.text || '').trim();
         const bugsSignature = buildExternalValidationSignature(bugsFileRef);
@@ -898,7 +908,7 @@ const TestReporterSelector = observer(
           return { valid: false };
         }
       },
-      [isMewpCoverageMode, store, selectedTeamProject?.text]
+      [isMewpCoverageMode, validationContextReady, store, selectedTeamProject?.text]
     );
 
     const restoreLatestExternalByType = useCallback(
@@ -1182,49 +1192,58 @@ const TestReporterSelector = observer(
                 value={selectedTestSuites}
               />
             </Grid>
-            <Grid
-              size={{ xs: 12, md: 2 }}
-              sx={{
-                minWidth: 0,
-                display: 'flex',
-                alignItems: 'flex-start',
-                pt: { xs: 0, md: 1.5 },
-              }}
-            >
-              <Stack
-                spacing={0.25}
-                alignItems='flex-start'
-                sx={{ width: '100%' }}
+            {!isSingleRelSuiteMode ? (
+              <Grid
+                size={{ xs: 12, md: 2 }}
+                sx={{
+                  minWidth: 0,
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  pt: { xs: 0, md: 1.5 },
+                }}
               >
-                <FormControlLabel
-                  sx={{ m: 0 }}
-                  control={
-                    <Switch
-                      size='small'
-                      checked={allSuitesSelected}
-                      onChange={handleSelectAllSuitesToggle}
-                      disabled={
-                        isSingleRelSuiteMode ||
-                        !selectedTestPlan?.key ||
-                        store.loadingState?.testSuiteListLoading ||
-                        visibleSuiteOptions.length === 0
-                      }
-                    />
-                  }
-                  label={
-                    <Typography variant='body2'>
-                      {isSingleRelSuiteMode ? 'Single suite mode' : 'Select all suites'}
-                    </Typography>
-                  }
-                />
+                <Stack
+                  spacing={0.25}
+                  alignItems='flex-start'
+                  sx={{ width: '100%' }}
+                >
+                  <FormControlLabel
+                    sx={{ m: 0 }}
+                    control={
+                      <Switch
+                        size='small'
+                        checked={allSuitesSelected}
+                        onChange={handleSelectAllSuitesToggle}
+                        disabled={
+                          !selectedTestPlan?.key ||
+                          store.loadingState?.testSuiteListLoading ||
+                          visibleSuiteOptions.length === 0
+                        }
+                      />
+                    }
+                    label={<Typography variant='body2'>Select all suites</Typography>}
+                  />
+                  <Typography
+                    variant='caption'
+                    color='text.secondary'
+                  >
+                    {suiteSelectionSummary}
+                  </Typography>
+                </Stack>
+              </Grid>
+            ) : (
+              <Grid
+                size={{ xs: 12 }}
+                sx={{ minWidth: 0 }}
+              >
                 <Typography
                   variant='caption'
                   color='text.secondary'
                 >
                   {suiteSelectionSummary}
                 </Typography>
-              </Stack>
-            </Grid>
+              </Grid>
+            )}
           </Grid>
         </Stack>
       </SectionCard>
@@ -1690,45 +1709,6 @@ const TestReporterSelector = observer(
             />
           </Stack>
         </SectionCard>
-        {showMewpViews ? (
-          <SectionCard
-            title='L2 Coverage'
-            description='MEWP-only: adds a parallel L2 coverage worksheet using the same plan and suites.'
-          >
-            <Stack spacing={1}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size='small'
-                    checked={includeMewpL2Coverage}
-                    onChange={(_event, checked) => {
-                      setIncludeMewpL2Coverage(checked);
-                    }}
-                  />
-                }
-                label='Include L2 coverage sheet'
-              />
-              <Typography
-                variant='caption'
-                color='text.secondary'
-              >
-                Regular Test Reporter output remains unchanged; this appends an additional sheet.
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size='small'
-                    checked={includeInternalValidationReport}
-                    onChange={(_event, checked) => {
-                      setIncludeInternalValidationReport(checked);
-                    }}
-                  />
-                }
-                label='Generate standalone Internal Validation report (ZIP package)'
-              />
-            </Stack>
-          </SectionCard>
-        ) : null}
       </>
     ) : (
       <>
