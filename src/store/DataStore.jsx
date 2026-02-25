@@ -2213,6 +2213,25 @@ class DocGenDataStore {
     return false;
   }
 
+  normalizeMewpExternalFileRef(fileItem) {
+    if (!fileItem) return null;
+    const objectName = String(fileItem?.objectName || fileItem?.text || fileItem?.name || '').trim();
+    if (!objectName) return null;
+    const displayName = objectName.split('/').pop() || objectName;
+    return {
+      ...fileItem,
+      // Keep canonical object path for backend loading/validation.
+      objectName,
+      text: objectName,
+      // Keep UI display stable.
+      name: String(fileItem?.name || '').includes('/') ? displayName : String(fileItem?.name || displayName),
+      bucketName: String(fileItem?.bucketName || this.getMewpExternalIngestionBucketName()).trim(),
+      sourceType: 'mewpExternalIngestion',
+      // Avoid relying on bucket-list URL shape (can be prefixed/duplicated on recursive listings).
+      url: '',
+    };
+  }
+
   async fetchMewpExternalIngestionFiles(docType, options = {}) {
     const normalizedDocType = String(docType || '')
       .trim()
@@ -2233,8 +2252,10 @@ class DocGenDataStore {
     );
 
     const normalized = (files || [])
+      .map((item) => this.normalizeMewpExternalFileRef(item))
+      .filter((item) => !!item)
       .filter((item) => {
-        const objectName = String(item?.name || item?.text || '').toLowerCase();
+        const objectName = String(item?.objectName || item?.text || item?.name || '').toLowerCase();
         if (!objectName.includes(`/${MEWP_EXTERNAL_INGESTION_PREFIX}/${normalizedDocType}/`)) return false;
         return ['.xlsx', '.xls', '.csv'].some((ext) => objectName.endsWith(ext));
       })
@@ -2278,6 +2299,8 @@ class DocGenDataStore {
 
   async validateMewpExternalIngestionFiles(options = {}) {
     const request = this.requestJson || {};
+    const externalBugsFile = this.normalizeMewpExternalFileRef(options?.externalBugsFile || null);
+    const externalL3L4File = this.normalizeMewpExternalFileRef(options?.externalL3L4File || null);
     const payload = {
       tfsCollectionUri: request.tfsCollectionUri,
       PAT: request.PAT,
@@ -2285,8 +2308,8 @@ class DocGenDataStore {
       templateFile: request.templateFile || '',
       uploadProperties: request.uploadProperties,
       formattingSettings: request.formattingSettings,
-      externalBugsFile: options?.externalBugsFile || null,
-      externalL3L4File: options?.externalL3L4File || null,
+      externalBugsFile,
+      externalL3L4File,
     };
     return await validateMewpExternalFiles(payload);
   }

@@ -73,6 +73,8 @@ const getFileDisplayName = (fileItem) =>
 const isAtpReleasePlanName = (planName) => String(planName || '').trim().toLowerCase() === 'atp release';
 const MEWP_EXTERNAL_VALIDATION_CACHE_PREFIX = 'mewpExternalValidationCache';
 const EXTERNAL_VALIDATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const EXTERNAL_SOURCE_TYPES = Object.freeze(['bugs', 'l3l4']);
+const EXTERNAL_ACTION_TYPES = Object.freeze(['upload', 'recover', 'delete']);
 
 const buildExternalValidationMessage = (result) => {
   if (!result || result.valid !== false) return '';
@@ -84,6 +86,19 @@ const buildExternalValidationMessage = (result) => {
   if (parts.length > 0) return parts.join(' | ');
   return 'External source files are invalid';
 };
+
+const normalizeExternalSourceType = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return EXTERNAL_SOURCE_TYPES.includes(normalized) ? normalized : null;
+};
+
+const isExternalActionType = (action) => EXTERNAL_ACTION_TYPES.includes(action);
+
+const createExternalActionLoadingState = () =>
+  EXTERNAL_SOURCE_TYPES.reduce((acc, sourceType) => {
+    acc[sourceType] = { upload: false, recover: false, delete: false };
+    return acc;
+  }, {});
 
 const resolveExternalTableValidationDetails = (validationState, tableType) => {
   const details = validationState?.details;
@@ -155,6 +170,8 @@ const writeExternalValidationCache = (projectName, tableType, signature, details
   }
 };
 
+const EXTERNAL_ACTION_BUTTON_STYLE = { minWidth: 128 };
+
 // Checkboxes for multi-select in suites are rendered internally by SmartAutocomplete when showCheckbox=true
 
 const BASE_FIELDS = [
@@ -194,7 +211,7 @@ const TestReporterSelector = observer(
     const [mergeDuplicateRequirementCells, setMergeDuplicateRequirementCells] = useState(false);
     const [externalBugsFile, setExternalBugsFile] = useState(null);
     const [externalL3L4File, setExternalL3L4File] = useState(null);
-    const [externalSourcesBusy, setExternalSourcesBusy] = useState(false);
+    const [externalActionLoading, setExternalActionLoading] = useState(createExternalActionLoadingState());
     const [externalUploadResetVersion, setExternalUploadResetVersion] = useState({
       bugs: 0,
       l3l4: 0,
@@ -204,6 +221,10 @@ const TestReporterSelector = observer(
       message: '',
       details: null,
     });
+    const isAnyExternalUploadBusy = useMemo(
+      () => EXTERNAL_SOURCE_TYPES.some((sourceType) => !!externalActionLoading?.[sourceType]?.upload),
+      [externalActionLoading]
+    );
     const isMewpProject = useMemo(
       () => isMewpProjectName(selectedTeamProject),
       [selectedTeamProject]
@@ -222,9 +243,25 @@ const TestReporterSelector = observer(
     const isSingleRelSuiteMode = isAtpReleasePlan;
     const availableTestPlans = useMemo(() => store.testPlansList || [], [store.testPlansList]);
     const suiteSource = useMemo(() => store.testSuiteList || [], [store.testSuiteList]);
+    const setExternalActionBusy = useCallback((docType, action, busy) => {
+      const normalizedType = normalizeExternalSourceType(docType);
+      if (!normalizedType || !isExternalActionType(action)) return;
+      const nextBusy = !!busy;
+      setExternalActionLoading((prev) => {
+        if (prev?.[normalizedType]?.[action] === nextBusy) return prev;
+        return {
+          ...prev,
+          [normalizedType]: {
+            ...prev?.[normalizedType],
+            [action]: nextBusy,
+          },
+        };
+      });
+    }, []);
 
     // isRestoring/restoreReady provided by useTabStatePersistence
     const savedDataRef = useRef(null);
+    const externalUploadMutexRef = useRef(false);
 
     const fieldsToSelect = useMemo(() => {
       const customFields =
@@ -611,6 +648,8 @@ const TestReporterSelector = observer(
       setMergeDuplicateRequirementCells(false);
       setExternalBugsFile(null);
       setExternalL3L4File(null);
+      setExternalActionLoading(createExternalActionLoadingState());
+      externalUploadMutexRef.current = false;
       savedDataRef.current = null;
     }, []);
 
@@ -913,8 +952,9 @@ const TestReporterSelector = observer(
 
     const restoreLatestExternalByType = useCallback(
       async (docType, { silent = false } = {}) => {
-        const normalized = String(docType || '').trim().toLowerCase();
-        if (!['bugs', 'l3l4'].includes(normalized)) return null;
+        const normalized = normalizeExternalSourceType(docType);
+        if (!normalized) return null;
+        setExternalActionBusy(normalized, 'recover', true);
         try {
           const latest = await store.getLatestMewpExternalIngestionFile(normalized, { mineOnly: true });
           if (latest) {
@@ -940,16 +980,17 @@ const TestReporterSelector = observer(
             toast.error(`Failed loading ${normalized.toUpperCase()} source: ${error?.message || error}`);
           }
           return null;
+        } finally {
+          setExternalActionBusy(normalized, 'recover', false);
         }
       },
-      [store, externalBugsFile, externalL3L4File, validateMewpExternalSources]
+      [store, externalBugsFile, externalL3L4File, validateMewpExternalSources, setExternalActionBusy]
     );
 
     useEffect(() => {
       if (!isMewpCoverageMode || !store.teamProjectName) return;
       let cancelled = false;
       const restoreFromBucket = async () => {
-        setExternalSourcesBusy(true);
         try {
           const [bugs, l3l4] = await Promise.all([
             store.getLatestMewpExternalIngestionFile('bugs', { mineOnly: true }),
@@ -964,10 +1005,6 @@ const TestReporterSelector = observer(
           }
         } catch {
           // keep UI usable even if auto-recovery fails
-        } finally {
-          if (!cancelled) {
-            setExternalSourcesBusy(false);
-          }
         }
       };
       restoreFromBucket();
@@ -990,15 +1027,23 @@ const TestReporterSelector = observer(
 
     const uploadExternalMewpSource = useCallback(
       async (file, docType, onSuccess) => {
-        const normalizedType = String(docType || '').trim().toLowerCase();
+        const normalizedType = normalizeExternalSourceType(docType);
+        if (!normalizedType) {
+          return Upload.LIST_IGNORE;
+        }
         const lower = String(file?.name || '').toLowerCase();
         const isSupported = lower.endsWith('.csv') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
         if (!isSupported) {
           toast.error('Only CSV/XLS/XLSX files are supported');
           return Upload.LIST_IGNORE;
         }
+        if (externalUploadMutexRef.current) {
+          toast.info('Another file upload is in progress. Please wait for it to complete.');
+          return Upload.LIST_IGNORE;
+        }
+        externalUploadMutexRef.current = true;
+        setExternalActionBusy(normalizedType, 'upload', true);
         try {
-          setExternalSourcesBusy(true);
           const existingByName = await store.findMewpExternalIngestionFileByName(
             normalizedType,
             file?.name,
@@ -1037,23 +1082,25 @@ const TestReporterSelector = observer(
         } catch (error) {
           toast.error(`Failed to upload ${file.name}: ${error?.message || error}`, { autoClose: false });
         } finally {
-          setExternalSourcesBusy(false);
+          externalUploadMutexRef.current = false;
+          setExternalActionBusy(normalizedType, 'upload', false);
         }
         return false;
       },
-      [store, externalBugsFile, externalL3L4File, validateMewpExternalSources]
+      [store, externalBugsFile, externalL3L4File, validateMewpExternalSources, setExternalActionBusy]
     );
 
     const deleteExternalMewpSource = useCallback(
       async (docType, fileItem, onClear) => {
         if (!fileItem) return;
+        const normalized = normalizeExternalSourceType(docType);
+        if (!normalized) return;
+        setExternalActionBusy(normalized, 'delete', true);
         try {
-          setExternalSourcesBusy(true);
           if (fileItem?.etag) {
             await store.deleteMewpExternalIngestionFile(fileItem);
           }
           onClear();
-          const normalized = String(docType || '').trim().toLowerCase();
           const nextBugs = normalized === 'bugs' ? null : externalBugsFile;
           const nextL3L4 = normalized === 'l3l4' ? null : externalL3L4File;
           await validateMewpExternalSources(nextBugs, nextL3L4, { silent: true });
@@ -1061,10 +1108,10 @@ const TestReporterSelector = observer(
         } catch (error) {
           toast.error(`Failed deleting ${String(docType || '').toUpperCase()} source: ${error?.message || error}`);
         } finally {
-          setExternalSourcesBusy(false);
+          setExternalActionBusy(normalized, 'delete', false);
         }
       },
-      [store, externalBugsFile, externalL3L4File, validateMewpExternalSources]
+      [store, externalBugsFile, externalL3L4File, validateMewpExternalSources, setExternalActionBusy]
     );
 
     const createExternalUploadProps = useCallback(
@@ -1323,6 +1370,13 @@ const TestReporterSelector = observer(
       fileItem,
       setFileItem,
     }) => {
+      const panelLoading = externalActionLoading?.[docType] || {};
+      const isUploadBusy = !!panelLoading?.upload;
+      const isRecoverBusy = !!panelLoading?.recover;
+      const isDeleteBusy = !!panelLoading?.delete;
+      const isPanelActionBusy = isUploadBusy || isRecoverBusy || isDeleteBusy;
+      const isUploadLockedByOtherPanel = isAnyExternalUploadBusy && !isUploadBusy;
+      const isUploadActionDisabled = (isPanelActionBusy && !isUploadBusy) || isUploadLockedByOtherPanel;
       const tableDetails = resolveExternalTableValidationDetails(externalValidationState, docType);
       const missingColumns = Array.isArray(tableDetails?.missingRequiredColumns)
         ? tableDetails.missingRequiredColumns
@@ -1388,19 +1442,40 @@ const TestReporterSelector = observer(
           <Stack spacing={1}>
             <Typography variant='body2'>{label}</Typography>
             <Stack direction='row' spacing={1} sx={{ flexWrap: 'wrap' }}>
-              <Upload
-                key={`${docType}-${externalUploadResetVersion[docType] || 0}`}
-                {...createExternalUploadProps(docType, (uploadedFileItem) => setFileItem(uploadedFileItem))}
+              <Tooltip
+                placement='top'
+                title={
+                  isUploadLockedByOtherPanel
+                    ? 'Another file upload is already running. Please wait for it to finish.'
+                    : ''
+                }
+                disableHoverListener={!isUploadLockedByOtherPanel}
               >
-                <Button icon={<UploadOutlined />} loading={externalSourcesBusy}>
-                  {uploadButtonLabel}
-                </Button>
-              </Upload>
+                <span style={{ display: 'inline-flex' }}>
+                  <Upload
+                    key={`${docType}-${externalUploadResetVersion[docType] || 0}`}
+                    disabled={isUploadActionDisabled}
+                    {...createExternalUploadProps(docType, (uploadedFileItem) => setFileItem(uploadedFileItem))}
+                  >
+                    <Button
+                      size='small'
+                      icon={<UploadOutlined />}
+                      loading={isUploadBusy}
+                      disabled={isUploadActionDisabled}
+                      style={EXTERNAL_ACTION_BUTTON_STYLE}
+                    >
+                      {uploadButtonLabel}
+                    </Button>
+                  </Upload>
+                </span>
+              </Tooltip>
               <Button
                 size='small'
                 icon={<ReloadOutlined />}
                 onClick={() => restoreLatestExternalByType(docType)}
-                loading={externalSourcesBusy}
+                loading={isRecoverBusy}
+                disabled={isPanelActionBusy && !isRecoverBusy}
+                style={EXTERNAL_ACTION_BUTTON_STYLE}
               >
                 Recover Mine
               </Button>
@@ -1408,8 +1483,9 @@ const TestReporterSelector = observer(
                 size='small'
                 danger
                 icon={<DeleteOutlined />}
-                disabled={!fileItem}
-                loading={externalSourcesBusy}
+                disabled={!fileItem || (isPanelActionBusy && !isDeleteBusy)}
+                loading={isDeleteBusy}
+                style={EXTERNAL_ACTION_BUTTON_STYLE}
                 onClick={() =>
                   deleteExternalMewpSource(docType, fileItem, () => {
                     setFileItem(null);
@@ -1423,6 +1499,11 @@ const TestReporterSelector = observer(
                 Delete
               </Button>
             </Stack>
+            {isUploadLockedByOtherPanel ? (
+              <Typography variant='caption' color='warning.main'>
+                Upload locked while the other file is uploading.
+              </Typography>
+            ) : null}
             <Typography variant='caption' color='text.secondary'>
               {getFileDisplayName(fileItem) || 'No file uploaded'}
             </Typography>
