@@ -53,6 +53,16 @@ const isMewpProjectName = (selectedTeamProject) => {
   return String(projectName).trim().toLowerCase() === 'mewp';
 };
 
+const isUiDebugModeEnabled = () => {
+  try {
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = params.get('debug');
+    return raw === '1' || raw === 'true';
+  } catch {
+    return false;
+  }
+};
+
 const REL_PATTERN = /(?:^|[^a-z0-9])rel\s*([0-9]+)/i;
 const hasRelNumber = (value) => REL_PATTERN.test(String(value || ''));
 const getFileDisplayName = (fileItem) =>
@@ -191,6 +201,7 @@ const TestReporterSelector = observer(
       () => isMewpProjectName(selectedTeamProject),
       [selectedTeamProject]
     );
+    const debugModeEnabled = useMemo(() => isUiDebugModeEnabled(), []);
     const showMewpViews = isMewpProject;
     const isMewpCoverageMode = showMewpViews && reportMode === 'mewpStandalone';
     const isAtpReleasePlan = useMemo(
@@ -691,6 +702,7 @@ const TestReporterSelector = observer(
           nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
           includeInternalValidationReport: showMewpViews ? includeInternalValidationReport : false,
           mergeDuplicateRequirementCells: showMewpViews ? mergeDuplicateRequirementCells : false,
+          debugMode: debugModeEnabled,
           reportMode,
         };
 
@@ -762,6 +774,7 @@ const TestReporterSelector = observer(
       reportMode,
       isMewpProject,
       showMewpViews,
+      debugModeEnabled,
       isMewpCoverageMode,
       externalBugsFile,
       externalL3L4File,
