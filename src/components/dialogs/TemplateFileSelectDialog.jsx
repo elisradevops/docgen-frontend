@@ -67,7 +67,20 @@ export const TemplateFileSelectDialog = ({
           const sharedTemplates = templates.filter((t) => String(t.name || '').startsWith('shared/'));
           let chosen = null;
 
-          // 1) Prefer docType-specific default names inside 'shared'
+          // 1) Restore saved selection first (tab switch/project switch continuity)
+          try {
+            const saved =
+              tryLocalStorageGet(storageKey(docType, selectedTeamProject)) ||
+              // Legacy (pre-namespace) fallback
+              localStorage.getItem(`template:${docType}:${selectedTeamProject || 'shared'}`);
+            if (saved) {
+              chosen = templates.find((t) => t.url === saved) || null;
+            }
+          } catch {
+            /* empty */
+          }
+
+          // 2) Prefer docType-specific default names inside 'shared'
           const base = (n) =>
             String(n || '')
               .split('/')
@@ -82,26 +95,13 @@ export const TemplateFileSelectDialog = ({
               : dt === 'str'
               ? ['STR']
               : [];
-          chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
-
-          // 2) Fallback: first shared
           if (!chosen) {
-            chosen = sharedTemplates[0] || null;
+            chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
           }
 
-          // 3) Respect saved selection only if nothing chosen yet
+          // 3) Fallback: first shared
           if (!chosen) {
-            try {
-              const saved =
-                tryLocalStorageGet(storageKey(docType, selectedTeamProject)) ||
-                // Legacy (pre-namespace) fallback
-                localStorage.getItem(`template:${docType}:${selectedTeamProject || 'shared'}`);
-              if (saved) {
-                chosen = templates.find((t) => t.url === saved) || null;
-              }
-            } catch {
-              /* empty */
-            }
+            chosen = sharedTemplates[0] || null;
           }
 
           // 4) Final fallback: first overall

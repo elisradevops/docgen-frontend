@@ -16,7 +16,13 @@ import {
 } from '../store/data/docManagerApi';
 import { toast } from 'react-toastify';
 import logger from '../utils/logger';
-import { makeKey, trySessionStorageGet, trySessionStorageSet, trySessionStorageRemove } from '../utils/storage';
+import {
+  makeKey,
+  tryLocalStorageSet,
+  trySessionStorageGet,
+  trySessionStorageSet,
+  trySessionStorageRemove,
+} from '../utils/storage';
 import { setRequestQueueConfig } from '../utils/requestQueue';
 import { isAccessToken } from '../utils/tokenUtils';
 import C from './constants';
@@ -1460,6 +1466,16 @@ class DocGenDataStore {
     // If template is not in shared folder, it means it is a custom template
     this.isCustomTemplate = templateObject?.text?.split('/')?.shift() !== 'shared';
     this.selectedTemplate = templateObject;
+    // Keep per-docType/project template preference in sync for tab restore continuity.
+    try {
+      const docType = this.docType || '';
+      if (docType && templateObject?.url) {
+        const projectKey = this.teamProjectName || 'shared';
+        tryLocalStorageSet(makeKey('template', docType, projectKey), templateObject.url);
+      }
+    } catch {
+      /* empty */
+    }
   }
 
   // Set or update validation state for a specific content control and key (e.g., 'baseType', 'gitRange')
