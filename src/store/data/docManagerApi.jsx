@@ -335,6 +335,19 @@ export const validateMewpExternalFiles = async (payload) => {
   }
 };
 
+export const getServiceConnectionsHealth = async () => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/health`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting service health: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
 /**
  * SharePoint Integration API Functions
  */
