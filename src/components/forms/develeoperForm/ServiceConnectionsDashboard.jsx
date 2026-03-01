@@ -304,7 +304,7 @@ const normalizeErrorDetails = (target = {}) => {
 };
 
 /**
- * Flattens all monitored entities into one list (services + API Gate dependencies).
+ * Flattens all monitored entities into one list (services + nested dependencies).
  */
 const collectMonitoredTargets = (services = []) => {
   const flattened = [];
@@ -318,7 +318,7 @@ const collectMonitoredTargets = (services = []) => {
 };
 
 /**
- * Aggregates dependency state counters for API Gate's dependency header chips.
+ * Aggregates dependency state counters for dependency header chips.
  */
 const summarizeDependencies = (dependencies = []) =>
   dependencies.reduce(
@@ -663,10 +663,11 @@ const ServiceConnectionsDashboard = () => {
               const shouldHideServiceAlert =
                 isApiGate &&
                 isDuplicateGlobalError(serviceError, error, errorHint);
-              const dependencySummary =
-                isApiGate && Array.isArray(service?.dependencies)
-                  ? summarizeDependencies(service.dependencies)
-                  : null;
+              const hasDependencies =
+                Array.isArray(service?.dependencies) && service.dependencies.length > 0;
+              const dependencySummary = hasDependencies
+                ? summarizeDependencies(service.dependencies)
+                : null;
 
               return (
                 <Paper
@@ -743,9 +744,7 @@ const ServiceConnectionsDashboard = () => {
                     <strong>Response:</strong> {formatLatency(service?.responseTimeMs)}
                   </Typography>
 
-                  {service?.key === 'api-gate' &&
-                  Array.isArray(service?.dependencies) &&
-                  service.dependencies.length > 0 ? (
+                  {hasDependencies ? (
                     <Box
                       sx={{
                         mt: 0.5,
@@ -756,7 +755,7 @@ const ServiceConnectionsDashboard = () => {
                       }}
                     >
                       <Typography variant='caption' sx={{ fontWeight: 700, display: 'block', mb: 1 }}>
-                        API Gate Dependencies
+                        {`${String(service?.displayName || 'Service')} Dependencies`}
                       </Typography>
                       {dependencySummary ? (
                         <Stack direction='row' spacing={1} sx={{ mb: 1 }}>
