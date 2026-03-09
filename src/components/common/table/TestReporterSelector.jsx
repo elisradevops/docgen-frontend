@@ -65,6 +65,11 @@ const isUiDebugModeEnabled = () => {
 
 const REL_PATTERN = /(?:^|[^a-z0-9])rel\s*([0-9]+)/i;
 const hasRelNumber = (value) => REL_PATTERN.test(String(value || ''));
+const extractRelNumberValue = (value) => {
+  const match = REL_PATTERN.exec(String(value || ''));
+  const relNumber = Number(match?.[1] || NaN);
+  return Number.isFinite(relNumber) ? relNumber : null;
+};
 const getFileDisplayName = (fileItem) =>
   String(fileItem?.name || fileItem?.objectName || fileItem?.text || '')
     .split('/')
@@ -207,7 +212,6 @@ const TestReporterSelector = observer(
     const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
     const [includeAllHistory, setIncludeAllHistory] = useState(false);
     const [reportMode, setReportMode] = useState('regular');
-    const [includeInternalValidationReport, setIncludeInternalValidationReport] = useState(false);
     const [mergeDuplicateRequirementCells, setMergeDuplicateRequirementCells] = useState(false);
     const [externalBugsFile, setExternalBugsFile] = useState(null);
     const [externalL3L4File, setExternalL3L4File] = useState(null);
@@ -235,7 +239,8 @@ const TestReporterSelector = observer(
       [store, selectedTeamProject]
     );
     const showMewpViews = isMewpProject;
-    const isMewpCoverageMode = showMewpViews && reportMode === 'mewpStandalone';
+    const isMewpCoverageMode = showMewpViews && reportMode === 'mewpL2Coverage';
+    const isMewpInternalValidationMode = showMewpViews && reportMode === 'mewpInternalValidation';
     const isAtpReleasePlan = useMemo(
       () => isMewpCoverageMode && isAtpReleasePlanName(selectedTestPlan?.text),
       [isMewpCoverageMode, selectedTestPlan?.text]
@@ -302,7 +307,6 @@ const TestReporterSelector = observer(
 
     useEffect(() => {
       if (!showMewpViews) {
-        setIncludeInternalValidationReport(false);
         setMergeDuplicateRequirementCells(false);
         setReportMode('regular');
       }
@@ -402,6 +406,80 @@ const TestReporterSelector = observer(
       isMewpCoverageMode,
       isSingleRelSuiteMode,
     ]);
+
+    const latestRelScope = useMemo(() => {
+      if (!selectedTestPlan?.key || !Array.isArray(suiteSource) || suiteSource.length === 0) {
+        return { rootSuite: null, suiteIds: [] };
+      }
+
+      const suiteByNumericId = new Map();
+      (suiteSource || []).forEach((suite) => {
+        const id = Number(suite?.id);
+        if (!Number.isFinite(id) || id <= 0) return;
+        suiteByNumericId.set(id, suite);
+      });
+
+      const resolveRelRoot = (startSuite) => {
+        let cursor = startSuite;
+        const visited = new Set();
+        while (cursor && !visited.has(cursor.id)) {
+          visited.add(cursor.id);
+          const relNumber = extractRelNumberValue(cursor?.name || cursor?.text || '');
+          if (Number.isFinite(relNumber)) {
+            return {
+              rootSuite: cursor,
+              relNumber,
+            };
+          }
+          cursor = suiteByNumericId.get(Number(cursor?.parent || 0));
+        }
+        return null;
+      };
+
+      const relRoots = new Map();
+      (suiteSource || []).forEach((suite) => {
+        const resolved = resolveRelRoot(suite);
+        if (!resolved?.rootSuite?.id) return;
+        const key = Number(resolved.rootSuite.id);
+        if (!relRoots.has(key)) {
+          relRoots.set(key, {
+            suite: resolved.rootSuite,
+            relNumber: resolved.relNumber,
+          });
+        }
+      });
+
+      const sortedRoots = [...relRoots.values()].sort((a, b) => {
+        if (a.relNumber !== b.relNumber) return b.relNumber - a.relNumber;
+        return Number(a?.suite?.id || 0) - Number(b?.suite?.id || 0);
+      });
+      if (sortedRoots.length === 0) {
+        return { rootSuite: null, suiteIds: [] };
+      }
+
+      const latestRootSuite = sortedRoots[0].suite;
+      const latestRootId = Number(latestRootSuite?.id || 0);
+      const hasAncestor = (suite, ancestorId) => {
+        let cursor = suite;
+        const visited = new Set();
+        while (cursor && !visited.has(cursor.id)) {
+          if (Number(cursor.id) === ancestorId) return true;
+          visited.add(cursor.id);
+          cursor = suiteByNumericId.get(Number(cursor?.parent || 0));
+        }
+        return false;
+      };
+      const suiteIds = (suiteSource || [])
+        .filter((suite) => hasAncestor(suite, latestRootId))
+        .map((suite) => Number(suite?.id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+        .sort((a, b) => a - b);
+
+      return {
+        rootSuite: latestRootSuite,
+        suiteIds: [...new Set(suiteIds)],
+      };
+    }, [selectedTestPlan?.key, suiteSource]);
 
     useEffect(() => {
       if (!Array.isArray(selectedTestSuites)) return;
@@ -518,7 +596,6 @@ const TestReporterSelector = observer(
       const savedRunFilterMode = dataToSave?.runFilterMode;
       const savedRunStepFilterMode = dataToSave?.runStepFilterMode;
       const savedIncludeAllHistory = dataToSave?.includeAllHistory;
-      const savedIncludeInternalValidationReport = dataToSave?.includeInternalValidationReport;
       const savedMergeDuplicateRequirementCells = dataToSave?.mergeDuplicateRequirementCells;
       const savedReportMode = dataToSave?.reportMode;
       const savedExternalBugsFile = dataToSave?.externalBugsFile;
@@ -547,13 +624,14 @@ const TestReporterSelector = observer(
       if (savedIncludeAllHistory !== undefined) {
         setIncludeAllHistory(!!savedIncludeAllHistory);
       }
-      if (savedIncludeInternalValidationReport !== undefined) {
-        setIncludeInternalValidationReport(!!savedIncludeInternalValidationReport);
-      }
       if (savedMergeDuplicateRequirementCells !== undefined) {
         setMergeDuplicateRequirementCells(!!savedMergeDuplicateRequirementCells);
       }
-      if (savedReportMode && showMewpViews && ['regular', 'mewpStandalone'].includes(savedReportMode)) {
+      if (
+        savedReportMode &&
+        showMewpViews &&
+        ['regular', 'mewpInternalValidation', 'mewpL2Coverage'].includes(savedReportMode)
+      ) {
         setReportMode(savedReportMode);
       }
       if (savedExternalBugsFile) {
@@ -644,7 +722,6 @@ const TestReporterSelector = observer(
       setLinkedQueryRequest(defaultSelectedQueries);
       setIncludeAllHistory(false);
       setReportMode('regular');
-      setIncludeInternalValidationReport(false);
       setMergeDuplicateRequirementCells(false);
       setExternalBugsFile(null);
       setExternalL3L4File(null);
@@ -676,12 +753,20 @@ const TestReporterSelector = observer(
     useEffect(() => {
       let isValid = true;
       let message = '';
+      const requiresManualSuites = !isMewpInternalValidationMode;
       if (!selectedTestPlan?.key) {
         isValid = false;
         message = 'Select a test plan';
-      } else if (!Array.isArray(selectedTestSuites) || selectedTestSuites.length === 0) {
+      } else if (requiresManualSuites && (!Array.isArray(selectedTestSuites) || selectedTestSuites.length === 0)) {
         isValid = false;
         message = 'Select at least one test suite';
+      } else if (
+        isMewpInternalValidationMode &&
+        !store.loadingState?.testSuiteListLoading &&
+        latestRelScope.suiteIds.length === 0
+      ) {
+        isValid = false;
+        message = 'No Rel suite found for the selected test plan';
       } else if (isMewpCoverageMode && (externalBugsFile || externalL3L4File)) {
         if (externalValidationState.status === 'validating') {
           isValid = false;
@@ -713,6 +798,8 @@ const TestReporterSelector = observer(
       selectedTestSuites,
       store,
       contentControlIndex,
+      isMewpInternalValidationMode,
+      latestRelScope.suiteIds.length,
       isMewpCoverageMode,
       externalBugsFile,
       externalL3L4File,
@@ -741,10 +828,10 @@ const TestReporterSelector = observer(
                 .filter(Boolean)
             : [],
           nonRecursiveTestSuiteIdList: nonRecursiveTestSuiteIdList,
-          includeInternalValidationReport:
-            showMewpViews && reportMode === 'mewpStandalone' ? includeInternalValidationReport : false,
-          mergeDuplicateRequirementCells:
-            showMewpViews && reportMode === 'mewpStandalone' ? mergeDuplicateRequirementCells : false,
+          includeInternalValidationReport: false,
+          mergeDuplicateRequirementCells: showMewpViews && reportMode === 'mewpL2Coverage'
+            ? mergeDuplicateRequirementCells
+            : false,
           debugMode: debugModeEnabled,
           reportMode,
         };
@@ -760,6 +847,24 @@ const TestReporterSelector = observer(
                 linkedQueryRequest,
                 externalBugsFile,
                 externalL3L4File,
+              },
+              isExcelSpreadsheet: true,
+            },
+            contentControlIndex
+          );
+          return;
+        }
+
+        if (isMewpInternalValidationMode) {
+          addToDocumentRequestObject(
+            {
+              type: 'internalValidationReporter',
+              title: 'mewp-internal-validation-content-control',
+              skin: 'testReporter',
+              data: {
+                ...sharedData,
+                testSuiteArray: latestRelScope.suiteIds,
+                linkedQueryRequest,
               },
               isExcelSpreadsheet: true,
             },
@@ -811,11 +916,12 @@ const TestReporterSelector = observer(
       errorFilterMode,
       linkedQueryRequest,
       includeAllHistory,
-      includeInternalValidationReport,
       mergeDuplicateRequirementCells,
       reportMode,
       showMewpViews,
       debugModeEnabled,
+      isMewpInternalValidationMode,
+      latestRelScope.suiteIds,
       isMewpCoverageMode,
       externalBugsFile,
       externalL3L4File,
@@ -1156,11 +1262,13 @@ const TestReporterSelector = observer(
     //   linkedSummaryLabel,
     // ].filter(Boolean);
 
-    const renderScopeSection = (standaloneMode = false) => (
+    const renderScopeSection = ({ standaloneMode = false, showSuites = true } = {}) => (
       <SectionCard
         title='Scope'
         description={
-          standaloneMode
+          !showSuites
+            ? 'Choose the test plan. Latest Rel suite is selected automatically.'
+            : standaloneMode
             ? 'Choose the test plan and Rel suites for standalone MEWP reporting.'
             : 'Choose the test plan and suites to include in this report.'
         }
@@ -1188,110 +1296,134 @@ const TestReporterSelector = observer(
             }}
             value={selectedTestPlan}
           />
-          <Grid
-            container
-            spacing={1.5}
-            alignItems='flex-start'
-          >
+          {showSuites ? (
             <Grid
-              size={{ xs: 12, md: 10 }}
-              sx={{ minWidth: 0 }}
+              container
+              spacing={1.5}
+              alignItems='flex-start'
             >
-              <SmartAutocomplete
-                multiple
-                size='small'
-                options={visibleSuiteOptions}
-                loading={store.loadingState.testSuiteListLoading}
-                disableCloseOnSelect
-                autoHighlight
-                groupBy={(option) => {
-                  const parent = suiteById.get(option.parent);
-                  return parent ? `Parent: ${parent.name}` : 'Top Level';
-                }}
-                label={
-                  isSingleRelSuiteMode
-                    ? 'Top-level Rel suite (descendants auto-included)'
-                    : 'Test suites (descendants auto-included)'
-                }
-                placeholder='Search suites...'
-                textFieldProps={{
-                  size: 'small',
-                  helperText: selectedTestPlan?.key
-                    ? isSingleRelSuiteMode
-                      ? 'ATP Release mode: pick one top-level Rel suite'
-                      : 'Descendants are auto-included'
-                    : 'Select a test plan first',
-                }}
-                showCheckbox={!isSingleRelSuiteMode}
-                disabled={!selectedTestPlan?.key}
-                onChange={async (_event, newValue) => {
-                  if (isSingleRelSuiteMode) {
-                    const nextSelection = Array.isArray(newValue)
-                      ? newValue.length
-                        ? [newValue[newValue.length - 1]]
-                        : []
-                      : [];
-                    setSelectedTestSuites(nextSelection);
-                    return;
-                  }
-                  setSelectedTestSuites(newValue);
-                }}
-                value={selectedTestSuites}
-              />
-            </Grid>
-            {!isSingleRelSuiteMode ? (
               <Grid
-                size={{ xs: 12, md: 2 }}
-                sx={{
-                  minWidth: 0,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  pt: { xs: 0, md: 1.5 },
-                }}
+                size={{ xs: 12, md: 10 }}
+                sx={{ minWidth: 0 }}
               >
-                <Stack
-                  spacing={0.25}
-                  alignItems='flex-start'
-                  sx={{ width: '100%' }}
-                >
-                  <FormControlLabel
-                    sx={{ m: 0 }}
-                    control={
-                      <Switch
-                        size='small'
-                        checked={allSuitesSelected}
-                        onChange={handleSelectAllSuitesToggle}
-                        disabled={
-                          !selectedTestPlan?.key ||
-                          store.loadingState?.testSuiteListLoading ||
-                          visibleSuiteOptions.length === 0
-                        }
-                      />
+                <SmartAutocomplete
+                  multiple
+                  size='small'
+                  options={visibleSuiteOptions}
+                  loading={store.loadingState.testSuiteListLoading}
+                  disableCloseOnSelect
+                  autoHighlight
+                  groupBy={(option) => {
+                    const parent = suiteById.get(option.parent);
+                    return parent ? `Parent: ${parent.name}` : 'Top Level';
+                  }}
+                  label={
+                    isSingleRelSuiteMode
+                      ? 'Top-level Rel suite (descendants auto-included)'
+                      : 'Test suites (descendants auto-included)'
+                  }
+                  placeholder='Search suites...'
+                  textFieldProps={{
+                    size: 'small',
+                    helperText: selectedTestPlan?.key
+                      ? isSingleRelSuiteMode
+                        ? 'ATP Release mode: pick one top-level Rel suite'
+                        : 'Descendants are auto-included'
+                      : 'Select a test plan first',
+                  }}
+                  showCheckbox={!isSingleRelSuiteMode}
+                  disabled={!selectedTestPlan?.key}
+                  onChange={async (_event, newValue) => {
+                    if (isSingleRelSuiteMode) {
+                      const nextSelection = Array.isArray(newValue)
+                        ? newValue.length
+                          ? [newValue[newValue.length - 1]]
+                          : []
+                        : [];
+                      setSelectedTestSuites(nextSelection);
+                      return;
                     }
-                    label={<Typography variant='body2'>Select all suites</Typography>}
-                  />
+                    setSelectedTestSuites(newValue);
+                  }}
+                  value={selectedTestSuites}
+                />
+              </Grid>
+              {!isSingleRelSuiteMode ? (
+                <Grid
+                  size={{ xs: 12, md: 2 }}
+                  sx={{
+                    minWidth: 0,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    pt: { xs: 0, md: 1.5 },
+                  }}
+                >
+                  <Stack
+                    spacing={0.25}
+                    alignItems='flex-start'
+                    sx={{ width: '100%' }}
+                  >
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      control={
+                        <Switch
+                          size='small'
+                          checked={allSuitesSelected}
+                          onChange={handleSelectAllSuitesToggle}
+                          disabled={
+                            !selectedTestPlan?.key ||
+                            store.loadingState?.testSuiteListLoading ||
+                            visibleSuiteOptions.length === 0
+                          }
+                        />
+                      }
+                      label={<Typography variant='body2'>Select all suites</Typography>}
+                    />
+                    <Typography
+                      variant='caption'
+                      color='text.secondary'
+                    >
+                      {suiteSelectionSummary}
+                    </Typography>
+                  </Stack>
+                </Grid>
+              ) : (
+                <Grid
+                  size={{ xs: 12 }}
+                  sx={{ minWidth: 0 }}
+                >
                   <Typography
                     variant='caption'
                     color='text.secondary'
                   >
                     {suiteSelectionSummary}
                   </Typography>
-                </Stack>
-              </Grid>
-            ) : (
-              <Grid
-                size={{ xs: 12 }}
-                sx={{ minWidth: 0 }}
-              >
-                <Typography
-                  variant='caption'
-                  color='text.secondary'
-                >
-                  {suiteSelectionSummary}
+                </Grid>
+              )}
+            </Grid>
+          ) : (
+            <Stack spacing={0.25}>
+              {store.loadingState?.testSuiteListLoading ? (
+                <Typography variant='caption' color='text.secondary'>
+                  Resolving latest Rel suite...
                 </Typography>
-              </Grid>
-            )}
-          </Grid>
+              ) : latestRelScope.rootSuite ? (
+                <>
+                  <Typography variant='body2'>
+                    Latest Rel suite selected automatically: <strong>{latestRelScope.rootSuite?.name}</strong> (
+                    {latestRelScope.rootSuite?.id})
+                  </Typography>
+                  <Typography variant='caption' color='text.secondary'>
+                    Included suites in latest Rel scope: {latestRelScope.suiteIds.length}
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant='caption' color='error.main'>
+                  No Rel suite found for the selected test plan.
+                </Typography>
+              )}
+            </Stack>
+          )}
         </Stack>
       </SectionCard>
     );
@@ -1512,7 +1644,8 @@ const TestReporterSelector = observer(
       );
     };
 
-    const modeSpecificSections = !isMewpCoverageMode ? (
+    const modeSpecificSections =
+      !showMewpViews || reportMode === 'regular' ? (
       <>
         <SectionCard
           title='Execution filters'
@@ -1791,36 +1924,48 @@ const TestReporterSelector = observer(
           </Stack>
         </SectionCard>
       </>
+    ) : isMewpInternalValidationMode ? (
+      <>
+        {renderStandaloneMewpQuerySection()}
+        <SectionCard
+          title='Internal Validation Report'
+          description='Uses the latest Rel suite automatically for the selected test plan.'
+        >
+          <Stack spacing={1}>
+            {store.loadingState?.testSuiteListLoading ? (
+              <Typography variant='caption' color='text.secondary'>
+                Resolving latest Rel suite...
+              </Typography>
+            ) : latestRelScope.rootSuite ? (
+              <>
+                <Typography variant='body2'>
+                  Latest Rel suite: <strong>{latestRelScope.rootSuite?.name}</strong> (
+                  {latestRelScope.rootSuite?.id})
+                </Typography>
+                <Typography variant='caption' color='text.secondary'>
+                  Included suites in latest Rel scope: {latestRelScope.suiteIds.length}
+                </Typography>
+              </>
+            ) : (
+              <Typography variant='caption' color='error.main'>
+                No Rel suite found for the selected test plan.
+              </Typography>
+            )}
+          </Stack>
+        </SectionCard>
+      </>
     ) : (
       <>
         {renderStandaloneMewpQuerySection()}
         <SectionCard
-          title='Standalone MEWP Reports'
-          description='Generates a standalone MEWP L2 report, with optional Internal Validation report, packaged as ZIP.'
+          title='MEWP L2 Requirement Coverage'
+          description='Generate standalone L2 coverage report for selected Rel suites.'
         >
           <Stack spacing={1.5}>
-            <Typography
-              variant='caption'
-              color='text.secondary'
-            >
-              Only Rel suites are supported in this mode. Latest selected Rel is used, with fallback to previous Rel when needed.
+            <Typography variant='caption' color='text.secondary'>
+              Uploaded external sources are kept for 1 day. Recover reloads your latest file from bucket after
+              refresh, and Delete removes it immediately.
             </Typography>
-            <Typography
-              variant='caption'
-              color='text.secondary'
-            >
-              Uploaded external sources are kept for 1 day. Recover reloads your latest file from bucket after refresh, and Delete removes it immediately.
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size='small'
-                  checked={includeInternalValidationReport}
-                  onChange={(_event, checked) => setIncludeInternalValidationReport(checked)}
-                />
-              }
-              label='Include Internal Validation report in ZIP'
-            />
             <FormControlLabel
               control={
                 <Checkbox
@@ -1921,8 +2066,12 @@ const TestReporterSelector = observer(
                     label='Regular Test Reporter'
                   />
                   <Tab
-                    value='mewpStandalone'
-                    label='MEWP New Reports'
+                    value='mewpInternalValidation'
+                    label='Internal Validation Report'
+                  />
+                  <Tab
+                    value='mewpL2Coverage'
+                    label='MEWP L2 Requirement Coverage'
                   />
                 </Tabs>
               </Box>
@@ -1930,13 +2079,15 @@ const TestReporterSelector = observer(
                 spacing={1.5}
                 sx={{ mt: 1.5 }}
               >
-                {renderScopeSection(isMewpCoverageMode)}
+                {isMewpInternalValidationMode
+                  ? renderScopeSection({ standaloneMode: true, showSuites: false })
+                  : renderScopeSection({ standaloneMode: isMewpCoverageMode, showSuites: true })}
                 {modeSpecificSections}
               </Stack>
             </SectionCard>
           ) : (
             <>
-              {renderScopeSection(false)}
+              {renderScopeSection({ standaloneMode: false, showSuites: true })}
               {modeSpecificSections}
             </>
           )}
