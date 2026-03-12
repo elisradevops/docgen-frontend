@@ -92,6 +92,8 @@ export const TemplateFileSelectDialog = ({
               ? ['Software Version Description', 'SVD']
               : dt === 'std'
               ? ['STD']
+              : dt === 'stp'
+              ? ['STP', 'Software Test Plan']
               : dt === 'str'
               ? ['STR']
               : [];

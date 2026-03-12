@@ -318,7 +318,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         // Show warning for invalid docTypes (consolidated)
         if (result.invalidFiles && result.invalidFiles.length > 0) {
           toast.warning(
-            `${result.invalidFiles.length} file(s) skipped due to invalid docType: ${result.invalidFiles.map(f => f.name).join(', ')}. Valid types are: STD, STR, SVD, SRS`,
+            `${result.invalidFiles.length} file(s) skipped due to invalid docType: ${result.invalidFiles.map(f => f.name).join(', ')}. Valid types are: STD, STP, STR, SVD, SRS`,
             { autoClose: 8000 }
           );
         }

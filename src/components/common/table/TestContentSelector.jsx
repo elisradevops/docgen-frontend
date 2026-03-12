@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 /**
- * TestContentSelector (STD)
- * Manages test plan/suites and related options for the STD tab.
+ * TestContentSelector (STD/STP)
+ * Manages test plan/suites and related options for test-based document tabs.
  * Uses useTabStatePersistence to restore/save state with proper gating and provides
  * dependency-aware re-apply flows for shared queries and test plans/suites.
  */
@@ -30,6 +30,7 @@ import logger from '../../../utils/logger';
 import { suiteIdCollection } from '../../../utils/sessionPersistence';
 import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
 import RestoreBackdrop from '../RestoreBackdrop';
+import { buildTestContentRequestData } from './testContentRequestData';
 
 const defaultSelectedQueries = {
   traceAnalysisMode: 'none',
@@ -52,7 +53,10 @@ const TestContentSelector = observer(
     editingMode,
     addToDocumentRequestObject,
     contentControlIndex,
+    documentMode = 'std',
   }) => {
+    const isStpMode = String(documentMode || '').toLowerCase() === 'stp';
+    const selectorTag = isStpMode ? 'STP' : 'STD';
     const [selectedTestPlan, setSelectedTestPlan] = useState({ key: '', text: '' });
     const [selectedTestSuites, setSelectedTestSuites] = useState([]);
     const [isSuiteSpecific, setIsSuiteSpecific] = useState(false);
@@ -63,7 +67,6 @@ const TestContentSelector = observer(
     const [includeAttachmentContent, setIncludeAttachmentContent] = useState(false);
     const [includeRequirements, setIncludeRequirements] = useState(false);
     const [includeCustomerId, setIncludeCustomerId] = useState(false);
-    const [flatSuiteTestCases, setFlatSuiteTestCases] = useState(false);
 
     const [linkedMomRequest, setLinkedMomRequest] = useState(defaultLinkedMomRequest);
     const [traceAnalysisRequest, setTraceAnalysisRequest] = useState(defaultSelectedQueries);
@@ -71,11 +74,13 @@ const TestContentSelector = observer(
 
     const UpdateDocumentRequestObject = useCallback(() => {
       if (!store?.docType) {
-        logger.debug('[STD] UpdateDocumentRequestObject skipped: docType missing');
+        logger.debug(`[${selectorTag}] UpdateDocumentRequestObject skipped: docType missing`);
         return; // wait until docType is set to avoid writing under a wrong/empty key
       }
       logger.debug(
-        `[STD] UpdateDocumentRequestObject: plan=${selectedTestPlan?.key || ''} suitesSel=${(selectedTestSuites||[]).length} suiteSpecific=${isSuiteSpecific}`
+        `[${selectorTag}] UpdateDocumentRequestObject: plan=${selectedTestPlan?.key || ''} suitesSel=${
+          (selectedTestSuites || []).length
+        } suiteSpecific=${isSuiteSpecific}`
       );
       let testSuiteIdList;
       let nonRecursiveTestSuiteIdList;
@@ -90,15 +95,11 @@ const TestContentSelector = observer(
           title: contentControlTitle,
           skin,
           headingLevel: 1,
-          data: {
-            testPlanId: selectedTestPlan.key,
-            testPlanText: selectedTestPlan.text || '',
-            testSuiteArray: testSuiteIdList,
-            testSuiteTextList: Array.isArray(selectedTestSuites)
-              ? selectedTestSuites
-                  .map((s) => s?.text || s?.name || String(s?.id ?? s?.key ?? ''))
-                  .filter(Boolean)
-              : [],
+          data: buildTestContentRequestData({
+            selectedTestPlanKey: selectedTestPlan.key,
+            selectedTestPlanText: selectedTestPlan.text,
+            testSuiteIdList,
+            selectedTestSuites,
             isSuiteSpecific,
             nonRecursiveTestSuiteIdList,
             includeAttachments,
@@ -109,8 +110,8 @@ const TestContentSelector = observer(
             includeCustomerId,
             traceAnalysisRequest,
             linkedMomRequest,
-            flatSuiteTestCases,
-          },
+            isStpMode,
+          }),
         },
         contentControlIndex
       );
@@ -129,11 +130,12 @@ const TestContentSelector = observer(
       includeCustomerId,
       traceAnalysisRequest,
       linkedMomRequest,
-      flatSuiteTestCases,
       contentControlIndex,
       selectedTestSuites,
       selectedTestPlan.text,
       store,
+      isStpMode,
+      selectorTag,
     ]);
 
     // Save on state changes, but only after restore completes
@@ -170,7 +172,7 @@ const TestContentSelector = observer(
 
     const handleTestPlanChanged = useCallback(
       async (value) => {
-        logger.debug(`[STD] handleTestPlanChanged: ${value?.key || ''}`);
+        logger.debug(`[${selectorTag}] handleTestPlanChanged: ${value?.key || ''}`);
         const waitForSuitesToLoad = async () => {
           const deadline = Date.now() + 10000;
           while (store.loadingState?.testSuiteListLoading) {
@@ -187,7 +189,7 @@ const TestContentSelector = observer(
         }
         setSelectedTestPlan(value || { key: '', text: '' });
       },
-      [store]
+      [selectorTag, store]
     );
 
     const processTestPlanSelection = useCallback(
@@ -212,16 +214,14 @@ const TestContentSelector = observer(
         includeAttachmentContent,
         includeRequirements,
         includeCustomerId,
-        flatSuiteTestCases,
       } = dataToSave;
       setIncludeAttachments(includeAttachments);
       setAttachmentType(attachmentType);
-      setIncludeHardCopyRun(includeHardCopyRun);
+      setIncludeHardCopyRun(isStpMode ? false : includeHardCopyRun);
       setIncludeAttachmentContent(includeAttachmentContent);
       setIncludeRequirements(includeRequirements);
       setIncludeCustomerId(includeCustomerId);
-      setFlatSuiteTestCases(flatSuiteTestCases);
-    }, []);
+    }, [isStpMode]);
 
     const processTraceAnalysisRequest = useCallback(
       (incoming) => {
@@ -302,7 +302,7 @@ const TestContentSelector = observer(
     const applySavedData = useCallback(
       async (dataToSave) => {
         try {
-          logger.debug('[STD] applySavedData: begin');
+          logger.debug(`[${selectorTag}] applySavedData: begin`);
           await processTestPlanSelection(dataToSave);
           // Ensure suites are available before applying saved suite choices
           try {
@@ -317,7 +317,7 @@ const TestContentSelector = observer(
           processLinkedMomRequest(dataToSave.linkedMomRequest);
           processTestSuiteSelections(dataToSave);
           savedDataRef.current = dataToSave;
-          logger.debug('[STD] applySavedData: applied');
+          logger.debug(`[${selectorTag}] applySavedData: applied`);
         } catch (error) {
           console.error('Error loading saved data:', error);
           toast.error(`Error loading favorite data: ${error.message}`);
@@ -329,6 +329,7 @@ const TestContentSelector = observer(
         processTestSuiteSelections,
         processTraceAnalysisRequest,
         processLinkedMomRequest,
+        selectorTag,
         store.loadingState?.testSuiteListLoading,
       ]
     );
@@ -343,11 +344,16 @@ const TestContentSelector = observer(
       setIncludeAttachmentContent(false);
       setIncludeRequirements(false);
       setIncludeCustomerId(false);
-      setFlatSuiteTestCases(false);
       setTraceAnalysisRequest(defaultSelectedQueries);
       setLinkedMomRequest(defaultLinkedMomRequest);
       savedDataRef.current = null;
     }, []);
+
+    useEffect(() => {
+      if (isStpMode) {
+        setIncludeHardCopyRun(false);
+      }
+    }, [isStpMode]);
 
     const { isRestoring, restoreReady } = useTabStatePersistence({
       store,
@@ -359,7 +365,9 @@ const TestContentSelector = observer(
     // Save on state changes, but only after restore completes
     useEffect(() => {
       if (editingMode === false && !isRestoring && restoreReady) {
-        logger.debug(`[STD] Trigger save effect: isRestoring=${isRestoring} restoreReady=${restoreReady}`);
+        logger.debug(
+          `[${selectorTag}] Trigger save effect: isRestoring=${isRestoring} restoreReady=${restoreReady}`
+        );
         UpdateDocumentRequestObject();
       }
     }, [
@@ -375,11 +383,11 @@ const TestContentSelector = observer(
       traceAnalysisRequest,
       linkedMomRequest,
       editingMode,
-      flatSuiteTestCases,
       UpdateDocumentRequestObject,
       isRestoring,
       store.docType,
       restoreReady,
+      selectorTag,
     ]);
 
     // Persist restored state once restoration completes (captures cases where values changed only during restore)
@@ -395,12 +403,12 @@ const TestContentSelector = observer(
       if (!savedDataRef.current) return;
       if (!store?.sharedQueries?.acquiredTrees) return;
       try {
-        logger.debug('[STD] Re-apply queries after sharedQueries ready');
+        logger.debug(`[${selectorTag}] Re-apply queries after sharedQueries ready`);
         processTraceAnalysisRequest(savedDataRef.current.traceAnalysisRequest);
         processLinkedMomRequest(savedDataRef.current.linkedMomRequest);
       } catch (e) { void e; }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [store.sharedQueries]);
+    }, [selectorTag, store.sharedQueries]);
 
     // Re-apply saved test plan (and then suites) once test plans become available
     useEffect(() => {
@@ -408,7 +416,7 @@ const TestContentSelector = observer(
       if (!saved) return;
       if (selectedTestPlan?.key) return;
       if (!Array.isArray(store.testPlansList) || store.testPlansList.length === 0) return;
-      logger.debug('[STD] Re-apply saved test plan now that testPlansList is available');
+      logger.debug(`[${selectorTag}] Re-apply saved test plan now that testPlansList is available`);
       (async () => {
         try {
           await processTestPlanSelection(saved);
@@ -422,7 +430,7 @@ const TestContentSelector = observer(
         } catch (e) { void e; }
       })();
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [store.testPlansList]);
+    }, [selectorTag, store.testPlansList]);
 
     // Favorite/Session restoration handled by useTabStatePersistence
 
@@ -536,32 +544,27 @@ const TestContentSelector = observer(
                 />
               ) : null}
             </Stack>
-            <Divider flexItem />
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} alignItems='flex-start'>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={includeHardCopyRun}
-                    onChange={(_event, checked) => setIncludeHardCopyRun(checked)}
+            {!isStpMode && (
+              <>
+                <Divider flexItem />
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} alignItems='flex-start'>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={includeHardCopyRun}
+                        onChange={(_event, checked) => setIncludeHardCopyRun(checked)}
+                      />
+                    }
+                    label='Generate manual hard copy run'
                   />
-                }
-                label='Generate manual hard copy run'
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={flatSuiteTestCases}
-                    onChange={(_event, checked) => setFlatSuiteTestCases(checked)}
-                  />
-                }
-                label='Flatten single-suite test cases'
-              />
-            </Stack>
+                </Stack>
+              </>
+            )}
           </Stack>
         </SectionCard>
 
         <Grid container spacing={1.5}>
-          <Grid size={{ xs: 12, md: 8 }}>
+          <Grid size={{ xs: 12, lg: 8 }}>
             <SectionCard
               title='Automation Queries'
               description='Configure linked MOM and trace analysis queries to enrich the output.'
@@ -599,7 +602,7 @@ const TestContentSelector = observer(
             </SectionCard>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid size={{ xs: 12, lg: 4 }}>
             <Stack spacing={1.5}>
               <SectionCard
                 title='Attachments'
@@ -666,7 +669,7 @@ const TestContentSelector = observer(
           </Box>
         ) : null}
       </Stack>
-      <RestoreBackdrop open={!!isRestoring} label='Restoring STD selection…' />
+      <RestoreBackdrop open={!!isRestoring} label={`Restoring ${selectorTag} selection…`} />
       </>
     );
   }

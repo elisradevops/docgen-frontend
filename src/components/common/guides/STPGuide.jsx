@@ -12,7 +12,7 @@ import {
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 
-const STDGuide = () => {
+const STPGuide = () => {
   const [openAttachments, setOpenAttachments] = useState(false);
   const [openRequirements, setOpenRequirements] = useState(false);
   const [openTraceAnalysis, setOpenTraceAnalysis] = useState(false);
@@ -20,13 +20,13 @@ const STDGuide = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant='h5' sx={{ fontWeight: 600, mb: 2 }}>
-        STD Document Guide
+        STP Document Guide
       </Typography>
       <List disablePadding>
         <ListItem>
           <ListItemText
-            primary='Generate STD for Manual Formal Testing (Hard Copy)'
-            secondary='Retrieve the STD document for manual formal testing.'
+            primary='Generate STP for Planned Testing'
+            secondary='Create a planned-test document with suite/test-case details and traceability before execution.'
           />
         </ListItem>
         <ListItem>
@@ -35,12 +35,30 @@ const STDGuide = () => {
             secondary='Flatten single-suite test cases is handled automatically when exactly one suite is selected.'
           />
         </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Suite-Specific Selection'
+            secondary='You may select one or more suites from the chosen test plan. Descendant suites are auto-included.'
+          />
+        </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='No Manual Hard-Copy Run'
+            secondary='STP does not generate manual hard-copy run printouts.'
+          />
+        </ListItem>
+        <ListItem>
+          <ListItemText
+            primary='Include Linked MOM'
+            secondary='Include linked Work Items in the STP document by relation or query.'
+          />
+        </ListItem>
 
         <ListItemButton onClick={() => setOpenAttachments((prev) => !prev)}>
           <ListItemIcon>{openAttachments ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Attachments & Evidence'
-            secondary='Control how attachments are embedded in the STD.'
+            secondary='Control how attachments are embedded in the STP.'
           />
         </ListItemButton>
         <Collapse in={openAttachments} timeout='auto' unmountOnExit>
@@ -48,19 +66,19 @@ const STDGuide = () => {
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='As Embedded'
-                secondary='Step-level images appear in the test procedure table; test-level images appear after the procedure.'
+                secondary='Images and supported files are embedded where relevant in the STP.'
               />
             </ListItem>
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='As Link'
-                secondary='Office documents are packaged into a ZIP and linked from the STD.'
+                secondary='Files are linked from the STP output instead of being embedded inline.'
               />
             </ListItem>
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='Include Attachment Content'
-                secondary='Inline supported document types (Word) directly in the STD.'
+                secondary='Inline supported document types (Word) directly in the STP.'
               />
             </ListItem>
           </List>
@@ -70,7 +88,7 @@ const STDGuide = () => {
           <ListItemIcon>{openRequirements ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Requirements Section'
-            secondary='Include or exclude the requirements table.'
+            secondary='Include or exclude requirement details in STP sections and trace tables.'
           />
         </ListItemButton>
         <Collapse in={openRequirements} timeout='auto' unmountOnExit>
@@ -78,30 +96,17 @@ const STDGuide = () => {
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='Include Customer ID'
-                secondary='Adds the Customer ID column to the requirements table.'
+                secondary='Adds the Customer ID column where requirement tables are generated.'
               />
             </ListItem>
           </List>
         </Collapse>
 
-        <ListItem>
-          <ListItemText
-            primary='Include Linked MOM'
-            secondary='Include linked Work Items in the STD document. These can be added either by relationship or by using queries.'
-          />
-        </ListItem>
-        <ListItem>
-          <ListItemText
-            primary='Suite-Specific Selection'
-            secondary='You may select one or more suites in the chosen test plan.'
-          />
-        </ListItem>
-
         <ListItemButton onClick={() => setOpenTraceAnalysis((prev) => !prev)}>
           <ListItemIcon>{openTraceAnalysis ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Trace Analysis Options'
-            secondary='Include or exclude trace analysis appendices.'
+            secondary='Include or exclude traceability appendices.'
           />
         </ListItemButton>
         <Collapse in={openTraceAnalysis} timeout='auto' unmountOnExit>
@@ -121,7 +126,7 @@ const STDGuide = () => {
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='Based on Queries'
-                secondary='Fetch trace analysis and covered requirements using saved queries.'
+                secondary='Fetch trace analysis using saved queries.'
               />
             </ListItem>
             <ListItem sx={{ pl: 6 }}>
@@ -132,9 +137,16 @@ const STDGuide = () => {
             </ListItem>
           </List>
         </Collapse>
+
+        <ListItem>
+          <ListItemText
+            primary='Generated STP Content'
+            secondary='Includes Items to Be Tested table, detailed test descriptions (description, optional linked requirements, test phase), and bidirectional traceability tables.'
+          />
+        </ListItem>
       </List>
     </Box>
   );
 };
 
-export default STDGuide;
+export default STPGuide;
