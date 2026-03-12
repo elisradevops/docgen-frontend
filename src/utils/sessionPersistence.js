@@ -23,6 +23,7 @@ export function suiteIdCollection(selectedSuites = [], store) {
     ? selectedSuites.map((s) => s?.id).filter((v) => v != null)
     : [];
   const testSuiteArray = [];
+  const visited = new Set();
   const allSuites = Array.isArray(store?.testSuiteList) ? store.testSuiteList : [];
   const byParent = new Map();
   for (const s of allSuites) {
@@ -31,7 +32,8 @@ export function suiteIdCollection(selectedSuites = [], store) {
     byParent.set(s.parent, list);
   }
   const addDescendants = (suiteId) => {
-    if (testSuiteArray.includes(suiteId)) return;
+    if (visited.has(suiteId)) return;
+    visited.add(suiteId);
     testSuiteArray.push(suiteId);
     const children = byParent.get(suiteId) || [];
     for (const child of children) addDescendants(child.id);
@@ -67,6 +69,7 @@ export function validateAndApplyQuery(savedQuery, tree, setter, validateQueryFn)
  * @returns {Promise<Array<any>>} Array of suite option objects suitable for UI selection
  */
 export async function applyPlanThenSuites({ saved, store, handleTestPlanChanged, waitForSuitesFn }) {
+  const normalizeSuiteId = (value) => String(value ?? '').trim();
   const id = saved?.testPlanId;
   if (!id) return [];
   const plan = (store?.testPlansList || []).find((p) => p.id === id);
@@ -81,8 +84,9 @@ export async function applyPlanThenSuites({ saved, store, handleTestPlanChanged,
     ? saved.testSuiteArray
     : [];
   const list = (store?.getTestSuiteList || store?.testSuiteList || []) || [];
+  const suiteById = new Map(list.map((suite) => [normalizeSuiteId(suite.id), suite]));
   const options = src
-    .map((suiteId) => list.find((suite) => suite.id === suiteId))
+    .map((suiteId) => suiteById.get(normalizeSuiteId(suiteId)))
     .filter(Boolean)
     .map((s) => ({ ...s, key: s.id, text: `${s.name} - (${s.id})` }));
   const dedup = new Map(options.map((s) => [s.id, s]));

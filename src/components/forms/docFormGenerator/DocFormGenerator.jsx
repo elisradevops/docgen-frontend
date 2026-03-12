@@ -117,6 +117,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             ? ['Software Version Description', 'SVD']
             : dt === 'std'
             ? ['STD']
+            : dt === 'stp'
+            ? ['STP', 'Software Test Plan']
             : dt === 'str'
             ? ['STR']
             : [];
@@ -194,6 +196,21 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             editingMode={false}
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}
+            documentMode='std'
+          />
+        );
+      case 'test-stp':
+        return (
+          <TestContentSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
+            store={store}
+            contentControlTitle={formControl.title}
+            type={formControl.type}
+            skin={formControl.skin}
+            editingMode={false}
+            addToDocumentRequestObject={store.addContentControlToDocument}
+            contentControlIndex={contentControlIndex}
+            documentMode='stp'
           />
         );
       case 'test-str':
@@ -376,6 +393,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           'srs-skin',
           'test-str',
           'test-std',
+          'test-stp',
         ].includes(skin)
       )
         return true;

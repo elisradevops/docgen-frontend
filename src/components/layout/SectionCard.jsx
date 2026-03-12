@@ -34,9 +34,10 @@ const SectionCard = ({
       {hasMeta ? (
         <Stack
           direction='row'
-          alignItems={{ xs: 'flex-start', sm: 'center' }}
+          alignItems='flex-start'
           justifyContent='space-between'
           spacing={1}
+          sx={{ flexWrap: 'wrap', rowGap: 0.75 }}
         >
           <Box sx={{ flex: 1, minWidth: 0 }}>
             {title ? (
@@ -53,12 +54,18 @@ const SectionCard = ({
               </Typography>
             ) : null}
           </Box>
-          <Stack direction='row' spacing={1} alignItems='center'>
+          <Stack
+            direction='row'
+            spacing={1}
+            alignItems='center'
+            sx={{ flexShrink: 0, ml: 'auto', maxWidth: '100%' }}
+          >
             {actions}
             {enableToggle ? (
               <FormControlLabel
                 control={<Switch size='small' checked={enabled} onChange={onToggle} />}
                 label={enableToggle}
+                sx={{ m: 0 }}
               />
             ) : null}
           </Stack>

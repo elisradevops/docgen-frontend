@@ -9,7 +9,8 @@ import DeveloperModeIcon from '@mui/icons-material/DeveloperMode';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import Button from '@mui/material/Button';
-import { styled, alpha, keyframes } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { styled, alpha, keyframes, useTheme } from '@mui/material/styles';
 import {
   Box,
   Grid,
@@ -26,6 +27,7 @@ import {
 import SmartAutocomplete from '../common/SmartAutocomplete';
 import STRGuide from '../common/guides/STRGuide';
 import STDGuide from '../common/guides/STDGuide';
+import STPGuide from '../common/guides/STPGuide';
 import SVDGuide from '../common/guides/SVDGuide';
 import SRSGuide from '../common/guides/SRSGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
@@ -159,6 +161,8 @@ const TAB_TEMPLATES = 'templates';
 const TAB_DEVELOPER = 'developer';
 
 const MainTabs = observer(({ store, adoContext }) => {
+  const theme = useTheme();
+  const isCompactTabs = useMediaQuery(theme.breakpoints.down('lg'));
   const [selectedTab, setSelectedTab] = useState(TAB_DOCS);
   // eslint-disable-next-line no-unused-vars
   const [cookies, setCookie, removeCookie] = useCookies(['azureDevopsUrl', 'azureDevopsPat']);
@@ -325,6 +329,8 @@ const MainTabs = observer(({ store, adoContext }) => {
     switch (docType) {
       case 'STD':
         return <STDGuide />;
+      case 'STP':
+        return <STPGuide />;
       case 'STR':
         return <STRGuide />;
       case 'SVD':
@@ -361,6 +367,9 @@ const MainTabs = observer(({ store, adoContext }) => {
   const navigation = (
     <StyledTabs
       value={selectedTab}
+      variant='scrollable'
+      scrollButtons='auto'
+      allowScrollButtonsMobile
       onChange={(event, newValue) => {
         if (adoBooting) return;
         setTabManuallyChanged(true);
@@ -369,6 +378,14 @@ const MainTabs = observer(({ store, adoContext }) => {
         setProjectClearable(newValue === TAB_TEMPLATES);
       }}
       aria-label='document tabs'
+      sx={{
+        minHeight: 48,
+        '& .MuiTabs-scroller': { overflowX: 'auto !important' },
+        '& .MuiTabs-scrollButtons': {
+          color: 'rgba(255,255,255,0.9)',
+          '&.Mui-disabled': { opacity: 0.2 },
+        },
+      }}
     >
       {store.documentTypes.map((docType) => {
         return (
@@ -376,16 +393,31 @@ const MainTabs = observer(({ store, adoContext }) => {
             key={`doctype-tab-${docType}`}
             label={docType}
             value={docType}
+            sx={{
+              minWidth: isCompactTabs ? 84 : 110,
+              px: isCompactTabs ? 1.25 : 2,
+              mr: isCompactTabs ? 0.5 : 1,
+            }}
           />
         );
       })}
       <StyledTab
         label='Documents'
         value={TAB_DOCS}
+        sx={{
+          minWidth: isCompactTabs ? 96 : 118,
+          px: isCompactTabs ? 1.25 : 2,
+          mr: isCompactTabs ? 0.5 : 1,
+        }}
       />
       <StyledTab
         label='Templates'
         value={TAB_TEMPLATES}
+        sx={{
+          minWidth: isCompactTabs ? 96 : 118,
+          px: isCompactTabs ? 1.25 : 2,
+          mr: isCompactTabs ? 0.5 : 1,
+        }}
       />
       {/* Keep MUI Tabs value valid when using the Developer button */}
       <StyledTab
