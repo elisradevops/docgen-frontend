@@ -96,6 +96,8 @@ export const TemplateFileSelectDialog = ({
               ? ['STP', 'Software Test Plan']
               : dt === 'str'
               ? ['STR']
+              : dt === 'sysrs'
+              ? ['SysRS', 'SYSRS']
               : [];
           if (!chosen) {
             chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;

@@ -29,7 +29,7 @@ import STRGuide from '../common/guides/STRGuide';
 import STDGuide from '../common/guides/STDGuide';
 import STPGuide from '../common/guides/STPGuide';
 import SVDGuide from '../common/guides/SVDGuide';
-import SRSGuide from '../common/guides/SRSGuide';
+import RequirementsGuide from '../common/guides/RequirementsGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
 import ClearIcon from '@mui/icons-material/Clear';
 import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOutlined';
@@ -318,15 +318,15 @@ const MainTabs = observer(({ store, adoContext }) => {
     selectedTab === TAB_DOCS
       ? store.loadingState?.documentsLoadingState
       : selectedTab === TAB_TEMPLATES
-      ? store.loadingState?.templatesLoadingState
-      : false;
+        ? store.loadingState?.templatesLoadingState
+        : false;
 
   const isProjectSelected = Boolean(selectedTeamProject?.key && selectedTeamProject?.text);
   const isDocTypeTab = Array.isArray(store.documentTypes) && store.documentTypes.includes(selectedTab);
   const currentHasGuide = isDocTypeTab && generateGuide(selectedTab) !== null;
 
   function generateGuide(docType) {
-    switch (docType) {
+    switch (String(docType || '').toUpperCase()) {
       case 'STD':
         return <STDGuide />;
       case 'STP':
@@ -336,7 +336,9 @@ const MainTabs = observer(({ store, adoContext }) => {
       case 'SVD':
         return <SVDGuide />;
       case 'SRS':
-        return <SRSGuide />;
+        return <RequirementsGuide variant='srs' />;
+      case 'SYSRS':
+        return <RequirementsGuide variant='sysrs' />;
       default:
         return null;
     }
@@ -492,7 +494,7 @@ const MainTabs = observer(({ store, adoContext }) => {
               background: (theme) =>
                 `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.12)}, ${alpha(
                   theme.palette.secondary.main,
-                  0.12
+                  0.12,
                 )})`,
             }}
           >
@@ -569,7 +571,10 @@ const MainTabs = observer(({ store, adoContext }) => {
           {selectedTab !== TAB_DOCS && selectedTab !== TAB_TEMPLATES ? (
             <>
               <FormattingSettingsDialog store={store} />
-              <Tooltip title='Clear selection' placement='top'>
+              <Tooltip
+                title='Clear selection'
+                placement='top'
+              >
                 <span>
                   <IconButton
                     aria-label='clear-tab-selection'
@@ -770,8 +775,8 @@ const MainTabs = observer(({ store, adoContext }) => {
       adoBootStatus === 'idle'
         ? 'Waiting for Azure DevOps context...'
         : !store.teamProject
-        ? 'Resolving project identity...'
-        : 'Loading profile, project metadata, and permissions...';
+          ? 'Resolving project identity...'
+          : 'Loading profile, project metadata, and permissions...';
     return (
       <AppLayout
         navigation={navigation}
@@ -791,10 +796,10 @@ const MainTabs = observer(({ store, adoContext }) => {
             background: (theme) =>
               `radial-gradient(1200px 600px at 20% 10%, ${alpha(
                 theme.palette.primary.main,
-                0.12
+                0.12,
               )}, transparent 60%), radial-gradient(900px 480px at 80% 20%, ${alpha(
                 theme.palette.secondary.main,
-                0.14
+                0.14,
               )}, transparent 60%)`,
           }}
         >
@@ -822,7 +827,7 @@ const MainTabs = observer(({ store, adoContext }) => {
               background: (theme) =>
                 `linear-gradient(180deg, ${alpha(theme.palette.common.white, 0.9)}, ${alpha(
                   theme.palette.background.paper,
-                  0.95
+                  0.95,
                 )})`,
               boxShadow: (theme) => theme.shadows[6],
             }}
@@ -891,7 +896,7 @@ const MainTabs = observer(({ store, adoContext }) => {
                     background: (theme) =>
                       `linear-gradient(90deg, transparent, ${alpha(
                         theme.palette.primary.main,
-                        0.6
+                        0.6,
                       )}, transparent)`,
                     animation: `${bootSweep} 1.6s ease-in-out infinite`,
                   }}
