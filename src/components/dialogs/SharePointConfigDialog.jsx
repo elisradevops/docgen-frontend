@@ -183,7 +183,7 @@ const SharePointConfigDialog = ({ open, onClose, onSubmit, userId, initialConfig
             value={folder}
             onChange={(e) => setFolder(e.target.value)}
             placeholder="02 Engineering/Templates"
-            helperText="Path to the parent templates folder (subfolders like STD, SRS will be scanned automatically)"
+            helperText="Path to the parent templates folder (subfolders like STD, SRS, SYSRS will be scanned automatically)"
             sx={{ mb: 2 }}
           />
 
@@ -207,7 +207,7 @@ const SharePointConfigDialog = ({ open, onClose, onSubmit, userId, initialConfig
             Folder: 02 Engineering/SFTP and DTS/Templates
             <br />
             <br />
-            <strong>Note:</strong> Subfolders (STD, SRS, STR, etc.) will be scanned automatically and files will be organized by document type.
+            <strong>Note:</strong> Subfolders (STD, STP, STR, SVD, SRS, SYSRS, etc.) will be scanned automatically and files will be organized by document type.
           </Typography>
         </Box>
       </DialogContent>

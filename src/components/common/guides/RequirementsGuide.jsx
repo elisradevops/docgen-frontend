@@ -12,15 +12,29 @@ import {
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 
-const SRSGuide = () => {
+const RequirementsGuide = ({ variant = 'srs' } = {}) => {
+  const isSysRs = String(variant || '').toLowerCase() === 'sysrs';
+  const guideTitle = isSysRs ? 'SysRS Generation Guide' : 'SRS Traceability Guide';
+  const requirementsLabel = isSysRs ? 'System Requirements' : 'Software Requirements';
+  const forwardTraceLabel = isSysRs ? 'Sub-System → System Requirements' : 'System → Software Requirements';
+  const reverseTraceLabel = isSysRs ? 'System → Sub-System Requirements' : 'Software → System Requirements';
+  const forwardTraceDescription = isSysRs
+    ? 'Select a "Work items and direct links" query that returns links from Sub-System to System requirements. Ensure the query filters the correct Area Path.'
+    : 'Select a "Work items and direct links" query that returns links from System to Software requirements. Ensure the query filters the correct Area Path.';
+  const reverseTraceDescription = isSysRs
+    ? 'Select a "Work items and direct links" query that returns links from System to Sub-System requirements. Ensure the query filters the relevant Area Path.'
+    : 'Select a "Work items and direct links" query that returns links from Software to System requirements. Ensure the query filters the relevant Area Path.';
   const [openDisplayMode, setOpenDisplayMode] = useState(false);
   const [openTraceability, setOpenTraceability] = useState(false);
   const [openNotes, setOpenNotes] = useState(false);
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant='h5' sx={{ fontWeight: 600, mb: 2 }}>
-        SRS Traceability Guide
+      <Typography
+        variant='h5'
+        sx={{ fontWeight: 600, mb: 2 }}
+      >
+        {guideTitle}
       </Typography>
       <List disablePadding>
         <ListItemButton onClick={() => setOpenDisplayMode((prev) => !prev)}>
@@ -30,8 +44,15 @@ const SRSGuide = () => {
             secondary='Choose how requirements are organized in the generated document.'
           />
         </ListItemButton>
-        <Collapse in={openDisplayMode} timeout='auto' unmountOnExit>
-          <List component='div' disablePadding>
+        <Collapse
+          in={openDisplayMode}
+          timeout='auto'
+          unmountOnExit
+        >
+          <List
+            component='div'
+            disablePadding
+          >
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='Hierarchical'
@@ -49,8 +70,8 @@ const SRSGuide = () => {
 
         <ListItem>
           <ListItemText
-            primary='Include System Requirements'
-            secondary='Select a predefined System Requirements query from Azure DevOps (TFS). Use either a "Tree of work items" or a "Work items and direct links" query. Flat list queries are not supported.'
+            primary={`Include ${requirementsLabel}`}
+            secondary={`Select a predefined ${requirementsLabel} query from Azure DevOps (TFS). Use either a "Tree of work items" or a "Work items and direct links" query. Flat list queries are not supported.`}
           />
         </ListItem>
 
@@ -58,21 +79,32 @@ const SRSGuide = () => {
           <ListItemIcon>{openTraceability ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
           <ListItemText
             primary='Traceability Sections'
-            secondary='Include bidirectional traceability between System and Software requirements.'
+            secondary={
+              isSysRs
+                ? 'Include bidirectional traceability between System and Sub-System requirements.'
+                : 'Include bidirectional traceability between System and Software requirements.'
+            }
           />
         </ListItemButton>
-        <Collapse in={openTraceability} timeout='auto' unmountOnExit>
-          <List component='div' disablePadding>
+        <Collapse
+          in={openTraceability}
+          timeout='auto'
+          unmountOnExit
+        >
+          <List
+            component='div'
+            disablePadding
+          >
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
-                primary='System → Software Requirements'
-                secondary='Select a "Work items and direct links" query that returns links from System to Software requirements. Ensure the query filters the correct Area Path.'
+                primary={forwardTraceLabel}
+                secondary={forwardTraceDescription}
               />
             </ListItem>
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
-                primary='Software → System Requirements'
-                secondary='Select a "Work items and direct links" query that returns links from Software to System requirements. Ensure the query filters the relevant Area Path.'
+                primary={reverseTraceLabel}
+                secondary={reverseTraceDescription}
               />
             </ListItem>
           </List>
@@ -85,8 +117,15 @@ const SRSGuide = () => {
             secondary='Additional details on how selections behave.'
           />
         </ListItemButton>
-        <Collapse in={openNotes} timeout='auto' unmountOnExit>
-          <List component='div' disablePadding>
+        <Collapse
+          in={openNotes}
+          timeout='auto'
+          unmountOnExit
+        >
+          <List
+            component='div'
+            disablePadding
+          >
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
                 primary='Availability of Queries'
@@ -124,4 +163,4 @@ const SRSGuide = () => {
   );
 };
 
-export default SRSGuide;
+export default RequirementsGuide;

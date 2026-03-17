@@ -7,7 +7,7 @@ import QueryContentSelector from '../../common/selectors/QueryContentSelector';
 import TraceTableSelector from '../../common/selectors/TraceTableSelector';
 import ChangeTableSelector from '../../common/table/ChangeTableSelector';
 import STRTableSelector from '../../common/table/STRTableSelector';
-import SRSSelector from '../../common/table/SRSSelector';
+import RequirementsSelector from '../../common/table/RequirementsSelector';
 import { Box, Button, Collapse, Typography, Paper, Stack } from '@mui/material';
 import Tooltip from '@mui/material/Tooltip';
 import TestReporterSelector from '../../common/table/TestReporterSelector';
@@ -43,14 +43,14 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           setDocFormsControls(docFormsControls); // Set state after templates are fetched
           if (docFormsControls.length > 0) {
             const temp = docFormsControls.find((docForm) =>
-              docForm.documentTitle.toLowerCase().includes(docType.toLowerCase())
+              docForm.documentTitle.toLowerCase().includes(docType.toLowerCase()),
             );
             setDocForm(temp);
           }
         })
         .catch((error) => {
           logger.error(
-            `Error occurred while fetching doc forms templates for docType: ${docType}: ${error.message}`
+            `Error occurred while fetching doc forms templates for docType: ${docType}: ${error.message}`,
           );
         })
         .finally(() => {
@@ -116,12 +116,14 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           dt === 'svd'
             ? ['Software Version Description', 'SVD']
             : dt === 'std'
-            ? ['STD']
-            : dt === 'stp'
-            ? ['STP', 'Software Test Plan']
-            : dt === 'str'
-            ? ['STR']
-            : [];
+              ? ['STD']
+              : dt === 'stp'
+                ? ['STP', 'Software Test Plan']
+                : dt === 'str'
+                  ? ['STR']
+                  : dt === 'sysrs'
+                    ? ['SysRS', 'SYSRS']
+                    : [];
         if (!chosen) {
           chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
         }
@@ -291,7 +293,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         );
       case 'srs-skin':
         return (
-          <SRSSelector
+          <RequirementsSelector
             key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
             store={store}
             contentControlTitle={formControl.title}
@@ -300,6 +302,20 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
             addToDocumentRequestObject={store.addContentControlToDocument}
             contentControlIndex={contentControlIndex}
             sharedQueries={store.sharedQueries}
+          />
+        );
+      case 'sysrs-skin':
+        return (
+          <RequirementsSelector
+            key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
+            store={store}
+            contentControlTitle={formControl.title}
+            type={formControl.type}
+            skin={formControl.skin}
+            addToDocumentRequestObject={store.addContentControlToDocument}
+            contentControlIndex={contentControlIndex}
+            sharedQueries={store.sharedQueries}
+            variant='sysrs'
           />
         );
 
@@ -335,7 +351,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
               style: {
                 minWidth: '450px',
               },
-            }
+            },
           );
         }
       }
@@ -355,7 +371,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const { sendDisabled, validationMessage } = React.useMemo(() => {
     try {
       const indices = new Set(
-        Array.isArray(docForm?.contentControls) ? docForm.contentControls.map((_, idx) => idx) : []
+        Array.isArray(docForm?.contentControls) ? docForm.contentControls.map((_, idx) => idx) : [],
       );
       // Convert MobX observable to plain object for Edge 92 compatibility
       const states = store?.validationStates ? JSON.parse(JSON.stringify(store.validationStates)) : {};
@@ -391,6 +407,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           'change-table',
           'table',
           'srs-skin',
+          'sysrs-skin',
           'test-str',
           'test-std',
           'test-stp',
@@ -411,7 +428,10 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       spacing={1.5}
       sx={{ width: '100%', height: '100%', minHeight: 0 }}
     >
-      <RestoreBackdrop open={templatesLoading} label='Loading templates…' />
+      <RestoreBackdrop
+        open={templatesLoading}
+        label='Loading templates…'
+      />
       {loadingForm ? (
         <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
           <LoadingState
@@ -514,8 +534,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     {sendDisabled
                       ? validationMessage || 'Please complete required selections'
                       : selectedTemplate
-                      ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
-                      : 'Ready to generate'}
+                        ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
+                        : 'Ready to generate'}
                   </Typography>
                   <Tooltip
                     title={sendDisabled ? validationMessage || 'Please complete required selections' : ''}
