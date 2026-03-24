@@ -2368,6 +2368,7 @@ class DocGenDataStore {
       : this.contextName
       ? `${this.teamProjectName}-${this.docType}-${this.contextName}-${this.getFormattedDate()}`
       : `${this.teamProjectName}-${this.docType}-${this.getFormattedDate()}`;
+    const controls = Array.isArray(this.contentControls) ? this.contentControls : [];
     const orgUrl = this.adoOrgUrl || azureDevopsUrl;
     const token = this.adoToken || azureDevopsPat;
     return {
@@ -2395,7 +2396,7 @@ class DocGenDataStore {
         }),
         enableDirectDownload: false,
       },
-      contentControls: this.contentControls,
+      contentControls: controls,
       formattingSettings: this.formattingSettings,
     };
   }
