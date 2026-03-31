@@ -1,6 +1,15 @@
 export const validateQuery = (queryData, query) => {
   if (!queryData || !query) return null;
 
+  const toCandidateIds = (value) => {
+    if (value == null) return [];
+    if (typeof value !== 'object') return [String(value)];
+    const candidates = [value.id, value.value, value.key]
+      .map((candidate) => String(candidate || '').trim())
+      .filter((candidate) => candidate !== '');
+    return Array.from(new Set(candidates));
+  };
+
   // Function to search for a node in the tree by ID
   const findNodeById = (treeData, id) => {
     for (const node of treeData) {
@@ -13,9 +22,9 @@ export const validateQuery = (queryData, query) => {
     return null;
   };
 
-  // Try to find the query in the tree data
-  const foundQuery = findNodeById(queryData, query.id);
+  const queryIds = toCandidateIds(query);
+  const foundQuery = queryIds.map((id) => findNodeById(queryData, id)).find(Boolean);
 
   // Return the found query if valid, otherwise null
-  return foundQuery && foundQuery.isValidQuery ? query : null;
+  return foundQuery && foundQuery.isValidQuery ? foundQuery : null;
 };

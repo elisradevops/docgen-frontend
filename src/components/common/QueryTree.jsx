@@ -3,15 +3,29 @@ import { TreeSelect } from 'antd';
 import { Alert, TextField } from '@mui/material';
 import { toast } from 'react-toastify';
 import { validateQuery } from '../../utils/queryValidation';
+import { resolveSelectedQueryValue } from './queryTreeUtils';
 
-const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoading }) => {
-  const [selectedQuery, setSelectedQuery] = useState(prevSelectedQuery);
+const QueryTree = ({
+  data,
+  prevSelectedQuery,
+  onSelectedQuery,
+  queryType,
+  isLoading,
+  queryLabel = '',
+  width = 300,
+}) => {
+  const toSelectedValue = useCallback((query) => resolveSelectedQueryValue(query), []);
+
+  const [selectedQueryValue, setSelectedQueryValue] = useState(() => toSelectedValue(prevSelectedQuery));
   const [showQueryNotSelectedAlert, setShowQueryNotSelectedAlert] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
   const [placeholder, setPlaceholder] = useState('');
 
   // Title and no-data message helpers must be declared before effects that depend on them
   const getTitle = useCallback(() => {
+    if (String(queryLabel || '').trim()) {
+      return String(queryLabel).trim();
+    }
     switch (queryType) {
       case 'req-test':
         return 'Requirement - Test case';
@@ -44,7 +58,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
       default:
         return 'Default';
     }
-  }, [queryType]);
+  }, [queryLabel, queryType]);
 
   const noData = `No query for ${getTitle()} available`;
 
@@ -62,7 +76,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
 
       if (validQuery) {
         // Query exists and is valid, so set it
-        setSelectedQuery(prevSelectedQuery);
+        setSelectedQueryValue(toSelectedValue(validQuery));
         setShowQueryNotSelectedAlert(false);
       } else {
         // Query doesn't exist or is invalid in the current context
@@ -71,27 +85,25 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
             prevSelectedQuery?.id ?? '(unknown id)'
           } not found in available queries`
         );
-        setSelectedQuery(undefined);
+        setSelectedQueryValue(undefined);
         onSelectedQuery(null);
 
-        if (prevSelectedQuery.id) {
+        if (typeof prevSelectedQuery === 'object' && (prevSelectedQuery.id || prevSelectedQuery.value)) {
           // Show an alert that the previously selected query is no longer available
           setShowQueryNotSelectedAlert(true);
         }
       }
     }
-  }, [data, prevSelectedQuery, onSelectedQuery]);
-
-  
+  }, [data, prevSelectedQuery, onSelectedQuery, toSelectedValue]);
 
   const handleQuerySelect = (value, selectedQuery) => {
     if (selectedQuery.isValidQuery) {
-      setSelectedQuery(value);
+      setSelectedQueryValue(value);
 
       onSelectedQuery(selectedQuery);
       setShowQueryNotSelectedAlert(false);
     } else {
-      setSelectedQuery(undefined);
+      setSelectedQueryValue(undefined);
 
       onSelectedQuery(null);
       setShowQueryNotSelectedAlert(true);
@@ -100,7 +112,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
   };
 
   const handleOnClear = () => {
-    setSelectedQuery(undefined);
+    setSelectedQueryValue(undefined);
     onSelectedQuery(null);
   };
 
@@ -109,7 +121,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
   return (
     <div>
       {showQueryNotSelectedAlert && (
-        <Alert sx={{ width: 300, my: 1 }} severity='info'>
+        <Alert sx={{ width, my: 1 }} severity='info'>
           Please select a valid query:
         </Alert>
       )}
@@ -117,7 +129,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
         <TreeSelect
           showSearch
           onClear={handleOnClear}
-          style={{ marginBlock: 8, width: 300 }}
+          style={{ marginBlock: 8, width }}
           dropdownStyle={{
             maxHeight: 400,
             overflow: 'auto',
@@ -125,7 +137,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
           }}
           treeData={data}
           disabled={isDisabled}
-          value={selectedQuery}
+          value={selectedQueryValue}
           placeholder={placeholder}
           onSelect={handleQuerySelect}
           allowClear
@@ -138,7 +150,7 @@ const QueryTree = ({ data, prevSelectedQuery, onSelectedQuery, queryType, isLoad
           value=''
           disabled
           placeholder={placeholder}
-          sx={{ width: 300, my: 1 }}
+          sx={{ width, my: 1 }}
           inputProps={{ 'aria-label': getTitle() }}
         />
       )}

@@ -30,7 +30,9 @@ import STDGuide from '../common/guides/STDGuide';
 import STPGuide from '../common/guides/STPGuide';
 import SVDGuide from '../common/guides/SVDGuide';
 import RequirementsGuide from '../common/guides/RequirementsGuide';
+import HistoricalQueryGuide from '../common/guides/HistoricalQueryGuide';
 import TemplatesTab from '../forms/templatesTab/TemplatesTab';
+import HistoricalQueryTab from '../forms/historicalQueryTab/HistoricalQueryTab';
 import ClearIcon from '@mui/icons-material/Clear';
 import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOutlined';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
@@ -44,6 +46,7 @@ import DocumentScannerOutlinedIcon from '@mui/icons-material/DocumentScannerOutl
 import TemplateFileSelectDialog from '../dialogs/TemplateFileSelectDialog';
 import FavoriteDialog from '../dialogs/FavoriteDialog';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { isAccessToken } from '../../utils/tokenUtils';
 
 const defaultItem = { key: '', text: '' };
@@ -159,6 +162,7 @@ const normalizeProjectName = (value) => {
 const TAB_DOCS = 'docs';
 const TAB_TEMPLATES = 'templates';
 const TAB_DEVELOPER = 'developer';
+const TAB_HISTORICAL = 'historical-query';
 
 const MainTabs = observer(({ store, adoContext }) => {
   const theme = useTheme();
@@ -271,7 +275,7 @@ const MainTabs = observer(({ store, adoContext }) => {
   // Note: Do not override manual selection of special tabs (Docs/Templates/Developer).
   useEffect(() => {
     const types = store.documentTypes || [];
-    const isSpecial = [TAB_DOCS, TAB_TEMPLATES, TAB_DEVELOPER].includes(selectedTab);
+    const isSpecial = [TAB_DOCS, TAB_TEMPLATES, TAB_DEVELOPER, TAB_HISTORICAL].includes(selectedTab);
     if (types.length > 0) {
       // If the current selection is not a special tab and not a valid doc type, default to the first doc type
       if (!isSpecial && !types.includes(selectedTab)) {
@@ -285,6 +289,12 @@ const MainTabs = observer(({ store, adoContext }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.documentTypes]);
+
+  useEffect(() => {
+    if (selectedTab === TAB_HISTORICAL) {
+      store.setDocType(TAB_HISTORICAL);
+    }
+  }, [selectedTab, store]);
 
   // Auto-select the first doc type after the initial tab list finishes loading.
   // Also notify via toast if tabs failed to load (no doc types after load completes).
@@ -319,11 +329,14 @@ const MainTabs = observer(({ store, adoContext }) => {
       ? store.loadingState?.documentsLoadingState
       : selectedTab === TAB_TEMPLATES
         ? store.loadingState?.templatesLoadingState
+        : selectedTab === TAB_HISTORICAL
+          ? store.loadingState?.historicalQueriesLoadingState
         : false;
 
   const isProjectSelected = Boolean(selectedTeamProject?.key && selectedTeamProject?.text);
   const isDocTypeTab = Array.isArray(store.documentTypes) && store.documentTypes.includes(selectedTab);
-  const currentHasGuide = isDocTypeTab && generateGuide(selectedTab) !== null;
+  const currentHasGuide = generateGuide(selectedTab) !== null;
+  const showHistoricalQueryButton = !!store.showDebugDocs;
 
   function generateGuide(docType) {
     switch (String(docType || '').toUpperCase()) {
@@ -339,6 +352,8 @@ const MainTabs = observer(({ store, adoContext }) => {
         return <RequirementsGuide variant='srs' />;
       case 'SYSRS':
         return <RequirementsGuide variant='sysrs' />;
+      case 'HISTORICAL-QUERY':
+        return <HistoricalQueryGuide />;
       default:
         return null;
     }
@@ -363,6 +378,9 @@ const MainTabs = observer(({ store, adoContext }) => {
       } catch {
         store.fetchTemplatesListForDownload();
       }
+    } else if (selectedTab === TAB_HISTORICAL) {
+      store.fetchHistoricalQueries();
+      store.fetchHistoricalDateFavorites();
     }
   };
 
@@ -375,6 +393,10 @@ const MainTabs = observer(({ store, adoContext }) => {
       onChange={(event, newValue) => {
         if (adoBooting) return;
         setTabManuallyChanged(true);
+        store.clearLoadedFavorite();
+        if (newValue === TAB_HISTORICAL) {
+          store.setDocType(TAB_HISTORICAL);
+        }
         setSelectedTab(newValue);
         // Check if the selected tab is the templates tab
         setProjectClearable(newValue === TAB_TEMPLATES);
@@ -403,6 +425,19 @@ const MainTabs = observer(({ store, adoContext }) => {
           />
         );
       })}
+      <StyledTab
+        label='Historical Query'
+        value={TAB_HISTORICAL}
+        // Keep MUI Tabs value valid when using the Historical Query header button.
+        sx={{
+          visibility: 'hidden',
+          minWidth: 0,
+          width: 0,
+          maxWidth: 0,
+          p: 0,
+          m: 0,
+        }}
+      />
       <StyledTab
         label='Documents'
         value={TAB_DOCS}
@@ -438,25 +473,59 @@ const MainTabs = observer(({ store, adoContext }) => {
     </StyledTabs>
   );
 
-  const headerActions = isAdoMode ? null : (
+  const openHistoricalTab = () => {
+    if (!showHistoricalQueryButton) return;
+    if (adoBooting) return;
+    setTabManuallyChanged(true);
+    store.clearLoadedFavorite();
+    store.setDocType(TAB_HISTORICAL);
+    setSelectedTab(TAB_HISTORICAL);
+    setProjectClearable(false);
+  };
+
+  useEffect(() => {
+    if (showHistoricalQueryButton) return;
+    if (selectedTab !== TAB_HISTORICAL) return;
+    const visibleDocTypes = Array.isArray(store.documentTypes) ? store.documentTypes : [];
+    const fallbackTab = visibleDocTypes.length > 0 ? visibleDocTypes[0] : TAB_DOCS;
+    setSelectedTab(fallbackTab);
+    setProjectClearable(fallbackTab === TAB_TEMPLATES);
+  }, [showHistoricalQueryButton, selectedTab, store.documentTypes]);
+
+  const headerActions = (
     <>
-      <StyledButton
-        startIcon={<DeveloperModeIcon />}
-        onClick={() => {
-          setTabManuallyChanged(true);
-          setSelectedTab(TAB_DEVELOPER);
-          setProjectClearable(false);
-        }}
-      >
-        Developer
-      </StyledButton>
-      <StyledLogoutButton onClick={logout}>Logout</StyledLogoutButton>
+      {showHistoricalQueryButton ? (
+        <StyledButton
+          startIcon={<HistoryOutlinedIcon />}
+          onClick={openHistoricalTab}
+          disabled={adoBooting}
+        >
+          Historical Query
+        </StyledButton>
+      ) : null}
+      {!isAdoMode ? (
+        <StyledButton
+          startIcon={<DeveloperModeIcon />}
+          onClick={() => {
+            setTabManuallyChanged(true);
+            store.clearLoadedFavorite();
+            setSelectedTab(TAB_DEVELOPER);
+            setProjectClearable(false);
+          }}
+        >
+          Developer
+        </StyledButton>
+      ) : null}
+      {!isAdoMode ? <StyledLogoutButton onClick={logout}>Logout</StyledLogoutButton> : null}
     </>
   );
 
   const selectedTemplateInfo = store.selectedTemplate;
   const isTestReporterTab = (selectedTab || '').toLowerCase() === 'test-reporter';
   const showDocControls = isDocTypeTab && !adoBooting;
+  const showHistoricalControls = selectedTab === TAB_HISTORICAL && !adoBooting;
+  const showFavoriteControls = showDocControls || showHistoricalControls;
+  const supportsSync = [TAB_DOCS, TAB_TEMPLATES, TAB_HISTORICAL].includes(selectedTab);
 
   const filterControls = (
     <Box
@@ -568,7 +637,7 @@ const MainTabs = observer(({ store, adoContext }) => {
             gap: { xs: 1, sm: 1.25 },
           }}
         >
-          {selectedTab !== TAB_DOCS && selectedTab !== TAB_TEMPLATES ? (
+          {isDocTypeTab ? (
             <>
               <FormattingSettingsDialog store={store} />
               <Tooltip
@@ -602,7 +671,7 @@ const MainTabs = observer(({ store, adoContext }) => {
                 </span>
               </Tooltip>
             </>
-          ) : (
+          ) : supportsSync ? (
             <Tooltip
               title={
                 syncing ? 'Syncing…' : !isProjectSelected ? 'Select a TeamProject' : 'Refresh from Azure'
@@ -621,8 +690,8 @@ const MainTabs = observer(({ store, adoContext }) => {
                 </IconButton>
               </span>
             </Tooltip>
-          )}
-          {projectClearable && !isAdoMode ? (
+          ) : null}
+          {supportsSync && projectClearable && !isAdoMode ? (
             <Tooltip
               title='Clear the selected TeamProject (optional)'
               placement='top'
@@ -643,7 +712,7 @@ const MainTabs = observer(({ store, adoContext }) => {
           ) : null}
         </Box>
       </Box>
-      {showDocControls ? (
+      {showFavoriteControls ? (
         <>
           <Box
             sx={{
@@ -655,7 +724,7 @@ const MainTabs = observer(({ store, adoContext }) => {
               gridRow: { xs: 'auto', md: '2 / 3' },
             }}
           >
-            {!isTestReporterTab ? (
+            {showDocControls && !isTestReporterTab ? (
               <TemplateFileSelectDialog
                 store={store}
                 docType={selectedTab}
@@ -665,13 +734,17 @@ const MainTabs = observer(({ store, adoContext }) => {
               />
             ) : null}
             <FavoriteDialog
-              isDisabled={!selectedTemplateInfo && (selectedTab || '').toLowerCase() !== 'test-reporter'}
+              isDisabled={
+                showDocControls
+                  ? !selectedTemplateInfo && (selectedTab || '').toLowerCase() !== 'test-reporter'
+                  : !isProjectSelected
+              }
               store={store}
               docType={selectedTab}
               selectedTeamProject={selectedTeamProject.text}
             />
           </Box>
-          {selectedTemplateInfo ? (
+          {showDocControls && selectedTemplateInfo ? (
             <Paper
               variant='outlined'
               sx={{
@@ -727,6 +800,7 @@ const MainTabs = observer(({ store, adoContext }) => {
     if (isDocTypeTab) return `${selectedTab} Documents`;
     if (selectedTab === TAB_DOCS) return 'Documents';
     if (selectedTab === TAB_TEMPLATES) return 'Templates';
+    if (selectedTab === TAB_HISTORICAL) return 'Historical Query';
     if (selectedTab === TAB_DEVELOPER) return 'Developer Tools';
     return selectedTab;
   })();
@@ -766,7 +840,7 @@ const MainTabs = observer(({ store, adoContext }) => {
     </Tooltip>
   );
 
-  const isDeveloperTab = selectedTab === TAB_DEVELOPER;
+  const isAutoHeightTab = selectedTab === TAB_DEVELOPER || selectedTab === TAB_HISTORICAL;
 
   if (adoBooting) {
     const bootTitle =
@@ -951,8 +1025,8 @@ const MainTabs = observer(({ store, adoContext }) => {
           sx={{
             flex: 1,
             minHeight: 0,
-            height: isDeveloperTab ? 'auto' : '100%',
-            overflowY: isDeveloperTab ? 'auto' : 'hidden',
+            height: isAutoHeightTab ? 'auto' : '100%',
+            overflowY: isAutoHeightTab ? 'auto' : 'hidden',
             overflowX: 'hidden',
           }}
         >
@@ -960,10 +1034,10 @@ const MainTabs = observer(({ store, adoContext }) => {
             container
             spacing={2}
             sx={{
-              height: isDeveloperTab ? 'auto' : '100%',
+              height: isAutoHeightTab ? 'auto' : '100%',
               m: 0,
               width: '100%',
-              overflow: isDeveloperTab ? 'visible' : 'hidden',
+              overflow: isAutoHeightTab ? 'visible' : 'hidden',
             }}
           >
             {store.documentTypes.map((docType) => {
@@ -990,6 +1064,20 @@ const MainTabs = observer(({ store, adoContext }) => {
                 }}
               >
                 <DeveloperForm store={store} />
+              </Grid>
+            ) : null}
+            {selectedTab === TAB_HISTORICAL ? (
+              <Grid
+                size={12}
+                sx={{
+                  height: 'auto',
+                  overflow: 'visible',
+                }}
+              >
+                <HistoricalQueryTab
+                  key={`historical-${selectedTeamProject?.key || 'no-project'}`}
+                  store={store}
+                />
               </Grid>
             ) : null}
             {selectedTab === TAB_DOCS ? (
@@ -1072,7 +1160,7 @@ const MainTabs = observer(({ store, adoContext }) => {
               py: 2,
             }}
           >
-            {isDocTypeTab ? (
+            {currentHasGuide ? (
               generateGuide(selectedTab)
             ) : (
               <Typography

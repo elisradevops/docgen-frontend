@@ -50,7 +50,7 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
     setLoadingFavoriteList(true);
 
     try {
-      const favorites = await store.fetchFavoritesList();
+      const favorites = await store.fetchFavoritesList(docType);
       setFavoriteList(favorites);
     } catch (err) {
       logger.error('Error fetching favorite list:', err.message);
@@ -58,7 +58,7 @@ const FavoriteDialog = ({ store, docType, selectedTeamProject, isDisabled }) => 
     } finally {
       setLoadingFavoriteList(false);
     }
-  }, [store]);
+  }, [store, docType]);
 
   useEffect(() => {
     if (docType) {

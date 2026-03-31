@@ -12,6 +12,7 @@ DocGen connects to an Azure DevOps organization with a Personal Access Token (PA
 - Document workspace: switch between document types, configure content controls (queries, test plans, trace tables, change logs, STR/SRS layouts), and send the request with one click.
 - Template automation: pull templates from shared and project-scoped MinIO buckets, auto-pick sensible defaults, upload/download custom templates, and guard shared templates from accidental deletion.
 - Favorites & formatting: store reusable document presets (personal or shared), tweak whitespace trimming, and enable Void List post-processing for Excel exports.
+- Historical query analysis: run shared queries at a point in time (`As Of`), compare two dates (`Baseline` vs `Compare To`), save milestone dates as per-project favorites, and generate a Word compare report through the standard backend pipeline.
 - Document library: browse project outputs with filtering, highlighting, and quick download links (remember to archive locally—retention is 2 days).
 - Developer toolkit: craft new content controls, toggle debug-only document types, and inspect request payloads without touching backend code.
 - Modern UI stack: responsive layout built with Material UI + Ant Design on a unified theme, toast notifications, and MobX for observable state.
@@ -103,6 +104,12 @@ src/
 - **Send request** – Click "Send Request" to post to `/jsonDocument/create`. A success toast confirms the backend accepted the job. Errors bubble up with toast notifications and console logs.
 - **Documents tab** – Lists generated files from the project bucket with search, highlighting, and sort controls. An info banner reminds you about the two-day retention policy.
 - **Templates tab** – Download or remove project-specific templates. Shared templates are protected from deletion.
+- **Historical Query tab** – Standalone workspace for Azure DevOps historical query exploration:
+  - Select a shared query and run `As Of` snapshots
+  - Compare `Baseline` and `Compare To` timestamps with compare-status output (`Added`, `Deleted`, `Changed`, `No changes`)
+  - Uses `POST /time-machine/as-of` and `POST /time-machine/compare` when available, with compatibility fallback to legacy `/azure/queries/*` historical routes
+  - Save milestone dates as favorites scoped to the current Team Project
+  - Generate a Word compare report via `/jsonDocument/create` (same WordService flow as other document types)
 - **Developer tab** – Assemble custom content controls, switch to debug doc types, and experiment with request payloads without impacting production forms.
 
 ## Persistence & Debugging Tips
