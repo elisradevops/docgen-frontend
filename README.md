@@ -94,6 +94,9 @@ src/
   - Test content (plans, suites, reporter exports)
   - Work item queries (paragraphs/tables)
   - Traceability matrices and change tables
+  - Requirements display behavior:
+    - SRS supports `Display Mode` selection (`Hierarchical` or `Categorized`)
+    - SysRS is always rendered in `Hierarchical` mode (no display-mode selector)
   - SVD change logs with optional Task-to-parent replacement, where Task work items can be replaced by their immediate Requirement or Change Request parent (other or missing parents are omitted)
   - STR/SRS composite builders with guide drawers
   - Attachments, wiki URLs, and validation helpers
