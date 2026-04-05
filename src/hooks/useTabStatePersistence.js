@@ -12,13 +12,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *
  * Notes:
  * - To avoid infinite loops, the incoming `applySavedData` is stabilized via ref; effects do not depend on it directly.
- * - A de-dup key prevents re-applying an unchanged favorite. The key is reset on manual clear to allow reloading the same favorite.
+ * - A de-dup key prevents re-applying an unchanged favorite. Explicit favorite reloads are allowed via a load nonce.
  *
  * @param {Object} params
  * @param {import('../store/DataStore').default} params.store MobX store instance
  * @param {number} params.contentControlIndex Index of the content control (used for session key scoping)
  * @param {(data: any) => (void|Promise<void>)} params.applySavedData Callback to apply the restored data shape into the component state
  * @param {() => void} params.resetLocalState Callback to reset local component state when clearing
+ * @param {string} [params.docType] Explicit document type override for restore/save key scoping
  * @returns {{ isRestoring: boolean, restoreReady: boolean, onClearTabState: () => void }}
  */
 export default function useTabStatePersistence({
@@ -26,12 +27,14 @@ export default function useTabStatePersistence({
   contentControlIndex,
   applySavedData,
   resetLocalState,
+  docType,
 }) {
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreReady, setRestoreReady] = useState(false);
   const restoredFromSessionRef = useRef(false);
   const savedDataRef = useRef(null);
   const appliedFavoriteKeyRef = useRef(null);
+  const effectiveDocType = String(docType || store?.docType || '').trim();
 
   // Keep latest applySavedData in a ref to avoid effect dependency loops
   const applySavedDataRef = useRef(applySavedData);
@@ -43,9 +46,10 @@ export default function useTabStatePersistence({
     const fav = store?.selectedFavorite?.dataToSave;
     if (!fav) return;
     const favId = store?.selectedFavorite?.id;
+    const favLoadNonce = store?.selectedFavorite?.__loadNonce;
     const key =
       favId != null
-        ? `id:${favId}`
+        ? `id:${favId}:load:${String(favLoadNonce || '')}`
         : `hash:${(() => {
             try {
               return JSON.stringify(fav);
@@ -76,9 +80,9 @@ export default function useTabStatePersistence({
   useEffect(() => {
     if (restoredFromSessionRef.current) return;
     if (store?.selectedFavorite?.dataToSave) return;
-    if (!store?.docType || !store?.teamProject) return;
+    if (!effectiveDocType || !store?.teamProject) return;
     try {
-      const dataToSave = store.loadTabSessionState(store.docType, contentControlIndex);
+      const dataToSave = store.loadTabSessionState(effectiveDocType, contentControlIndex);
       if (!dataToSave) {
         setRestoreReady(true);
         return;
@@ -103,12 +107,18 @@ export default function useTabStatePersistence({
     } catch {
       setRestoreReady(true);
     }
-  }, [store, store?.docType, store?.teamProject, contentControlIndex, store?.selectedFavorite?.dataToSave]);
+  }, [
+    store,
+    effectiveDocType,
+    store?.teamProject,
+    contentControlIndex,
+    store?.selectedFavorite?.dataToSave,
+  ]);
 
   const onClearTabState = useCallback(() => {
     try {
-      if (store?.docType) {
-        store.clearTabSessionState(store.docType, contentControlIndex);
+      if (effectiveDocType) {
+        store.clearTabSessionState(effectiveDocType, contentControlIndex);
       }
     } catch {
       /* empty */
@@ -123,12 +133,11 @@ export default function useTabStatePersistence({
     } catch {
       /* empty */
     }
-  }, [store, contentControlIndex, resetLocalState]);
+  }, [store, effectiveDocType, contentControlIndex, resetLocalState]);
 
   useEffect(() => {
-    const dt = store?.docType;
-    if (!dt) return;
-    const ev = `docgen:clear-tab:${dt}`;
+    if (!effectiveDocType) return;
+    const ev = `docgen:clear-tab:${effectiveDocType}`;
     const handler = () => {
       onClearTabState();
     };
@@ -144,7 +153,7 @@ export default function useTabStatePersistence({
         /* empty */
       }
     };
-  }, [store?.docType, onClearTabState]);
+  }, [effectiveDocType, onClearTabState]);
 
   return { isRestoring, restoreReady, onClearTabState };
 }

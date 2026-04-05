@@ -41,6 +41,11 @@ export default class AzureDevopsRestApi {
     return raw;
   }
 
+  _shouldFallbackToLegacyHistorical(err) {
+    const status = Number(err?.response?.status || 0);
+    return status === 404 || status === 405;
+  }
+
   async _wrap(callFn, options = {}) {
     try {
       return await enqueueRequest(callFn, { key: 'ado', ...options });
@@ -78,13 +83,15 @@ export default class AzureDevopsRestApi {
     });
   }
 
-  async getSharedQueries(teamProjectId = null, docType = '') {
+  async getSharedQueries(teamProjectId = null, docType = '', path = 'shared') {
     return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/queries`, {
         headers: this._headers(),
-        //Add my Queries for debugging
-        // params: { teamProjectId, docType, path: 'My Queries' },
-        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), docType, path: '' },
+        params: {
+          teamProjectId: this._normalizeTeamProjectId(teamProjectId),
+          docType,
+          path,
+        },
       });
       return res.data;
     });
@@ -107,7 +114,95 @@ export default class AzureDevopsRestApi {
         {
           headers: this._headers(),
           params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
+        },
+      );
+      return res.data;
+    });
+  }
+
+  async getHistoricalQueries(teamProjectId = '', path = 'shared') {
+    return this._wrap(async () => {
+      const res = await axios.get(`${C.jsonDocument_url}/azure/queries/historical`, {
+        headers: this._headers(),
+        params: {
+          teamProjectId: this._normalizeTeamProjectId(teamProjectId),
+          path,
+        },
+      });
+      return res.data;
+    });
+  }
+
+  async getHistoricalQueryResults(queryId = null, teamProjectId = '', asOf = '') {
+    return this._wrap(async () => {
+      const normalizedTeamProjectId = this._normalizeTeamProjectId(teamProjectId);
+      const normalizedQueryId = String(queryId || '').trim();
+      const payload = {
+        teamProject: normalizedTeamProjectId,
+        queryId: normalizedQueryId,
+        asOf,
+      };
+      try {
+        const res = await axios.post(`${C.jsonDocument_url}/time-machine/as-of`, payload, {
+          headers: this._headers(),
+        });
+        return res.data;
+      } catch (err) {
+        if (!this._shouldFallbackToLegacyHistorical(err)) {
+          throw err;
         }
+      }
+
+      const res = await axios.get(
+        `${C.jsonDocument_url}/azure/queries/${encodeURIComponent(normalizedQueryId)}/historical-results`,
+        {
+          headers: this._headers(),
+          params: {
+            teamProjectId: normalizedTeamProjectId,
+            asOf,
+          },
+        },
+      );
+      return res.data;
+    });
+  }
+
+  async compareHistoricalQueryResults(
+    queryId = null,
+    teamProjectId = '',
+    baselineAsOf = '',
+    compareToAsOf = '',
+  ) {
+    return this._wrap(async () => {
+      const normalizedTeamProjectId = this._normalizeTeamProjectId(teamProjectId);
+      const normalizedQueryId = String(queryId || '').trim();
+      const payload = {
+        teamProject: normalizedTeamProjectId,
+        queryId: normalizedQueryId,
+        baselineTimestamp: baselineAsOf,
+        compareToTimestamp: compareToAsOf,
+      };
+      try {
+        const res = await axios.post(`${C.jsonDocument_url}/time-machine/compare`, payload, {
+          headers: this._headers(),
+        });
+        return res.data;
+      } catch (err) {
+        if (!this._shouldFallbackToLegacyHistorical(err)) {
+          throw err;
+        }
+      }
+
+      const res = await axios.get(
+        `${C.jsonDocument_url}/azure/queries/${encodeURIComponent(normalizedQueryId)}/historical-compare`,
+        {
+          headers: this._headers(),
+          params: {
+            teamProjectId: normalizedTeamProjectId,
+            baselineAsOf,
+            compareToAsOf,
+          },
+        },
       );
       return res.data;
     });
@@ -130,7 +225,7 @@ export default class AzureDevopsRestApi {
         {
           headers: this._headers(),
           params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), includeChildren: true },
-        }
+        },
       );
       return res.data;
     });
@@ -152,7 +247,7 @@ export default class AzureDevopsRestApi {
         {
           headers: this._headers(),
           params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
-        }
+        },
       );
       return res.data;
     });
@@ -165,7 +260,7 @@ export default class AzureDevopsRestApi {
         {
           headers: this._headers(),
           params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), versionIdentifier },
-        }
+        },
       );
       return res.data;
     });
@@ -174,60 +269,60 @@ export default class AzureDevopsRestApi {
   async getReleaseDefinitionList(teamProjectId = '') {
     return this._wrap(
       async () => {
-      const res = await axios.get(`${C.jsonDocument_url}/azure/pipelines/releases/definitions`, {
-        headers: this._headers(),
-        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
-      });
-      return res.data;
+        const res = await axios.get(`${C.jsonDocument_url}/azure/pipelines/releases/definitions`, {
+          headers: this._headers(),
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
+        });
+        return res.data;
       },
-      { priority: 'low' }
+      { priority: 'low' },
     );
   }
 
   async getPipelineList(teamProjectId = '') {
     return this._wrap(
       async () => {
-      const res = await axios.get(`${C.jsonDocument_url}/azure/pipelines`, {
-        headers: this._headers(),
-        params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
-      });
-      return res.data;
+        const res = await axios.get(`${C.jsonDocument_url}/azure/pipelines`, {
+          headers: this._headers(),
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
+        });
+        return res.data;
       },
-      { priority: 'low' }
+      { priority: 'low' },
     );
   }
 
   async getReleaseDefinitionHistory(definitionId = '', teamProjectId = '') {
     return this._wrap(
       async () => {
-      const res = await axios.get(
-        `${C.jsonDocument_url}/azure/pipelines/releases/definitions/${encodeURIComponent(
-          definitionId || ''
-        )}/history`,
-        {
-          headers: this._headers(),
-          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
-        }
-      );
-      return res.data;
+        const res = await axios.get(
+          `${C.jsonDocument_url}/azure/pipelines/releases/definitions/${encodeURIComponent(
+            definitionId || '',
+          )}/history`,
+          {
+            headers: this._headers(),
+            params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
+          },
+        );
+        return res.data;
       },
-      { priority: 'low' }
+      { priority: 'low' },
     );
   }
 
   async getPipelineRunHistory(pipelineId = '', teamProjectId = '') {
     return this._wrap(
       async () => {
-      const res = await axios.get(
-        `${C.jsonDocument_url}/azure/pipelines/${encodeURIComponent(pipelineId || '')}/runs`,
-        {
-          headers: this._headers(),
-          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
-        }
-      );
-      return res.data;
+        const res = await axios.get(
+          `${C.jsonDocument_url}/azure/pipelines/${encodeURIComponent(pipelineId || '')}/runs`,
+          {
+            headers: this._headers(),
+            params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
+          },
+        );
+        return res.data;
       },
-      { priority: 'low' }
+      { priority: 'low' },
     );
   }
   async getRepoPullRequests(RepoId = '', teamProjectId = '') {
@@ -237,7 +332,7 @@ export default class AzureDevopsRestApi {
         {
           headers: this._headers(),
           params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
-        }
+        },
       );
       return res.data;
     });
@@ -264,7 +359,7 @@ export default class AzureDevopsRestApi {
         {
           headers: this._headers(),
           params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId), type: gitObjectType },
-        }
+        },
       );
       return res.data;
     });
@@ -279,8 +374,8 @@ export default class AzureDevopsRestApi {
       const items = Array.isArray(linkTypes?.value)
         ? linkTypes.value
         : Array.isArray(linkTypes)
-        ? linkTypes
-        : [];
+          ? linkTypes
+          : [];
       return items
         .map((link) => ({
           key: link?.attributes?.oppositeEndReferenceName || link?.key || link?.id,
@@ -297,7 +392,7 @@ export default class AzureDevopsRestApi {
               'Attached File',
               'Duplicate Of',
               'Test Case',
-            ].includes(link.text)
+            ].includes(link.text),
         );
     }).catch(() => {
       logger.warn(`no linkTypes found - this could mean azure devops connection problems`);
@@ -308,20 +403,20 @@ export default class AzureDevopsRestApi {
   async getUserDetails() {
     return this._wrap(
       async () => {
-      const res = await axios.get(`${C.jsonDocument_url}/azure/user/profile`, {
-        headers: this._headers(),
-      });
-      // If server inadvertently returns HTML, convert to auth error like before
-      if (typeof res?.data === 'string' && /(<!DOCTYPE|<html\b)/i.test(res.data)) {
-        const err = new Error(
-          'Received sign-in HTML instead of JSON while fetching user details. Likely unauthorized.'
-        );
-        err.status = 401;
-        throw err;
-      }
-      return res.data;
+        const res = await axios.get(`${C.jsonDocument_url}/azure/user/profile`, {
+          headers: this._headers(),
+        });
+        // If server inadvertently returns HTML, convert to auth error like before
+        if (typeof res?.data === 'string' && /(<!DOCTYPE|<html\b)/i.test(res.data)) {
+          const err = new Error(
+            'Received sign-in HTML instead of JSON while fetching user details. Likely unauthorized.',
+          );
+          err.status = 401;
+          throw err;
+        }
+        return res.data;
       },
-      { priority: 'high' }
+      { priority: 'high' },
     );
   }
 

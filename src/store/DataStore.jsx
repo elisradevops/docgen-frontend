@@ -25,6 +25,12 @@ import {
 } from '../utils/storage';
 import { setRequestQueueConfig } from '../utils/requestQueue';
 import { isAccessToken } from '../utils/tokenUtils';
+import { sanitizeFileToken } from '../utils/fileUtils';
+import {
+  mapHistoricalQueriesFromSharedTree,
+  normalizeHistoricalAsOfResult,
+  normalizeHistoricalCompareResult,
+} from '../utils/historicalQuery';
 import C from './constants';
 const sanitizeCookie = (v) => {
   if (v == null) return '';
@@ -587,6 +593,11 @@ class DocGenDataStore {
       selectedTemplate: observable,
       contentControls: observable,
       sharedQueries: observable,
+      historicalQueries: observable,
+      historicalAsOfResult: observable,
+      historicalCompareResult: observable,
+      historicalDateFavorites: observable,
+      historicalFavoriteDraft: observable,
       teamProjectsList: observable,
       templateList: observable,
       templateForDownload: observable,
@@ -628,9 +639,20 @@ class DocGenDataStore {
       fetchDocFolders: action,
       setSelectedTemplate: action,
       fetchSharedQueries: action,
+      fetchHistoricalQueries: action,
       setSharedQueries: action,
+      setHistoricalQueries: action,
       fetchFieldsByType: action,
       setFieldsByType: action,
+      setHistoricalAsOfResult: action,
+      setHistoricalCompareResult: action,
+      fetchHistoricalAsOfResults: action,
+      fetchHistoricalCompareResults: action,
+      fetchHistoricalDateFavorites: action,
+      saveHistoricalDateFavorite: action,
+      deleteHistoricalDateFavorite: action,
+      generateHistoricalCompareReport: action,
+      setHistoricalFavoriteDraft: action,
       fetchGitRepoList: action,
       fetchGitRepoBranches: action,
       setGitRepoList: action,
@@ -754,6 +776,11 @@ class DocGenDataStore {
   contentControls = [];
   selectedTemplate = { key: '', name: '' };
   sharedQueries = { acquiredTrees: null }; // list of queries
+  historicalQueries = [];
+  historicalAsOfResult = null;
+  historicalCompareResult = null;
+  historicalDateFavorites = [];
+  historicalFavoriteDraft = null;
   fieldsByType = [];
   linkTypes = []; // list of link types
   userDetails = [];
@@ -775,6 +802,10 @@ class DocGenDataStore {
     testPlanListLoading: false,
     teamProjectsLoadingState: false,
     sharedQueriesLoadingState: false,
+    historicalQueriesLoadingState: false,
+    historicalAsOfLoadingState: false,
+    historicalCompareLoadingState: false,
+    historicalDateFavoritesLoadingState: false,
     testSuiteListLoading: false,
     fieldsByTypeLoadingState: false,
     contentControlsLoadingState: false,
@@ -1156,6 +1187,15 @@ class DocGenDataStore {
     const normalizedName = normalizeProjectName(teamProjectName);
     this.teamProject = teamProjectId;
     this.teamProjectName = normalizedName;
+    if (teamProjectId !== prevTeamProject) {
+      this.historicalQueries = [];
+      this.historicalAsOfResult = null;
+      this.historicalCompareResult = null;
+      this.historicalDateFavorites = [];
+      this.historicalFavoriteDraft = null;
+      this.favoriteList = [];
+      this.selectedFavorite = null;
+    }
     if (shouldDebugLogs()) {
       console.debug('[ado] setTeamProject', {
         teamProjectId,
@@ -1522,7 +1562,7 @@ class DocGenDataStore {
     if (this.teamProject && this.teamProject !== '' && this.docType && this.docType !== '') {
       this.loadingState.sharedQueriesLoadingState = true;
       this.azureRestClient
-        .getSharedQueries(this.teamProject, this.docType)
+        .getSharedQueries(this.teamProject, this.docType, 'shared')
         .then((data) => {
           this.setSharedQueries(data);
         })
@@ -1537,6 +1577,205 @@ class DocGenDataStore {
           });
         });
     }
+  }
+
+  setHistoricalQueries(queryList) {
+    this.historicalQueries = Array.isArray(queryList) ? [...queryList] : [];
+  }
+
+  setHistoricalAsOfResult(result) {
+    this.historicalAsOfResult = result || null;
+  }
+
+  setHistoricalCompareResult(result) {
+    this.historicalCompareResult = result || null;
+  }
+
+  mapHistoricalQueriesFromSharedTree(sharedPayload) {
+    return mapHistoricalQueriesFromSharedTree(sharedPayload);
+  }
+
+  async fetchHistoricalQueries(path = 'shared') {
+    if (!this.teamProject) {
+      this.setHistoricalQueries([]);
+      return [];
+    }
+    this.loadingState.historicalQueriesLoadingState = true;
+    try {
+      const normalizedPath = String(path || '').trim().toLowerCase() === 'shared' ? 'shared' : path;
+      const sharedQueryPayload = await this.azureRestClient.getHistoricalQueries(this.teamProject, normalizedPath);
+      const data = this.mapHistoricalQueriesFromSharedTree(sharedQueryPayload);
+      this.setHistoricalQueries(data);
+      return this.historicalQueries;
+    } catch (err) {
+      logger.error(`Error occurred while fetching historical queries: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      toast.error(`Failed loading historical queries: ${err?.message || err}`);
+      this.setHistoricalQueries([]);
+      return [];
+    } finally {
+      this.loadingState.historicalQueriesLoadingState = false;
+    }
+  }
+
+  async fetchHistoricalAsOfResults(queryId, asOf) {
+    if (!this.teamProject || !queryId || !asOf) {
+      this.setHistoricalAsOfResult(null);
+      return null;
+    }
+    this.loadingState.historicalAsOfLoadingState = true;
+    try {
+      const data = await this.azureRestClient.getHistoricalQueryResults(queryId, this.teamProject, asOf);
+      const normalized = normalizeHistoricalAsOfResult(data);
+      this.setHistoricalAsOfResult(normalized);
+      return normalized;
+    } catch (err) {
+      logger.error(`Error occurred while fetching historical as-of result: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      this.setHistoricalAsOfResult(null);
+      throw err;
+    } finally {
+      this.loadingState.historicalAsOfLoadingState = false;
+    }
+  }
+
+  async fetchHistoricalCompareResults(queryId, baselineAsOf, compareToAsOf) {
+    if (!this.teamProject || !queryId || !baselineAsOf || !compareToAsOf) {
+      this.setHistoricalCompareResult(null);
+      return null;
+    }
+    this.loadingState.historicalCompareLoadingState = true;
+    try {
+      const data = await this.azureRestClient.compareHistoricalQueryResults(
+        queryId,
+        this.teamProject,
+        baselineAsOf,
+        compareToAsOf
+      );
+      const normalized = normalizeHistoricalCompareResult(data);
+      this.setHistoricalCompareResult(normalized);
+      return normalized;
+    } catch (err) {
+      logger.error(`Error occurred while fetching historical compare result: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      this.setHistoricalCompareResult(null);
+      throw err;
+    } finally {
+      this.loadingState.historicalCompareLoadingState = false;
+    }
+  }
+
+  async fetchHistoricalDateFavorites() {
+    const userId = this.userDetails?.userId;
+    if (!userId || !this.teamProject) {
+      this.historicalDateFavorites = [];
+      return [];
+    }
+    this.loadingState.historicalDateFavoritesLoadingState = true;
+    try {
+      const favorites = await getFavoriteList(userId, 'historical-query-dates', this.teamProject);
+      this.historicalDateFavorites = Array.isArray(favorites) ? favorites : [];
+      return this.historicalDateFavorites;
+    } catch (err) {
+      logger.error(`Error occurred while fetching historical date favorites: ${err.message}`);
+      logger.error('Error stack:');
+      logger.error(err.stack);
+      this.historicalDateFavorites = [];
+      return [];
+    } finally {
+      this.loadingState.historicalDateFavoritesLoadingState = false;
+    }
+  }
+
+  async saveHistoricalDateFavorite(label, dateTimeIso) {
+    const userId = this.userDetails?.userId;
+    const trimmedLabel = String(label || '').trim();
+    const trimmedDateTime = String(dateTimeIso || '').trim();
+    if (!userId || !this.teamProject || !trimmedLabel || !trimmedDateTime) {
+      throw new Error('Missing required data for historical date favorite');
+    }
+    await createFavorite(
+      userId,
+      trimmedLabel,
+      'historical-query-dates',
+      {
+        label: trimmedLabel,
+        dateTimeIso: trimmedDateTime,
+      },
+      this.teamProject,
+      false
+    );
+    await this.fetchHistoricalDateFavorites();
+    return this.historicalDateFavorites;
+  }
+
+  async deleteHistoricalDateFavorite(favoriteId) {
+    const id = String(favoriteId || '').trim();
+    if (!id) return;
+    await deleteFavoriteFromDb(id);
+    this.historicalDateFavorites = this.historicalDateFavorites.filter((favorite) => favorite.id !== id);
+  }
+
+  async generateHistoricalCompareReport(options = {}) {
+    const compareResult = this.historicalCompareResult;
+    if (!compareResult) {
+      throw new Error('Missing historical compare result');
+    }
+    await createIfBucketDoesNotExist(this.ProjectBucketName);
+
+    const orgUrl = this.adoOrgUrl || azureDevopsUrl;
+    const token = this.adoToken || azureDevopsPat;
+    const queryName = String(options?.queryName || compareResult?.queryName || 'historical-query');
+    const safeQueryName = sanitizeFileToken(queryName) || 'historical-query';
+    const projectName = this.teamProjectName || this.teamProject || 'project';
+    const contentControl = {
+      title: 'historical-compare-report-content-control',
+      type: 'historical-compare-report',
+      skin: 'time-machine-report',
+      headingLevel: 1,
+      data: {
+        teamProjectName: projectName,
+        queryName,
+        compareResult,
+      },
+      isExcelSpreadsheet: false,
+    };
+    const fileName = `${projectName}-historical-compare-${safeQueryName}-${this.getFormattedDate()}.docx`;
+    const requestPayload = {
+      tfsCollectionUri: orgUrl,
+      PAT: token,
+      teamProjectName: projectName,
+      templateFile: '',
+      uploadProperties: {
+        bucketName: this.ProjectBucketName,
+        fileName,
+        createdBy: this.userDetails?.name || '',
+        inputSummary: buildInputSummary({
+          docType: 'Historical Query Compare',
+          contextName: queryName,
+          selectedTemplate: null,
+          contentControls: [contentControl],
+        }),
+        inputDetails: buildInputDetails({
+          docType: 'Historical Query Compare',
+          contextName: queryName,
+          selectedTemplate: null,
+          contentControls: [contentControl],
+        }),
+        enableDirectDownload: false,
+      },
+      contentControls: [contentControl],
+      formattingSettings: this.formattingSettings,
+    };
+
+    return sendDocumentToGenerator(requestPayload);
+  }
+
+  setHistoricalFavoriteDraft(draft = {}) {
+    this.historicalFavoriteDraft = draft && typeof draft === 'object' ? { ...draft } : {};
   }
 
   //for fetching fields by type
@@ -1985,10 +2224,12 @@ class DocGenDataStore {
     return sendDocumentToGenerator(docReq);
   }
 
-  async fetchFavoritesList() {
+  async fetchFavoritesList(docTypeOverride = '', teamProjectOverride = '') {
+    const effectiveDocType = String(docTypeOverride || this.docType || '').trim();
+    const effectiveTeamProject = String(teamProjectOverride || this.teamProject || '').trim();
     this.favoriteList =
-      this.userDetails?.userId && this.docType && this.teamProject
-        ? await getFavoriteList(this.userDetails.userId, this.docType, this.teamProject)
+      this.userDetails?.userId && effectiveDocType && effectiveTeamProject
+        ? await getFavoriteList(this.userDetails.userId, effectiveDocType, effectiveTeamProject)
         : [];
     return this.favoriteList;
   }
@@ -1999,13 +2240,19 @@ class DocGenDataStore {
 
   async saveFavorite(favName, isShared) {
     try {
-      if (this.docType !== '' && this.userDetails && this.contentControls?.length > 0) {
-        const item = this.contentControls[0];
-        const { data: dataToSave } = item;
+      const isHistoricalFavorite = String(this.docType || '').trim() === 'historical-query';
+      const historicalData =
+        this.historicalFavoriteDraft && typeof this.historicalFavoriteDraft === 'object'
+          ? this.historicalFavoriteDraft
+          : null;
+      const defaultControl = this.contentControls?.[0] || null;
+      const dataToSave = isHistoricalFavorite ? historicalData : defaultControl?.data;
+
+      if (this.docType !== '' && this.userDetails && dataToSave && typeof dataToSave === 'object') {
         // Also persist the currently selected template with the favorite
         const payload = {
           ...dataToSave,
-          selectedTemplate: this.selectedTemplate || null,
+          selectedTemplate: isHistoricalFavorite ? null : this.selectedTemplate || null,
           isCustomTemplate: !!this.isCustomTemplate,
         };
         await createFavorite(
@@ -2149,15 +2396,23 @@ class DocGenDataStore {
   }
 
   /**
-   * Load a favorite by id and mark as selected. Sets selectedFavorite to null first
-   * to ensure observers react even if the same favorite is chosen again.
+   * Load a favorite by id and mark as selected.
+   * Adds a per-load nonce so observers re-apply even when the same favorite is selected again.
    * Also applies a saved template selection when present.
    * @param {string|number} favoriteId
    */
   loadFavorite(favoriteId) {
-    // Force observable change even when re-selecting the same favorite
-    this.selectedFavorite = null;
-    this.selectedFavorite = this.favoriteList.find((fav) => fav.id === favoriteId);
+    const favorite = this.favoriteList.find((fav) => fav.id === favoriteId);
+    if (!favorite) {
+      this.selectedFavorite = null;
+      return;
+    }
+    // Use a per-load nonce so reloading the same favorite explicitly re-applies it.
+    const loadNonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this.selectedFavorite = {
+      ...favorite,
+      __loadNonce: loadNonce,
+    };
     try {
       const savedTemplate = this.selectedFavorite?.dataToSave?.selectedTemplate;
       if (savedTemplate) {

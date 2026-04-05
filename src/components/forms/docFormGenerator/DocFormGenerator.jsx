@@ -8,8 +8,7 @@ import TraceTableSelector from '../../common/selectors/TraceTableSelector';
 import ChangeTableSelector from '../../common/table/ChangeTableSelector';
 import STRTableSelector from '../../common/table/STRTableSelector';
 import RequirementsSelector from '../../common/table/RequirementsSelector';
-import { Box, Button, Collapse, Typography, Paper, Stack } from '@mui/material';
-import Tooltip from '@mui/material/Tooltip';
+import { Box, Collapse, Typography, Paper, Stack } from '@mui/material';
 import TestReporterSelector from '../../common/table/TestReporterSelector';
 import { toast } from 'react-toastify';
 import RestoreBackdrop from '../../common/RestoreBackdrop';
@@ -17,6 +16,7 @@ import logger from '../../../utils/logger';
 import { makeKey, tryLocalStorageGet, tryLocalStorageSet } from '../../../utils/storage';
 import LoadingState from '../../common/LoadingState';
 import TocReminderToast from '../../common/customToasts/TocReminderToast';
+import FooterBar from '../../common/FooterBar';
 
 const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
@@ -501,69 +501,20 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                   </Grid>
                 </Box>
 
-                <Paper
-                  variant='outlined'
-                  className='footer-bar'
-                  sx={{
-                    // Use flexShrink instead of sticky for Edge 92 compatibility
-                    flexShrink: 0,
-                    mt: 'auto', // Push to bottom
-                    mb: '10px', // Lift up by 1px
-                    mx: 'auto',
-                    maxWidth: 760,
-                    width: '100%',
-                    px: { xs: 1.75, md: 2.5 },
-                    py: { xs: 1.25, md: 1.5 },
-                    backgroundColor: (theme) => theme.palette.background.paper,
-                    display: 'flex',
-                    alignItems: { xs: 'stretch', sm: 'center' },
-                    flexDirection: { xs: 'column', sm: 'row' },
-                    justifyContent: 'space-between',
-                    gap: { xs: 1.25, sm: 2 },
-                    borderRadius: 999,
-                    boxShadow: (theme) => theme.shadows[4],
-                    border: (theme) => `1px solid ${theme.palette.divider}`,
-                    overflow: 'visible',
-                  }}
-                >
-                  <Typography
-                    variant='body2'
-                    color={sendDisabled ? 'warning.main' : 'text.secondary'}
-                    sx={{ fontWeight: 500, flex: 1, minWidth: 0 }}
-                  >
-                    {sendDisabled
+                <FooterBar
+                  message={
+                    sendDisabled
                       ? validationMessage || 'Please complete required selections'
                       : selectedTemplate
-                        ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
-                        : 'Ready to generate'}
-                  </Typography>
-                  <Tooltip
-                    title={sendDisabled ? validationMessage || 'Please complete required selections' : ''}
-                    arrow
-                  >
-                    <span>
-                      <Button
-                        endIcon={<SendIcon />}
-                        loading={loading}
-                        loadingPosition='end'
-                        variant='contained'
-                        size='large'
-                        sx={{
-                          px: { xs: 2.75, sm: 3 },
-                          py: { xs: 0.75, sm: 1 },
-                          fontWeight: 600,
-                          borderRadius: 2,
-                          alignSelf: { xs: 'stretch', sm: 'center' },
-                          boxShadow: 'none',
-                        }}
-                        onClick={handleSendRequest}
-                        disabled={sendDisabled || loading}
-                      >
-                        Send Request
-                      </Button>
-                    </span>
-                  </Tooltip>
-                </Paper>
+                      ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
+                      : 'Ready to generate'
+                  }
+                  disabled={sendDisabled}
+                  loading={loading}
+                  onClick={handleSendRequest}
+                  disabledTooltip={validationMessage || 'Please complete required selections'}
+                  endIcon={<SendIcon />}
+                />
               </Box>
             ) : (
               <Paper
