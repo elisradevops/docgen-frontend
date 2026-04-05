@@ -71,10 +71,10 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
 
   useEffect(() => {
     if (store?.isAdoMode && store?.adoBootStatus !== 'ready') return;
-    if (selectedTeamProject) {
-      store.fetchSharedQueries();
+    if (selectedTeamProject && docType) {
+      store.fetchSharedQueries(docType);
     }
-  }, [selectedTeamProject, store, store?.isAdoMode, store?.adoBootStatus]);
+  }, [selectedTeamProject, docType, store, store?.isAdoMode, store?.adoBootStatus]);
 
   // Auto-select template when none is selected: restore saved selection first, then default to shared/fallback.
   useEffect(() => {
@@ -506,8 +506,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     sendDisabled
                       ? validationMessage || 'Please complete required selections'
                       : selectedTemplate
-                      ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
-                      : 'Ready to generate'
+                        ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
+                        : 'Ready to generate'
                   }
                   disabled={sendDisabled}
                   loading={loading}

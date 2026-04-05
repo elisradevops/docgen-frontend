@@ -25,7 +25,7 @@ import RestoreBackdrop from '../RestoreBackdrop';
 
 /**
  * RequirementsSelector
- * Manages requirements queries and display mode with session/favorite restore via useTabStatePersistence.
+ * Manages requirements queries with session/favorite restore via useTabStatePersistence.
  * Used by both SRS and SysRS document variants.
  */
 
@@ -95,7 +95,7 @@ const RequirementsSelector = observer(
           setIncludeSystemRequirements(!!dataToSave?.includeSystemRequirements);
           setIncludeSystemToSoftwareRequirements(!!dataToSave?.includeSystemToSoftwareRequirements);
           setIncludeSoftwareToSystemRequirements(!!dataToSave?.includeSoftwareToSystemRequirements);
-          if (dataToSave?.displayMode) setDisplayMode(dataToSave.displayMode);
+          if (!isSysRs && dataToSave?.displayMode) setDisplayMode(dataToSave.displayMode);
           savedDataRef.current = dataToSave;
         } catch {
           toast.error('Error processing saved data');
@@ -241,19 +241,24 @@ const RequirementsSelector = observer(
 
       store.setContextName('');
 
+      const data = {
+        queriesRequest: backend,
+        includeSystemRequirements,
+        includeSystemToSoftwareRequirements,
+        includeSoftwareToSystemRequirements,
+      };
+
+      if (!isSysRs) {
+        data.displayMode = displayMode;
+      }
+
       addToDocumentRequestObject(
         {
           type,
           title: contentControlTitle,
           skin,
           headingLevel: 1,
-          data: {
-            queriesRequest: backend,
-            includeSystemRequirements,
-            includeSystemToSoftwareRequirements,
-            includeSoftwareToSystemRequirements,
-            displayMode,
-          },
+          data,
         },
         contentControlIndex,
       );
@@ -356,123 +361,125 @@ const RequirementsSelector = observer(
     return (
       <>
         <Stack spacing={1.5}>
-          <SectionCard
-            title='Display Mode'
-            description='Choose how to organize requirements in the document.'
-            compact
-          >
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Tooltip
-                title='Displays the full tree structure with all work item types (Features, Epics, and Requirements) showing parent-child relationships'
-                placement='top'
-                arrow
-              >
-                <Box
-                  onClick={() => setDisplayMode('hierarchical')}
-                  sx={{
-                    flex: 1,
-                    p: 2,
-                    border: '2px solid',
-                    borderColor: displayMode === 'hierarchical' ? 'primary.main' : 'divider',
-                    borderRadius: 1,
-                    cursor: 'pointer',
-                    backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'background.paper',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'action.hover',
-                    },
-                  }}
+          {!isSysRs ? (
+            <SectionCard
+              title='Display Mode'
+              description='Choose how to organize requirements in the document.'
+              compact
+            >
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Tooltip
+                  title='Displays the full tree structure with all work item types (Features, Epics, and Requirements) showing parent-child relationships'
+                  placement='top'
+                  arrow
                 >
-                  <Stack
-                    direction='row'
-                    spacing={1.5}
-                    alignItems='center'
+                  <Box
+                    onClick={() => setDisplayMode('hierarchical')}
+                    sx={{
+                      flex: 1,
+                      p: 2,
+                      border: '2px solid',
+                      borderColor: displayMode === 'hierarchical' ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'background.paper',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'action.hover',
+                      },
+                    }}
                   >
-                    <AccountTreeIcon
-                      sx={{
-                        fontSize: 24,
-                        color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
-                      }}
-                    />
-                    <Box>
-                      <Typography
-                        variant='body2'
-                        fontWeight={displayMode === 'hierarchical' ? 'bold' : 'medium'}
-                        color={displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.primary'}
-                      >
-                        Hierarchical
-                      </Typography>
-                      <Typography
-                        variant='caption'
+                    <Stack
+                      direction='row'
+                      spacing={1.5}
+                      alignItems='center'
+                    >
+                      <AccountTreeIcon
                         sx={{
+                          fontSize: 24,
                           color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
-                          opacity: displayMode === 'hierarchical' ? 0.9 : 1,
                         }}
-                      >
-                        Full tree structure
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Box>
-              </Tooltip>
+                      />
+                      <Box>
+                        <Typography
+                          variant='body2'
+                          fontWeight={displayMode === 'hierarchical' ? 'bold' : 'medium'}
+                          color={displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.primary'}
+                        >
+                          Hierarchical
+                        </Typography>
+                        <Typography
+                          variant='caption'
+                          sx={{
+                            color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
+                            opacity: displayMode === 'hierarchical' ? 0.9 : 1,
+                          }}
+                        >
+                          Full tree structure
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </Tooltip>
 
-              <Tooltip
-                title='Groups only Requirement work items by their type, filtering out Features and Epics for a focused document'
-                placement='top'
-                arrow
-              >
-                <Box
-                  onClick={() => setDisplayMode('categorized')}
-                  sx={{
-                    flex: 1,
-                    p: 2,
-                    border: '2px solid',
-                    borderColor: displayMode === 'categorized' ? 'primary.main' : 'divider',
-                    borderRadius: 1,
-                    cursor: 'pointer',
-                    backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'background.paper',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'action.hover',
-                    },
-                  }}
+                <Tooltip
+                  title='Groups only Requirement work items by their type, filtering out Features and Epics for a focused document'
+                  placement='top'
+                  arrow
                 >
-                  <Stack
-                    direction='row'
-                    spacing={1.5}
-                    alignItems='center'
+                  <Box
+                    onClick={() => setDisplayMode('categorized')}
+                    sx={{
+                      flex: 1,
+                      p: 2,
+                      border: '2px solid',
+                      borderColor: displayMode === 'categorized' ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'background.paper',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'action.hover',
+                      },
+                    }}
                   >
-                    <CategoryIcon
-                      sx={{
-                        fontSize: 24,
-                        color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
-                      }}
-                    />
-                    <Box>
-                      <Typography
-                        variant='body2'
-                        fontWeight={displayMode === 'categorized' ? 'bold' : 'medium'}
-                        color={displayMode === 'categorized' ? 'primary.contrastText' : 'text.primary'}
-                      >
-                        Categorized
-                      </Typography>
-                      <Typography
-                        variant='caption'
+                    <Stack
+                      direction='row'
+                      spacing={1.5}
+                      alignItems='center'
+                    >
+                      <CategoryIcon
                         sx={{
+                          fontSize: 24,
                           color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
-                          opacity: displayMode === 'categorized' ? 0.9 : 1,
                         }}
-                      >
-                        By requirement type
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Box>
-              </Tooltip>
-            </Box>
-          </SectionCard>
+                      />
+                      <Box>
+                        <Typography
+                          variant='body2'
+                          fontWeight={displayMode === 'categorized' ? 'bold' : 'medium'}
+                          color={displayMode === 'categorized' ? 'primary.contrastText' : 'text.primary'}
+                        >
+                          Categorized
+                        </Typography>
+                        <Typography
+                          variant='caption'
+                          sx={{
+                            color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
+                            opacity: displayMode === 'categorized' ? 0.9 : 1,
+                          }}
+                        >
+                          By requirement type
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </Tooltip>
+              </Box>
+            </SectionCard>
+          ) : null}
 
           <SectionCard
             title={requirementsLabel}

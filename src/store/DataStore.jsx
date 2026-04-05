@@ -49,7 +49,10 @@ const shouldDebugLogs = () => {
 };
 
 const isAllowedTemplateFileName = (objectKeyOrName) => {
-  const fileName = String(objectKeyOrName || '').split('/').pop() || '';
+  const fileName =
+    String(objectKeyOrName || '')
+      .split('/')
+      .pop() || '';
   if (!fileName) return false;
   if (fileName.startsWith('.')) return false;
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -70,7 +73,11 @@ const toTitleCase = (s) =>
     .replace(/\s+/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-const beautifyContextName = (s) => String(s || '').replace(/_-_/g, ' - ').replace(/_/g, ' ').trim();
+const beautifyContextName = (s) =>
+  String(s || '')
+    .replace(/_-_/g, ' - ')
+    .replace(/_/g, ' ')
+    .trim();
 
 const formatUiDateTime = (date) => {
   if (!(date instanceof Date) || isNaN(date.getTime())) return '';
@@ -159,7 +166,9 @@ const summarizeInputValue = (value) => {
     const compact = value
       .filter((v) => v != null)
       .slice(0, 3)
-      .map((v) => (typeof v === 'object' ? summarizeInputValue(v?.text ?? v?.name ?? v?.key ?? v?.id) : String(v)));
+      .map((v) =>
+        typeof v === 'object' ? summarizeInputValue(v?.text ?? v?.name ?? v?.key ?? v?.id) : String(v),
+      );
     const suffix = value.length > 3 ? ` (+${value.length - 3})` : '';
     return compact.join(', ') + suffix;
   }
@@ -294,18 +303,22 @@ const extractInputDetails = (data) => {
     handledKeys.add('workItemFilterOptions');
     const w = data.workItemFilterOptions;
     const enabled = !!w?.isEnabled;
-    addDetail({ key: 'workItemFilters', label: 'Work item filters', value: enabled ? 'Enabled' : 'Disabled' });
+    addDetail({
+      key: 'workItemFilters',
+      label: 'Work item filters',
+      value: enabled ? 'Enabled' : 'Disabled',
+    });
     if (enabled) {
       const types = Array.isArray(w?.workItemTypes)
         ? w.workItemTypes
         : w?.workItemType
-        ? [w.workItemType]
-        : [];
+          ? [w.workItemType]
+          : [];
       const states = Array.isArray(w?.workItemStates)
         ? w.workItemStates
         : w?.workItemState
-        ? [w.workItemState]
-        : [];
+          ? [w.workItemState]
+          : [];
       const typesLabel = types.length ? summarizeList(types.map(toTitleCase)) : 'All';
       const statesLabel = states.length ? summarizeList(states.map(toTitleCase)) : 'All';
       addDetail({ key: 'workItemTypes', label: 'Work item types', value: typesLabel });
@@ -322,7 +335,8 @@ const extractInputDetails = (data) => {
     addDetail({ key: 'includeSystemOverview', label: 'Include system overview', value: sys ? 'Yes' : 'No' });
     if (sys) {
       const sysTitle = summarizeInputValue(sys?.title ?? sys?.name ?? sys?.text ?? sys?.id);
-      if (sysTitle) addDetail({ key: 'systemOverviewQuery', label: 'System overview query', value: sysTitle });
+      if (sysTitle)
+        addDetail({ key: 'systemOverviewQuery', label: 'System overview query', value: sysTitle });
     }
     addDetail({ key: 'includeKnownBugs', label: 'Include known possible bugs', value: bugs ? 'Yes' : 'No' });
     if (bugs) {
@@ -336,12 +350,20 @@ const extractInputDetails = (data) => {
     handledKeys.add('linkedWiOptions');
     const l = data.linkedWiOptions;
     const enabled = !!l?.isEnabled;
-    addDetail({ key: 'linkedWorkItems', label: 'Linked work items', value: enabled ? 'Enabled' : 'Disabled' });
+    addDetail({
+      key: 'linkedWorkItems',
+      label: 'Linked work items',
+      value: enabled ? 'Enabled' : 'Disabled',
+    });
     if (enabled) {
       const types = String(l?.linkedWiTypes || 'both');
       const rel = String(l?.linkedWiRelationship || 'both');
       const typesText =
-        types === 'both' ? 'Requirements + Features' : types === 'reqOnly' ? 'Requirements only' : 'Features only';
+        types === 'both'
+          ? 'Requirements + Features'
+          : types === 'reqOnly'
+            ? 'Requirements only'
+            : 'Features only';
       const relText =
         rel === 'both' ? 'Covers + Affects' : rel === 'coversOnly' ? 'Covers only' : 'Affects only';
       addDetail({ key: 'linkedWiTypes', label: 'Linked types', value: typesText });
@@ -357,7 +379,11 @@ const extractInputDetails = (data) => {
       addDetail({ key: 'wikiFile', label: 'Wiki file', value: 'Not included' });
     } else {
       const fileName = url.split('?')[0].split('/').pop();
-      addDetail({ key: 'wikiFile', label: 'Wiki file', value: fileName ? `Uploaded (${fileName})` : 'Uploaded' });
+      addDetail({
+        key: 'wikiFile',
+        label: 'Wiki file',
+        value: fileName ? `Uploaded (${fileName})` : 'Uploaded',
+      });
     }
   }
 
@@ -373,16 +399,19 @@ const extractInputDetails = (data) => {
     handledKeys.add('openPCRsSelectionRequest');
     const o = data.openPCRsSelectionRequest || {};
     const mode = String(o?.openPcrMode || 'none');
-    const modeText =
-      mode === 'query' ? 'From query' : mode === 'linked' ? 'From linked CR / Bugs' : 'No';
+    const modeText = mode === 'query' ? 'From query' : mode === 'linked' ? 'From linked CR / Bugs' : 'No';
     addDetail({ key: 'openPcrMode', label: 'Open PCRs', value: modeText });
     if (mode === 'query') {
       const common = String(o?.includeCommonColumnsMode || 'both');
       const commonText =
         common === 'openPcrOnly' ? 'Open PCR only' : common === 'testOnly' ? 'Test case only' : 'Both';
       addDetail({ key: 'openPcrCommonCols', label: 'Include common columns', value: commonText });
-      const t2o = summarizeInputValue(o?.testToOpenPcrQuery?.value ?? o?.testToOpenPcrQuery?.title ?? o?.testToOpenPcrQuery?.name);
-      const o2t = summarizeInputValue(o?.OpenPcrToTestQuery?.value ?? o?.OpenPcrToTestQuery?.title ?? o?.OpenPcrToTestQuery?.name);
+      const t2o = summarizeInputValue(
+        o?.testToOpenPcrQuery?.value ?? o?.testToOpenPcrQuery?.title ?? o?.testToOpenPcrQuery?.name,
+      );
+      const o2t = summarizeInputValue(
+        o?.OpenPcrToTestQuery?.value ?? o?.OpenPcrToTestQuery?.title ?? o?.OpenPcrToTestQuery?.name,
+      );
       if (t2o) addDetail({ key: 'testToOpenPcrQuery', label: 'Test to Open PCR query', value: t2o });
       if (o2t) addDetail({ key: 'openPcrToTestQuery', label: 'Open PCR to Test query', value: o2t });
     }
@@ -393,7 +422,11 @@ const extractInputDetails = (data) => {
     handledKeys.add('stepExecution');
     const s = data.stepExecution || {};
     const enabled = !!s?.isEnabled;
-    addDetail({ key: 'stepExecutionEnabled', label: 'Detailed steps execution', value: enabled ? 'Yes' : 'No' });
+    addDetail({
+      key: 'stepExecutionEnabled',
+      label: 'Detailed steps execution',
+      value: enabled ? 'Yes' : 'No',
+    });
     if (enabled) {
       if (typeof s?.flatSuiteTestCases === 'boolean') {
         addDetail({
@@ -404,7 +437,11 @@ const extractInputDetails = (data) => {
       }
       const a = s?.generateAttachments || {};
       if (typeof a?.isEnabled === 'boolean') {
-        addDetail({ key: 'stepExecutionGenerateAttachments', label: 'Generate attachments', value: a.isEnabled ? 'Yes' : 'No' });
+        addDetail({
+          key: 'stepExecutionGenerateAttachments',
+          label: 'Generate attachments',
+          value: a.isEnabled ? 'Yes' : 'No',
+        });
         if (a.isEnabled) {
           const type = String(a?.attachmentType || 'asEmbedded');
           const typeText = type === 'asLink' ? 'Link' : 'Embedded';
@@ -423,13 +460,25 @@ const extractInputDetails = (data) => {
       }
       const r = s?.generateRequirements || {};
       if (typeof r?.isEnabled === 'boolean') {
-        addDetail({ key: 'stepExecutionGenerateRequirements', label: 'Generate covered requirements', value: r.isEnabled ? 'Yes' : 'No' });
+        addDetail({
+          key: 'stepExecutionGenerateRequirements',
+          label: 'Generate covered requirements',
+          value: r.isEnabled ? 'Yes' : 'No',
+        });
         if (r.isEnabled) {
           const reqMode = String(r?.requirementInclusionMode || 'linkedRequirement');
           const reqModeText = reqMode === 'query' ? 'From query' : 'From linked requirements';
-          addDetail({ key: 'stepExecutionRequirementsMode', label: 'Requirements based on', value: reqModeText });
+          addDetail({
+            key: 'stepExecutionRequirementsMode',
+            label: 'Requirements based on',
+            value: reqModeText,
+          });
           if (typeof r?.includeCustomerId === 'boolean') {
-            addDetail({ key: 'stepExecutionIncludeCustomerId', label: 'Include customer ID (requirements)', value: r.includeCustomerId ? 'Yes' : 'No' });
+            addDetail({
+              key: 'stepExecutionIncludeCustomerId',
+              label: 'Include customer ID (requirements)',
+              value: r.includeCustomerId ? 'Yes' : 'No',
+            });
           }
           if (typeof r?.flatSuiteTestCases === 'boolean') {
             addDetail({
@@ -438,8 +487,15 @@ const extractInputDetails = (data) => {
               value: r.flatSuiteTestCases ? 'Yes' : 'No',
             });
           }
-          const reqQuery = summarizeInputValue(r?.testReqQuery?.value ?? r?.testReqQuery?.title ?? r?.testReqQuery?.name);
-          if (reqQuery) addDetail({ key: 'stepExecutionRequirementsQuery', label: 'Requirements query', value: reqQuery });
+          const reqQuery = summarizeInputValue(
+            r?.testReqQuery?.value ?? r?.testReqQuery?.title ?? r?.testReqQuery?.name,
+          );
+          if (reqQuery)
+            addDetail({
+              key: 'stepExecutionRequirementsQuery',
+              label: 'Requirements query',
+              value: reqQuery,
+            });
         }
       }
     }
@@ -449,15 +505,27 @@ const extractInputDetails = (data) => {
     handledKeys.add('stepAnalysis');
     const s = data.stepAnalysis || {};
     const enabled = !!s?.isEnabled;
-    addDetail({ key: 'stepAnalysisEnabled', label: 'Detailed steps analysis', value: enabled ? 'Yes' : 'No' });
+    addDetail({
+      key: 'stepAnalysisEnabled',
+      label: 'Detailed steps analysis',
+      value: enabled ? 'Yes' : 'No',
+    });
     if (enabled) {
       const a = s?.generateRunAttachments || {};
       if (typeof a?.isEnabled === 'boolean') {
-        addDetail({ key: 'stepAnalysisGenerateRunAttachments', label: 'Generate run attachments (analysis)', value: a.isEnabled ? 'Yes' : 'No' });
+        addDetail({
+          key: 'stepAnalysisGenerateRunAttachments',
+          label: 'Generate run attachments (analysis)',
+          value: a.isEnabled ? 'Yes' : 'No',
+        });
         if (a.isEnabled) {
           const type = String(a?.attachmentType || 'asEmbedded');
           const typeText = type === 'asLink' ? 'Link' : 'Embedded';
-          addDetail({ key: 'stepAnalysisAttachmentType', label: 'Attachment type (analysis)', value: typeText });
+          addDetail({
+            key: 'stepAnalysisAttachmentType',
+            label: 'Attachment type (analysis)',
+            value: typeText,
+          });
           if (typeof a?.includeAttachmentContent === 'boolean') {
             addDetail({
               key: 'stepAnalysisIncludeAttachmentContent',
@@ -965,7 +1033,7 @@ class DocGenDataStore {
           try {
             const list = await getBucketFileList('document-forms', dt);
             const jsonFiles = (list || []).filter(
-              (it) => it?.name && it.name.toLowerCase().endsWith('.json')
+              (it) => it?.name && it.name.toLowerCase().endsWith('.json'),
             );
             const norm = (s) => (s || '').toLowerCase().replace(/[\s_-]/g, '');
             const dtNorm = norm(dt);
@@ -1129,7 +1197,7 @@ class DocGenDataStore {
       const data = await this.azureRestClient.getTeamProjects();
       const list =
         (Array.isArray(data?.value) ? data.value : Array.isArray(data) ? data : []).sort((a, b) =>
-          a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+          a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
         ) || [];
       this.teamProjectsList = list;
       if (shouldDebugLogs()) {
@@ -1140,8 +1208,7 @@ class DocGenDataStore {
         });
       }
       const match = list.find(
-        (project) =>
-          normalizeProjectName(project?.name || '').toLowerCase() === normalizedName.toLowerCase()
+        (project) => normalizeProjectName(project?.name || '').toLowerCase() === normalizedName.toLowerCase(),
       );
       if (match?.id && match?.name) {
         if (shouldDebugLogs()) {
@@ -1329,7 +1396,7 @@ class DocGenDataStore {
         projects.map(async (proj) => {
           const data = await getBucketFileList('templates', docType, false, proj);
           return data || []; // Return an empty array if no data
-        })
+        }),
       );
 
       // Flatten the array of template lists
@@ -1394,7 +1461,7 @@ class DocGenDataStore {
       const status =
         err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
       logger.error(
-        `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
+        `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`,
       );
       let message = 'Authentication failed';
       const raw = `${err?.message || ''}`;
@@ -1453,7 +1520,7 @@ class DocGenDataStore {
         this.isAuthenticated = false;
         this.lastAuthErrorStatus = status ?? null;
         logger.error(
-          `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`
+          `Error occurred while fetching user details${status ? ` (${status})` : ''}: ${err?.message}`,
         );
         logger.error('Error stack:');
         logger.error(err?.stack);
@@ -1558,11 +1625,12 @@ class DocGenDataStore {
   }
 
   //for fetching shared queries
-  fetchSharedQueries() {
-    if (this.teamProject && this.teamProject !== '' && this.docType && this.docType !== '') {
+  fetchSharedQueries(docTypeOverride = '') {
+    const effectiveDocType = String(docTypeOverride || this.docType || '').trim();
+    if (this.teamProject && this.teamProject !== '' && effectiveDocType !== '') {
       this.loadingState.sharedQueriesLoadingState = true;
       this.azureRestClient
-        .getSharedQueries(this.teamProject, this.docType, 'shared')
+        .getSharedQueries(this.teamProject, effectiveDocType, 'shared')
         .then((data) => {
           this.setSharedQueries(data);
         })
@@ -1602,8 +1670,16 @@ class DocGenDataStore {
     }
     this.loadingState.historicalQueriesLoadingState = true;
     try {
-      const normalizedPath = String(path || '').trim().toLowerCase() === 'shared' ? 'shared' : path;
-      const sharedQueryPayload = await this.azureRestClient.getHistoricalQueries(this.teamProject, normalizedPath);
+      const normalizedPath =
+        String(path || '')
+          .trim()
+          .toLowerCase() === 'shared'
+          ? 'shared'
+          : path;
+      const sharedQueryPayload = await this.azureRestClient.getHistoricalQueries(
+        this.teamProject,
+        normalizedPath,
+      );
       const data = this.mapHistoricalQueriesFromSharedTree(sharedQueryPayload);
       this.setHistoricalQueries(data);
       return this.historicalQueries;
@@ -1652,7 +1728,7 @@ class DocGenDataStore {
         queryId,
         this.teamProject,
         baselineAsOf,
-        compareToAsOf
+        compareToAsOf,
       );
       const normalized = normalizeHistoricalCompareResult(data);
       this.setHistoricalCompareResult(normalized);
@@ -1706,7 +1782,7 @@ class DocGenDataStore {
         dateTimeIso: trimmedDateTime,
       },
       this.teamProject,
-      false
+      false,
     );
     await this.fetchHistoricalDateFavorites();
     return this.historicalDateFavorites;
@@ -1997,7 +2073,7 @@ class DocGenDataStore {
     try {
       const data = await this.azureRestClient.getReleaseDefinitionHistory(
         releaseDefinitionId,
-        this.teamProject
+        this.teamProject,
       );
       return data.value || [];
     } catch (err) {
@@ -2019,7 +2095,7 @@ class DocGenDataStore {
       .then((data) => {
         if (data.count > 0) {
           const sortedTestPlans = data.value.sort((a, b) =>
-            a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+            a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
           );
           this.setTestPlansList(sortedTestPlans);
         }
@@ -2096,7 +2172,7 @@ class DocGenDataStore {
             const objectName = this.resolveObjectName(item, bucketName);
             if (!objectName) return;
             item.url = `${C.jsonDocument_url}/minio/download/${bucketName}/${this.encodeObjectPath(
-              objectName
+              objectName,
             )}`;
           });
         }
@@ -2119,17 +2195,12 @@ class DocGenDataStore {
   //for fetching documents
   fetchTemplatesListForDownload(projectNameOverride = undefined) {
     this.loadingState.templatesLoadingState = true;
-    const effectiveProjectName = projectNameOverride !== undefined ? projectNameOverride : this.teamProjectName;
+    const effectiveProjectName =
+      projectNameOverride !== undefined ? projectNameOverride : this.teamProjectName;
     if (this.templatesForDownloadPromise) {
       return this.templatesForDownloadPromise;
     }
-    this.templatesForDownloadPromise = getBucketFileList(
-      'templates',
-      null,
-      true,
-      effectiveProjectName,
-      true
-    )
+    this.templatesForDownloadPromise = getBucketFileList('templates', null, true, effectiveProjectName, true)
       .then((data) => {
         // Process the data to fix the URLs
         const processedData = (data || [])
@@ -2149,7 +2220,7 @@ class DocGenDataStore {
           const objectName = this.resolveObjectName(item, bucketName);
           if (!objectName) return;
           item.url = `${C.jsonDocument_url}/minio/download/${bucketName}/${this.encodeObjectPath(
-            objectName
+            objectName,
           )}`;
         });
 
@@ -2261,7 +2332,7 @@ class DocGenDataStore {
           this.docType,
           payload,
           this.teamProject,
-          isShared
+          isShared,
         );
       } else {
         logger.debug('Missing required data for saving favorite');
@@ -2519,7 +2590,7 @@ class DocGenDataStore {
       prefixDocType,
       false,
       this.teamProjectName,
-      true
+      true,
     );
 
     const normalized = (files || [])
@@ -2561,11 +2632,7 @@ class DocGenDataStore {
   }
 
   async deleteMewpExternalIngestionFile(fileItem) {
-    return await deleteFile(
-      fileItem,
-      this.teamProjectName,
-      this.getMewpExternalIngestionBucketName()
-    );
+    return await deleteFile(fileItem, this.teamProjectName, this.getMewpExternalIngestionBucketName());
   }
 
   async validateMewpExternalIngestionFiles(options = {}) {
@@ -2621,8 +2688,8 @@ class DocGenDataStore {
     const tempFileName = this.isCustomTemplate
       ? `${templateName}-${this.getFormattedDate()}`
       : this.contextName
-      ? `${this.teamProjectName}-${this.docType}-${this.contextName}-${this.getFormattedDate()}`
-      : `${this.teamProjectName}-${this.docType}-${this.getFormattedDate()}`;
+        ? `${this.teamProjectName}-${this.docType}-${this.contextName}-${this.getFormattedDate()}`
+        : `${this.teamProjectName}-${this.docType}-${this.getFormattedDate()}`;
     const orgUrl = this.adoOrgUrl || azureDevopsUrl;
     const token = this.adoToken || azureDevopsPat;
     return {
