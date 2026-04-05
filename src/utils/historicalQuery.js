@@ -220,8 +220,8 @@ export const normalizeHistoricalAsOfResult = (payload) => {
   const rowsRaw = Array.isArray(payload?.rows)
     ? payload.rows
     : Array.isArray(payload?.items)
-    ? payload.items
-    : [];
+      ? payload.items
+      : [];
   const rows = rowsRaw.map((row) => normalizeAsOfRow(row));
   return {
     queryId: payload?.queryId || '',
@@ -229,6 +229,7 @@ export const normalizeHistoricalAsOfResult = (payload) => {
     teamProject: payload?.teamProject || payload?.teamProjectName || '',
     asOf: payload?.asOf || payload?.asOfTimestamp || '',
     total: toCount(payload?.total ?? payload?.totalCount, rows.length),
+    skippedWorkItemsCount: toCount(payload?.skippedWorkItemsCount, 0),
     rows,
   };
 };
@@ -258,8 +259,8 @@ export const normalizeHistoricalCompareResult = (payload) => {
   const rowsRaw = Array.isArray(payload?.rows)
     ? payload.rows
     : Array.isArray(payload?.items)
-    ? payload.items
-    : [];
+      ? payload.items
+      : [];
   const detailsById = new Map();
   if (Array.isArray(payload?.details)) {
     payload.details.forEach((detail) => {
@@ -322,6 +323,11 @@ export const normalizeHistoricalCompareResult = (payload) => {
     compareTo: {
       asOf: payload?.compareTo?.asOf || payload?.compareToTimestamp || '',
       total: toCount(payload?.compareTo?.total ?? payload?.compareToCount, 0),
+    },
+    skippedWorkItems: {
+      baselineCount: toCount(payload?.skippedWorkItems?.baselineCount, 0),
+      compareToCount: toCount(payload?.skippedWorkItems?.compareToCount, 0),
+      totalDistinct: toCount(payload?.skippedWorkItems?.totalDistinct, 0),
     },
     summary,
     rows,

@@ -111,12 +111,14 @@ describe('historicalQuery utils', () => {
       queryName: 'My Query',
       asOfTimestamp: '2025-12-22T17:08:00.000Z',
       totalCount: 1,
+      skippedWorkItemsCount: 3,
       items: [{ id: 12, workItemType: 'Bug', title: 'Test' }],
     });
 
     expect(normalized.queryName).toBe('My Query');
     expect(normalized.asOf).toBe('2025-12-22T17:08:00.000Z');
     expect(normalized.total).toBe(1);
+    expect(normalized.skippedWorkItemsCount).toBe(3);
     expect(normalized.rows[0].id).toBe(12);
   });
 
@@ -128,6 +130,11 @@ describe('historicalQuery utils', () => {
       baselineCount: 4,
       compareToCount: 5,
       updatedCount: 2,
+      skippedWorkItems: {
+        baselineCount: 2,
+        compareToCount: 1,
+        totalDistinct: 2,
+      },
       rows: [{ id: 1, compareStatus: 'changed', title: 'WI 1' }],
     });
 
@@ -135,6 +142,11 @@ describe('historicalQuery utils', () => {
     expect(normalized.baseline.asOf).toBe('2025-12-22T17:08:00.000Z');
     expect(normalized.compareTo.asOf).toBe('2025-12-28T08:57:00.000Z');
     expect(normalized.summary.updatedCount).toBe(2);
+    expect(normalized.skippedWorkItems).toEqual({
+      baselineCount: 2,
+      compareToCount: 1,
+      totalDistinct: 2,
+    });
     expect(normalized.rows[0].compareStatus).toBe('Changed');
   });
 });

@@ -21,6 +21,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SendOutlinedIcon from '@mui/icons-material/SendOutlined';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -58,7 +59,10 @@ const findTreeNode = (nodes, predicate) => {
   return null;
 };
 
-const getWorkItemTypeKey = (value) => String(value || '').trim().toLowerCase();
+const getWorkItemTypeKey = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
 const toPickerDateValue = (value) => {
   const iso = toIsoOrEmpty(value);
   return iso ? new Date(iso) : null;
@@ -73,7 +77,10 @@ const PickerNowAdornment = (props) => {
   const { children, position = 'end', onNowClick, nowLabel = 'Now', ...rest } = props;
   const canRenderNow = position === 'end' && typeof onNowClick === 'function';
   return (
-    <InputAdornment position={position} {...rest}>
+    <InputAdornment
+      position={position}
+      {...rest}
+    >
       {canRenderNow ? (
         <Button
           size='small'
@@ -282,8 +289,14 @@ const HistoricalQueryTab = observer(({ store }) => {
       return;
     }
     try {
-      await store.fetchHistoricalAsOfResults(queryId, asOfIso);
+      const result = await store.fetchHistoricalAsOfResults(queryId, asOfIso);
       toast.success('Historical query snapshot loaded.');
+      const skippedCount = Number(result?.skippedWorkItemsCount || 0);
+      if (skippedCount > 0) {
+        toast.info(
+          `${skippedCount} work item(s) were excluded because they did not exist at the selected point in time.`,
+        );
+      }
     } catch (error) {
       const message = error?.response?.data?.message || error?.message || error;
       toast.error(`Failed loading historical query result: ${message}`);
@@ -296,12 +309,18 @@ const HistoricalQueryTab = observer(({ store }) => {
       return;
     }
     try {
-      await store.fetchHistoricalCompareResults(
+      const result = await store.fetchHistoricalCompareResults(
         selectedQuery?.id,
         compareValidation.baselineIso,
         compareValidation.compareToIso,
       );
       toast.success('Historical compare completed.');
+      const skippedDistinctCount = Number(result?.skippedWorkItems?.totalDistinct || 0);
+      if (skippedDistinctCount > 0) {
+        toast.info(
+          `${skippedDistinctCount} work item(s) were excluded from one or both snapshots because they did not exist at the selected dates.`,
+        );
+      }
     } catch (error) {
       const message = error?.response?.data?.message || error?.message || error;
       toast.error(`Failed comparing historical query snapshots: ${message}`);
@@ -316,7 +335,9 @@ const HistoricalQueryTab = observer(({ store }) => {
     }
     setIsGeneratingReport(true);
     try {
-      await store.generateHistoricalCompareReport({ queryName: selectedQuery?.title || result?.queryName || '' });
+      await store.generateHistoricalCompareReport({
+        queryName: selectedQuery?.title || result?.queryName || '',
+      });
       toast.success('Historical compare report generation request submitted.');
     } catch (error) {
       const message = error?.response?.data?.message || error?.message || error;
@@ -357,7 +378,13 @@ const HistoricalQueryTab = observer(({ store }) => {
   );
   const canSendRequest = mode === MODE_COMPARE && compareResultIsCurrent;
   const asOfRows = Array.isArray(store.historicalAsOfResult?.rows) ? store.historicalAsOfResult.rows : [];
-  const compareRows = Array.isArray(store.historicalCompareResult?.rows) ? store.historicalCompareResult.rows : [];
+  const compareRows = Array.isArray(store.historicalCompareResult?.rows)
+    ? store.historicalCompareResult.rows
+    : [];
+  const asOfSkippedCount = Number(store.historicalAsOfResult?.skippedWorkItemsCount || 0);
+  const compareSkippedDistinctCount = Number(
+    store.historicalCompareResult?.skippedWorkItems?.totalDistinct || 0,
+  );
 
   const renderWorkItemType = (workItemTypeName) => {
     const text = String(workItemTypeName || '').trim();
@@ -372,8 +399,20 @@ const HistoricalQueryTab = observer(({ store }) => {
     const canUseIcon = iconUrl && isSameOrigin(iconUrl);
 
     return (
-      <Stack direction='row' spacing={0.75} alignItems='center'>
-        <Box sx={{ width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Stack
+        direction='row'
+        spacing={0.75}
+        alignItems='center'
+      >
+        <Box
+          sx={{
+            width: 16,
+            height: 16,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
           {canUseIcon ? (
             <Box
               sx={{
@@ -400,11 +439,20 @@ const HistoricalQueryTab = observer(({ store }) => {
   };
 
   return (
-    <Stack spacing={2} sx={{ height: '100%', minHeight: 0, overflow: 'auto' }}>
-      <Paper elevation={0} sx={{ p: { xs: 2, md: 3 } }}>
+    <Stack
+      spacing={2}
+      sx={{ height: '100%', minHeight: 0, overflow: 'auto' }}
+    >
+      <Paper
+        elevation={0}
+        sx={{ p: { xs: 2, md: 3 } }}
+      >
         <Stack spacing={2}>
           <Typography variant='h6'>Historical Query & Compare</Typography>
-          <Typography variant='body2' color='text.secondary'>
+          <Typography
+            variant='body2'
+            color='text.secondary'
+          >
             Run shared Azure DevOps queries as-of a specific date-time, or compare two date-times with
             noise-control field checks.
           </Typography>
@@ -422,12 +470,26 @@ const HistoricalQueryTab = observer(({ store }) => {
             />
           </Box>
 
-          <Tabs value={mode} onChange={(_event, value) => setMode(value)} aria-label='historical-query-mode'>
-            <Tab value={MODE_AS_OF} label='As Of' />
-            <Tab value={MODE_COMPARE} label='Compare' />
+          <Tabs
+            value={mode}
+            onChange={(_event, value) => setMode(value)}
+            aria-label='historical-query-mode'
+          >
+            <Tab
+              value={MODE_AS_OF}
+              label='As Of'
+            />
+            <Tab
+              value={MODE_COMPARE}
+              label='Compare'
+            />
           </Tabs>
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            useFlexGap
+          >
             {hasAsOfResult ? (
               <Chip
                 color='primary'
@@ -442,13 +504,20 @@ const HistoricalQueryTab = observer(({ store }) => {
             ) : null}
           </Stack>
           {hasAsOfResult && hasCompareResult ? (
-            <Alert severity='info' sx={{ py: 0.5 }}>
+            <Alert
+              severity='info'
+              sx={{ py: 0.5 }}
+            >
               Both results are available. Switch between As Of and Compare tabs to review each output.
             </Alert>
           ) : null}
 
           {mode === MODE_AS_OF ? (
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} alignItems={{ md: 'center' }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={1.5}
+              alignItems={{ md: 'center' }}
+            >
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DateTimePicker
                   ampm
@@ -465,7 +534,10 @@ const HistoricalQueryTab = observer(({ store }) => {
                   }}
                 />
               </LocalizationProvider>
-              <Stack direction='row' spacing={1}>
+              <Stack
+                direction='row'
+                spacing={1}
+              >
                 <Button
                   variant='text'
                   color='inherit'
@@ -474,7 +546,11 @@ const HistoricalQueryTab = observer(({ store }) => {
                 >
                   Clear
                 </Button>
-                <Button variant='contained' disabled={loadingAsOf} onClick={runAsOf}>
+                <Button
+                  variant='contained'
+                  disabled={loadingAsOf}
+                  onClick={runAsOf}
+                >
                   {loadingAsOf ? 'Loading…' : 'Run Snapshot'}
                 </Button>
               </Stack>
@@ -482,8 +558,15 @@ const HistoricalQueryTab = observer(({ store }) => {
           ) : (
             <Stack spacing={1.5}>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-                  <Stack direction='row' spacing={1} sx={{ width: '100%' }}>
+                <Stack
+                  direction={{ xs: 'column', md: 'row' }}
+                  spacing={1.5}
+                >
+                  <Stack
+                    direction='row'
+                    spacing={1}
+                    sx={{ width: '100%' }}
+                  >
                     <DateTimePicker
                       ampm
                       format='dd/MM/yyyy hh:mm a'
@@ -501,7 +584,11 @@ const HistoricalQueryTab = observer(({ store }) => {
                       }}
                     />
                   </Stack>
-                  <Stack direction='row' spacing={1} sx={{ width: '100%' }}>
+                  <Stack
+                    direction='row'
+                    spacing={1}
+                    sx={{ width: '100%' }}
+                  >
                     <DateTimePicker
                       ampm
                       format='dd/MM/yyyy hh:mm a'
@@ -522,11 +609,18 @@ const HistoricalQueryTab = observer(({ store }) => {
                 </Stack>
               </LocalizationProvider>
               {compareValidation.errors.query || compareValidation.errors.order ? (
-                <Alert severity='warning' sx={{ py: 0.5 }}>
+                <Alert
+                  severity='warning'
+                  sx={{ py: 0.5 }}
+                >
                   {compareValidation.errors.query || compareValidation.errors.order}
                 </Alert>
               ) : null}
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                alignItems={{ sm: 'center' }}
+              >
                 <Button
                   variant='contained'
                   disabled={loadingCompare || !compareValidation.isValid}
@@ -547,8 +641,8 @@ const HistoricalQueryTab = observer(({ store }) => {
                     !hasCompareResult
                       ? 'Run compare first'
                       : !compareResultIsCurrent
-                      ? 'Inputs changed. Run compare again.'
-                      : ''
+                        ? 'Inputs changed. Run compare again.'
+                        : ''
                   }
                   arrow
                 >
@@ -565,12 +659,15 @@ const HistoricalQueryTab = observer(({ store }) => {
                   </span>
                 </Tooltip>
               </Stack>
-              <Typography variant='body2' color={canSendRequest ? 'text.secondary' : 'warning.main'}>
+              <Typography
+                variant='body2'
+                color={canSendRequest ? 'text.secondary' : 'warning.main'}
+              >
                 {!hasCompareResult
                   ? 'Run compare to enable report generation.'
                   : canSendRequest
-                  ? 'Compare is ready. You can send the generation request now.'
-                  : 'Inputs changed after compare. Run compare again to refresh the report data.'}
+                    ? 'Compare is ready. You can send the generation request now.'
+                    : 'Inputs changed after compare. Run compare again to refresh the report data.'}
               </Typography>
             </Stack>
           )}
@@ -578,10 +675,20 @@ const HistoricalQueryTab = observer(({ store }) => {
       </Paper>
 
       {mode === MODE_AS_OF && loadingAsOf ? (
-        <Paper elevation={0} sx={{ p: { xs: 2, md: 3 } }}>
-          <Stack direction='row' spacing={1.25} alignItems='center'>
+        <Paper
+          elevation={0}
+          sx={{ p: { xs: 2, md: 3 } }}
+        >
+          <Stack
+            direction='row'
+            spacing={1.25}
+            alignItems='center'
+          >
             <CircularProgress size={20} />
-            <Typography variant='body2' color='text.secondary'>
+            <Typography
+              variant='body2'
+              color='text.secondary'
+            >
               Loading snapshot results...
             </Typography>
           </Stack>
@@ -589,7 +696,10 @@ const HistoricalQueryTab = observer(({ store }) => {
       ) : null}
 
       {mode === MODE_AS_OF && store.historicalAsOfResult ? (
-        <Paper elevation={0} sx={{ p: { xs: 2, md: 3 } }}>
+        <Paper
+          elevation={0}
+          sx={{ p: { xs: 2, md: 3 } }}
+        >
           <Stack spacing={1.5}>
             <Typography variant='h6'>
               {store.historicalAsOfResult.queryName} · As Of {formatDateTime(store.historicalAsOfResult.asOf)}
@@ -599,7 +709,28 @@ const HistoricalQueryTab = observer(({ store }) => {
               color='primary'
               sx={{ width: 'fit-content' }}
             />
-            <TableContainer component={Paper} variant='outlined'>
+            {asOfSkippedCount > 0 ? (
+              <Alert
+                severity='info'
+                sx={{ py: 0.5 }}
+              >
+                {asOfSkippedCount} work item(s) were excluded because they did not exist at the selected point
+                in time.
+                <Tooltip title='Historical snapshots can only include work items that already existed at the selected As Of timestamp.'>
+                  <Box
+                    component='span'
+                    sx={{ ml: 0.75, display: 'inline-flex', verticalAlign: 'middle', cursor: 'help' }}
+                    aria-label='Why were items skipped?'
+                  >
+                    <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+                  </Box>
+                </Tooltip>
+              </Alert>
+            ) : null}
+            <TableContainer
+              component={Paper}
+              variant='outlined'
+            >
               <Table size='small'>
                 <TableHead>
                   <TableRow>
@@ -616,7 +747,10 @@ const HistoricalQueryTab = observer(({ store }) => {
                 <TableBody>
                   {asOfRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align='center'>
+                      <TableCell
+                        colSpan={8}
+                        align='center'
+                      >
                         No work items found.
                       </TableCell>
                     </TableRow>
@@ -626,7 +760,12 @@ const HistoricalQueryTab = observer(({ store }) => {
                       <TableCell>{row.id}</TableCell>
                       <TableCell>{renderWorkItemType(row.workItemType)}</TableCell>
                       <TableCell>
-                        <Link href={row.workItemUrl} target='_blank' rel='noreferrer' sx={{ color: 'primary.main' }}>
+                        <Link
+                          href={row.workItemUrl}
+                          target='_blank'
+                          rel='noreferrer'
+                          sx={{ color: 'primary.main' }}
+                        >
                           {row.title}
                         </Link>
                       </TableCell>
@@ -645,10 +784,20 @@ const HistoricalQueryTab = observer(({ store }) => {
       ) : null}
 
       {mode === MODE_COMPARE && loadingCompare ? (
-        <Paper elevation={0} sx={{ p: { xs: 2, md: 3 } }}>
-          <Stack direction='row' spacing={1.25} alignItems='center'>
+        <Paper
+          elevation={0}
+          sx={{ p: { xs: 2, md: 3 } }}
+        >
+          <Stack
+            direction='row'
+            spacing={1.25}
+            alignItems='center'
+          >
             <CircularProgress size={20} />
-            <Typography variant='body2' color='text.secondary'>
+            <Typography
+              variant='body2'
+              color='text.secondary'
+            >
               Comparing snapshots...
             </Typography>
           </Stack>
@@ -656,17 +805,32 @@ const HistoricalQueryTab = observer(({ store }) => {
       ) : null}
 
       {mode === MODE_COMPARE && store.historicalCompareResult ? (
-        <Paper elevation={0} sx={{ p: { xs: 2, md: 3 } }}>
+        <Paper
+          elevation={0}
+          sx={{ p: { xs: 2, md: 3 } }}
+        >
           <Stack spacing={1.5}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} justifyContent='space-between'>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.25}
+              justifyContent='space-between'
+            >
               <Typography variant='h6'>
                 {store.historicalCompareResult.queryName} · Compare{' '}
                 {formatDateTime(store.historicalCompareResult.baseline?.asOf)} vs{' '}
                 {formatDateTime(store.historicalCompareResult.compareTo?.asOf)}
               </Typography>
             </Stack>
-            <Stack direction='row' spacing={1} flexWrap='wrap' useFlexGap>
-              <Chip label={`Added: ${store.historicalCompareResult.summary?.addedCount || 0}`} color='success' />
+            <Stack
+              direction='row'
+              spacing={1}
+              flexWrap='wrap'
+              useFlexGap
+            >
+              <Chip
+                label={`Added: ${store.historicalCompareResult.summary?.addedCount || 0}`}
+                color='success'
+              />
               <Chip
                 label={`Deleted: ${store.historicalCompareResult.summary?.deletedCount || 0}`}
                 color='error'
@@ -681,7 +845,28 @@ const HistoricalQueryTab = observer(({ store }) => {
                 color='primary'
               />
             </Stack>
-            <TableContainer component={Paper} variant='outlined'>
+            {compareSkippedDistinctCount > 0 ? (
+              <Alert
+                severity='info'
+                sx={{ py: 0.5 }}
+              >
+                {compareSkippedDistinctCount} work item(s) were excluded from one or both snapshots because
+                they did not exist at the selected dates.
+                <Tooltip title='An item can appear as Added/Deleted when it exists only on one date. Items missing on both dates are excluded.'>
+                  <Box
+                    component='span'
+                    sx={{ ml: 0.75, display: 'inline-flex', verticalAlign: 'middle', cursor: 'help' }}
+                    aria-label='Why were items skipped?'
+                  >
+                    <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+                  </Box>
+                </Tooltip>
+              </Alert>
+            ) : null}
+            <TableContainer
+              component={Paper}
+              variant='outlined'
+            >
               <Table size='small'>
                 <TableHead>
                   <TableRow>
@@ -697,7 +882,10 @@ const HistoricalQueryTab = observer(({ store }) => {
                 <TableBody>
                   {compareRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} align='center'>
+                      <TableCell
+                        colSpan={7}
+                        align='center'
+                      >
                         No work items found.
                       </TableCell>
                     </TableRow>
@@ -707,14 +895,21 @@ const HistoricalQueryTab = observer(({ store }) => {
                       <TableCell>{row.id}</TableCell>
                       <TableCell>{renderWorkItemType(row.workItemType)}</TableCell>
                       <TableCell>
-                        <Link href={row.workItemUrl} target='_blank' rel='noreferrer' sx={{ color: 'primary.main' }}>
+                        <Link
+                          href={row.workItemUrl}
+                          target='_blank'
+                          rel='noreferrer'
+                          sx={{ color: 'primary.main' }}
+                        >
                           {row.title}
                         </Link>
                       </TableCell>
                       <TableCell>{row.baselineRevisionId ?? ''}</TableCell>
                       <TableCell>{row.compareToRevisionId ?? ''}</TableCell>
                       <TableCell>{row.compareStatus}</TableCell>
-                      <TableCell>{Array.isArray(row.changedFields) ? row.changedFields.join(', ') : ''}</TableCell>
+                      <TableCell>
+                        {Array.isArray(row.changedFields) ? row.changedFields.join(', ') : ''}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -724,7 +919,10 @@ const HistoricalQueryTab = observer(({ store }) => {
         </Paper>
       ) : null}
 
-      <RestoreBackdrop open={!!isRestoring} label='Restoring historical query selection…' />
+      <RestoreBackdrop
+        open={!!isRestoring}
+        label='Restoring historical query selection…'
+      />
     </Stack>
   );
 });
