@@ -558,7 +558,7 @@ const RequirementsSelector = observer(
           {isSysRs ? (
             <SectionCard
               title='Customer/System Requirements Query (for Traceability)'
-              description='Provide a flat ADO query containing the customer or parent-system requirements your system requirements trace to. Only Requirement items are used. Leave off to skip the traceability table.'
+              description='Select a query containing the customer or parent-system requirements to trace against. DocGen will extract only Requirement-type items from the query results regardless of query structure. Optional - leave off to skip Chapter 6 traceability.'
               enableToggle='Include'
               enabled={includeCustomerRequirements}
               onToggle={(_event, checked) => setIncludeCustomerRequirements(checked)}
