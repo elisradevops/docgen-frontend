@@ -15,7 +15,7 @@ import {
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import CategoryIcon from '@mui/icons-material/Category';
 import { observer } from 'mobx-react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import QueryTree from '../QueryTree';
 import { toast } from 'react-toastify';
 import SectionCard from '../../layout/SectionCard';
@@ -37,6 +37,7 @@ const defaultQueriesForSRS = {
 
 const defaultQueriesForSysRS = {
   systemRequirements: null,
+  customerRequirements: null,
   subsystemToSystemRequirements: null,
   systemToSubsystemRequirements: null,
 };
@@ -61,6 +62,7 @@ const RequirementsSelector = observer(
 
     const [queryTrees, setQueryTrees] = useState({
       systemRequirementsTree: [],
+      customerRequirementsTree: [],
       forwardTraceTree: [],
       reverseTraceTree: [],
     });
@@ -70,6 +72,7 @@ const RequirementsSelector = observer(
 
     // Indicator checkboxes (first is always required if queries exist)
     const [includeSystemRequirements, setIncludeSystemRequirements] = useState(false);
+    const [includeCustomerRequirements, setIncludeCustomerRequirements] = useState(false);
     const [includeSystemToSoftwareRequirements, setIncludeSystemToSoftwareRequirements] = useState(false);
     const [includeSoftwareToSystemRequirements, setIncludeSoftwareToSystemRequirements] = useState(false);
 
@@ -83,6 +86,7 @@ const RequirementsSelector = observer(
             isSysRs
               ? {
                   systemRequirements: saved.systemRequirements || null,
+                  customerRequirements: saved.customerRequirements || null,
                   subsystemToSystemRequirements: saved.subsystemToSystemRequirements || null,
                   systemToSubsystemRequirements: saved.systemToSubsystemRequirements || null,
                 }
@@ -93,6 +97,7 @@ const RequirementsSelector = observer(
                 },
           );
           setIncludeSystemRequirements(!!dataToSave?.includeSystemRequirements);
+          setIncludeCustomerRequirements(isSysRs ? !!dataToSave?.includeCustomerRequirements : false);
           setIncludeSystemToSoftwareRequirements(!!dataToSave?.includeSystemToSoftwareRequirements);
           setIncludeSoftwareToSystemRequirements(!!dataToSave?.includeSoftwareToSystemRequirements);
           if (!isSysRs && dataToSave?.displayMode) setDisplayMode(dataToSave.displayMode);
@@ -107,6 +112,7 @@ const RequirementsSelector = observer(
     const resetLocalState = useCallback(() => {
       setQueriesRequest(isSysRs ? defaultQueriesForSysRS : defaultQueriesForSRS);
       setIncludeSystemRequirements(false);
+      setIncludeCustomerRequirements(false);
       setIncludeSystemToSoftwareRequirements(false);
       setIncludeSoftwareToSystemRequirements(false);
       setDisplayMode('hierarchical');
@@ -123,6 +129,9 @@ const RequirementsSelector = observer(
     // Handlers for selections
     const onSelectedSystemRequirementsQuery = useCallback((query) => {
       setQueriesRequest((prev) => ({ ...prev, systemRequirements: query }));
+    }, []);
+    const onSelectedCustomerRequirementsQuery = useCallback((query) => {
+      setQueriesRequest((prev) => ({ ...prev, customerRequirements: query }));
     }, []);
     const onSelectedForwardTraceQuery = useCallback(
       (query) => {
@@ -165,6 +174,10 @@ const RequirementsSelector = observer(
           systemRequirementsTree: acquired.systemRequirementsQueries?.systemRequirementsQueryTree
             ? [acquired.systemRequirementsQueries.systemRequirementsQueryTree]
             : [],
+          customerRequirementsTree:
+            isSysRs && acquired.customerRequirementsQueries?.systemRequirementsQueryTree
+              ? [acquired.customerRequirementsQueries.systemRequirementsQueryTree]
+              : [],
           forwardTraceTree: isSysRs
             ? acquired.subsystemToSystemRequirementsQueries
               ? [acquired.subsystemToSystemRequirementsQueries]
@@ -183,6 +196,7 @@ const RequirementsSelector = observer(
       } else {
         setQueryTrees({
           systemRequirementsTree: [],
+          customerRequirementsTree: [],
           forwardTraceTree: [],
           reverseTraceTree: [],
         });
@@ -199,6 +213,7 @@ const RequirementsSelector = observer(
         isSysRs
           ? {
               systemRequirements: dataToSave.systemRequirements || null,
+              customerRequirements: dataToSave.customerRequirements || null,
               subsystemToSystemRequirements: dataToSave.subsystemToSystemRequirements || null,
               systemToSubsystemRequirements: dataToSave.systemToSubsystemRequirements || null,
             }
@@ -213,6 +228,9 @@ const RequirementsSelector = observer(
     // Update document request
     const UpdateDocumentRequestObject = useCallback(() => {
       if (!store?.docType) return;
+
+      store.setContextName('');
+
       const backend = {};
       const selectedForwardTrace = isSysRs
         ? queriesRequest.subsystemToSystemRequirements
@@ -238,8 +256,11 @@ const RequirementsSelector = observer(
           backend.softwareToSystemRequirements = selectedReverseTrace;
         }
       }
-
-      store.setContextName('');
+      if (isSysRs) {
+        backend.customerRequirements = includeCustomerRequirements
+          ? queriesRequest.customerRequirements || null
+          : null;
+      }
 
       const data = {
         queriesRequest: backend,
@@ -248,7 +269,9 @@ const RequirementsSelector = observer(
         includeSoftwareToSystemRequirements,
       };
 
-      if (!isSysRs) {
+      if (isSysRs) {
+        data.includeCustomerRequirements = includeCustomerRequirements;
+      } else {
         data.displayMode = displayMode;
       }
 
@@ -265,6 +288,7 @@ const RequirementsSelector = observer(
     }, [
       queriesRequest,
       includeSystemRequirements,
+      includeCustomerRequirements,
       includeSystemToSoftwareRequirements,
       includeSoftwareToSystemRequirements,
       store,
@@ -285,6 +309,7 @@ const RequirementsSelector = observer(
     }, [
       queriesRequest,
       includeSystemRequirements,
+      includeCustomerRequirements,
       includeSystemToSoftwareRequirements,
       includeSoftwareToSystemRequirements,
       displayMode,
@@ -335,6 +360,20 @@ const RequirementsSelector = observer(
             `Query: ${queriesRequest.systemRequirements.value || queriesRequest.systemRequirements.text || queriesRequest.systemRequirements.title || 'Custom'}`,
           ]
         : undefined;
+    const customerRequirementsSummary = useMemo(
+      () =>
+        includeCustomerRequirements && queriesRequest.customerRequirements
+          ? [
+              `Query: ${
+                queriesRequest.customerRequirements.value ||
+                queriesRequest.customerRequirements.text ||
+                queriesRequest.customerRequirements.title ||
+                'Custom'
+              }`,
+            ]
+          : undefined,
+      [includeCustomerRequirements, queriesRequest.customerRequirements],
+    );
     const systemToSoftwareSummary =
       includeSystemToSoftwareRequirements && selectedForwardTrace
         ? [
@@ -516,98 +555,129 @@ const RequirementsSelector = observer(
             )}
           </SectionCard>
 
-          <SectionCard
-            title='Trace analysis'
-            description='Optionally include cross-level requirement mappings.'
-            compact
-            loading={loading}
-            loadingText='Loading queries...'
-          >
-            {isSysRs && (includeSystemToSoftwareRequirements || includeSoftwareToSystemRequirements) ? (
-              <Alert
-                severity='info'
-                sx={{ mb: 1.5 }}
-              >
-                If this document is a system-level specification - no traceability is required. For a
-                sub-system specification - the following trace tables are required.
-              </Alert>
-            ) : null}
-            <Grid
-              container
-              spacing={1.5}
+          {isSysRs ? (
+            <SectionCard
+              title='Customer/System Requirements Query (for Traceability)'
+              description='Select a query containing the customer or parent-system requirements to trace against. DocGen will extract only Requirement-type items from the query results regardless of query structure. Optional - leave off to skip Chapter 6 traceability.'
+              enableToggle='Include'
+              enabled={includeCustomerRequirements}
+              onToggle={(_event, checked) => setIncludeCustomerRequirements(checked)}
+              compact
+              loading={loading}
+              loadingText='Loading queries...'
             >
-              <Grid size={{ xs: 12, md: 6 }}>
+              {includeCustomerRequirements ? (
                 <Stack spacing={1}>
-                  <FormControlLabel
-                    disabled={loading || !queryTrees.forwardTraceTree?.length}
-                    control={
-                      <Checkbox
-                        checked={includeSystemToSoftwareRequirements}
-                        onChange={(_event, checked) => setIncludeSystemToSoftwareRequirements(checked)}
-                      />
-                    }
-                    label={firstTraceLabel}
+                  <SettingsDisplay
+                    title='Selected query'
+                    settings={customerRequirementsSummary || []}
+                    emptyMessage='No query selected yet.'
+                    boxProps={{ p: 0, bgcolor: 'transparent' }}
                   />
-                  <Collapse
-                    in={includeSystemToSoftwareRequirements}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <Stack spacing={1}>
-                      <SettingsDisplay
-                        title='Selected query'
-                        settings={systemToSoftwareSummary || []}
-                        emptyMessage='No query selected yet.'
-                        boxProps={{ p: 0, bgcolor: 'transparent' }}
-                      />
-                      <QueryTree
-                        data={queryTrees.forwardTraceTree}
-                        prevSelectedQuery={selectedForwardTrace}
-                        onSelectedQuery={onSelectedForwardTraceQuery}
-                        queryType={isSysRs ? 'subsystem-to-system' : 'system-to-software'}
-                        isLoading={loading}
-                      />
-                    </Stack>
-                  </Collapse>
-                </Stack>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Stack spacing={1}>
-                  <FormControlLabel
-                    disabled={loading || !queryTrees.reverseTraceTree?.length}
-                    control={
-                      <Checkbox
-                        checked={includeSoftwareToSystemRequirements}
-                        onChange={(_event, checked) => setIncludeSoftwareToSystemRequirements(checked)}
-                      />
-                    }
-                    label={secondTraceLabel}
+                  <QueryTree
+                    data={queryTrees.customerRequirementsTree}
+                    prevSelectedQuery={queriesRequest.customerRequirements}
+                    onSelectedQuery={onSelectedCustomerRequirementsQuery}
+                    queryType='customer-requirements'
+                    isLoading={loading}
                   />
-                  <Collapse
-                    in={includeSoftwareToSystemRequirements}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <Stack spacing={1}>
-                      <SettingsDisplay
-                        title='Selected query'
-                        settings={softwareToSystemSummary || []}
-                        emptyMessage='No query selected yet.'
-                        boxProps={{ p: 0, bgcolor: 'transparent' }}
-                      />
-                      <QueryTree
-                        data={queryTrees.reverseTraceTree}
-                        prevSelectedQuery={selectedReverseTrace}
-                        onSelectedQuery={onSelectedReverseTraceQuery}
-                        queryType={isSysRs ? 'system-to-subsystem' : 'software-to-system'}
-                        isLoading={loading}
-                      />
-                    </Stack>
-                  </Collapse>
                 </Stack>
+              ) : (
+                <Typography
+                  variant='body2'
+                  color='text.secondary'
+                >
+                  Enable to select the Customer/System requirements query.
+                </Typography>
+              )}
+            </SectionCard>
+          ) : null}
+
+          {!isSysRs && (
+            <SectionCard
+              title='Trace analysis'
+              description='Optionally include cross-level requirement mappings.'
+              compact
+              loading={loading}
+              loadingText='Loading queries...'
+            >
+              <Grid
+                container
+                spacing={1.5}
+              >
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Stack spacing={1}>
+                    <FormControlLabel
+                      disabled={loading || !queryTrees.forwardTraceTree?.length}
+                      control={
+                        <Checkbox
+                          checked={includeSystemToSoftwareRequirements}
+                          onChange={(_event, checked) => setIncludeSystemToSoftwareRequirements(checked)}
+                        />
+                      }
+                      label={firstTraceLabel}
+                    />
+                    <Collapse
+                      in={includeSystemToSoftwareRequirements}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <Stack spacing={1}>
+                        <SettingsDisplay
+                          title='Selected query'
+                          settings={systemToSoftwareSummary || []}
+                          emptyMessage='No query selected yet.'
+                          boxProps={{ p: 0, bgcolor: 'transparent' }}
+                        />
+                        <QueryTree
+                          data={queryTrees.forwardTraceTree}
+                          prevSelectedQuery={selectedForwardTrace}
+                          onSelectedQuery={onSelectedForwardTraceQuery}
+                          queryType='system-to-software'
+                          isLoading={loading}
+                        />
+                      </Stack>
+                    </Collapse>
+                  </Stack>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Stack spacing={1}>
+                    <FormControlLabel
+                      disabled={loading || !queryTrees.reverseTraceTree?.length}
+                      control={
+                        <Checkbox
+                          checked={includeSoftwareToSystemRequirements}
+                          onChange={(_event, checked) => setIncludeSoftwareToSystemRequirements(checked)}
+                        />
+                      }
+                      label={secondTraceLabel}
+                    />
+                    <Collapse
+                      in={includeSoftwareToSystemRequirements}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <Stack spacing={1}>
+                        <SettingsDisplay
+                          title='Selected query'
+                          settings={softwareToSystemSummary || []}
+                          emptyMessage='No query selected yet.'
+                          boxProps={{ p: 0, bgcolor: 'transparent' }}
+                        />
+                        <QueryTree
+                          data={queryTrees.reverseTraceTree}
+                          prevSelectedQuery={selectedReverseTrace}
+                          onSelectedQuery={onSelectedReverseTraceQuery}
+                          queryType='software-to-system'
+                          isLoading={loading}
+                        />
+                      </Stack>
+                    </Collapse>
+                  </Stack>
+                </Grid>
               </Grid>
-            </Grid>
-          </SectionCard>
+            </SectionCard>
+          )}
 
           {editingMode ? (
             <Box>

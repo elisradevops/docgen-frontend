@@ -79,40 +79,49 @@ const RequirementsGuide = ({ variant = 'srs' } = {}) => {
           />
         </ListItem>
 
-        <ListItemButton onClick={() => setOpenTraceability((prev) => !prev)}>
-          <ListItemIcon>{openTraceability ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
-          <ListItemText
-            primary='Traceability Sections'
-            secondary={
-              isSysRs
-                ? 'Include bidirectional traceability between System and Sub-System requirements.'
-                : 'Include bidirectional traceability between System and Software requirements.'
-            }
-          />
-        </ListItemButton>
-        <Collapse
-          in={openTraceability}
-          timeout='auto'
-          unmountOnExit
-        >
-          <List
-            component='div'
-            disablePadding
-          >
-            <ListItem sx={{ pl: 6 }}>
+        {isSysRs ? (
+          <ListItem>
+            <ListItemText
+              primary='Customer/System Requirements Query (for Traceability)'
+              secondary='Select a query containing the customer or parent-system requirements to trace against. DocGen will extract only Requirement-type items from the query results regardless of query structure. Optional - leave off to skip Chapter 6 traceability.'
+            />
+          </ListItem>
+        ) : null}
+
+        {!isSysRs && (
+          <>
+            <ListItemButton onClick={() => setOpenTraceability((prev) => !prev)}>
+              <ListItemIcon>{openTraceability ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
               <ListItemText
-                primary={forwardTraceLabel}
-                secondary={forwardTraceDescription}
+                primary='Traceability Sections'
+                secondary='Include bidirectional traceability between System and Software requirements.'
               />
-            </ListItem>
-            <ListItem sx={{ pl: 6 }}>
-              <ListItemText
-                primary={reverseTraceLabel}
-                secondary={reverseTraceDescription}
-              />
-            </ListItem>
-          </List>
-        </Collapse>
+            </ListItemButton>
+            <Collapse
+              in={openTraceability}
+              timeout='auto'
+              unmountOnExit
+            >
+              <List
+                component='div'
+                disablePadding
+              >
+                <ListItem sx={{ pl: 6 }}>
+                  <ListItemText
+                    primary={forwardTraceLabel}
+                    secondary={forwardTraceDescription}
+                  />
+                </ListItem>
+                <ListItem sx={{ pl: 6 }}>
+                  <ListItemText
+                    primary={reverseTraceLabel}
+                    secondary={reverseTraceDescription}
+                  />
+                </ListItem>
+              </List>
+            </Collapse>
+          </>
+        )}
 
         <ListItemButton onClick={() => setOpenNotes((prev) => !prev)}>
           <ListItemIcon>{openNotes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
