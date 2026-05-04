@@ -9,6 +9,19 @@ const baseHeaders = {
   'Content-Type': 'application/json',
 };
 
+const getServerErrorMessage = (data) => {
+  if (!data) return 'Server request failed';
+  if (typeof data === 'string') return data;
+  if (typeof data.message === 'string' && data.message.trim()) return data.message;
+  if (typeof data.error === 'string' && data.error.trim()) return data.error;
+  if (typeof data.error?.message === 'string' && data.error.message.trim()) return data.error.message;
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return 'Server request failed';
+  }
+};
+
 export const getBucketFileList = async (
   bucketName,
   docType = null,
@@ -144,7 +157,7 @@ export const sendDocumentToGenerator = async (docJson) => {
     if (err.response) {
       // If the error has a response, it comes from the server
       logger.error('Error response while sending document to generator:', err.response.data);
-      throw new Error(err.response.data.error);
+      throw new Error(getServerErrorMessage(err.response.data));
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while sending document to generator');
       throw new Error('Request timeout - server took too long to respond');
