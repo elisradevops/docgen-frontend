@@ -211,6 +211,7 @@ const TestReporterSelector = observer(
     const [selectedFields, setSelectedFields] = useState([]);
     const [linkedQueryRequest, setLinkedQueryRequest] = useState(defaultSelectedQueries);
     const [includeAllHistory, setIncludeAllHistory] = useState(false);
+    const [useLatestTestCaseProperties, setUseLatestTestCaseProperties] = useState(false);
     const [reportMode, setReportMode] = useState('regular');
     const [mergeDuplicateRequirementCells, setMergeDuplicateRequirementCells] = useState(false);
     const [externalBugsFile, setExternalBugsFile] = useState(null);
@@ -596,6 +597,7 @@ const TestReporterSelector = observer(
       const savedRunFilterMode = dataToSave?.runFilterMode;
       const savedRunStepFilterMode = dataToSave?.runStepFilterMode;
       const savedIncludeAllHistory = dataToSave?.includeAllHistory;
+      const savedUseLatestTestCaseProperties = dataToSave?.useLatestTestCaseProperties;
       const savedMergeDuplicateRequirementCells = dataToSave?.mergeDuplicateRequirementCells;
       const savedReportMode = dataToSave?.reportMode;
       const savedExternalBugsFile = dataToSave?.externalBugsFile;
@@ -623,6 +625,9 @@ const TestReporterSelector = observer(
       }
       if (savedIncludeAllHistory !== undefined) {
         setIncludeAllHistory(!!savedIncludeAllHistory);
+      }
+      if (savedUseLatestTestCaseProperties !== undefined) {
+        setUseLatestTestCaseProperties(!!savedUseLatestTestCaseProperties);
       }
       if (savedMergeDuplicateRequirementCells !== undefined) {
         setMergeDuplicateRequirementCells(!!savedMergeDuplicateRequirementCells);
@@ -721,6 +726,7 @@ const TestReporterSelector = observer(
       setSelectedFields([]);
       setLinkedQueryRequest(defaultSelectedQueries);
       setIncludeAllHistory(false);
+      setUseLatestTestCaseProperties(false);
       setReportMode('regular');
       setMergeDuplicateRequirementCells(false);
       setExternalBugsFile(null);
@@ -881,15 +887,16 @@ const TestReporterSelector = observer(
             data: {
               ...sharedData,
               allowCrossTestPlan: allowCrossTestPlan,
-              enableRunTestCaseFilter: enableRunTestCaseFilter,
-              enableRunStepStatusFilter: enableRunStepStatusFilter,
+              enableRunTestCaseFilter: useLatestTestCaseProperties ? false : enableRunTestCaseFilter,
+              enableRunStepStatusFilter: useLatestTestCaseProperties ? false : enableRunStepStatusFilter,
               runFilterMode,
               runStepFilterMode,
-              errorFilterMode: errorFilterMode,
-              allowGrouping: allowGrouping,
+              errorFilterMode: useLatestTestCaseProperties ? 'none' : errorFilterMode,
+              allowGrouping: useLatestTestCaseProperties ? false : allowGrouping,
               selectedFields: selectedFields,
               linkedQueryRequest: linkedQueryRequest,
               includeAllHistory,
+              useLatestTestCaseProperties,
               includeMewpL2Coverage: false,
             },
             isExcelSpreadsheet: true,
@@ -916,6 +923,7 @@ const TestReporterSelector = observer(
       errorFilterMode,
       linkedQueryRequest,
       includeAllHistory,
+      useLatestTestCaseProperties,
       mergeDuplicateRequirementCells,
       reportMode,
       showMewpViews,
@@ -1653,6 +1661,28 @@ const TestReporterSelector = observer(
         >
           <Stack spacing={1.5}>
             <Stack
+              direction='row'
+              spacing={0.5}
+              alignItems='center'
+            >
+              <FormControlLabel
+                sx={{ m: 0 }}
+                control={
+                  <Switch
+                    size='small'
+                    checked={useLatestTestCaseProperties}
+                    onChange={(_event, checked) => setUseLatestTestCaseProperties(checked)}
+                  />
+                }
+                label={<Typography variant='body2'>As latest test case properties</Typography>}
+              />
+              <Tooltip title='Default (off): test case properties as of the last run. On: latest properties, run results omitted (treated as never run).'>
+                <IconButton size='small' aria-label='As latest test case properties info'>
+                  <InfoOutlined fontSize='small' />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+            <Stack
               direction={{ xs: 'column', md: 'row' }}
               spacing={{ xs: 1.25, md: 2 }}
             >
@@ -1665,6 +1695,7 @@ const TestReporterSelector = observer(
                     <Checkbox
                       size='small'
                       checked={allowGrouping}
+                      disabled={useLatestTestCaseProperties}
                       onChange={(_event, checked) => {
                         setAllowGrouping(checked);
                       }}
@@ -1689,6 +1720,7 @@ const TestReporterSelector = observer(
                     <Checkbox
                       size='small'
                       checked={enableRunTestCaseFilter}
+                      disabled={useLatestTestCaseProperties}
                       onChange={(_event, checked) => {
                         setEnableRunTestCaseFilter(checked);
                       }}
@@ -1714,6 +1746,7 @@ const TestReporterSelector = observer(
                     <Checkbox
                       size='small'
                       checked={enableRunStepStatusFilter}
+                      disabled={useLatestTestCaseProperties}
                       onChange={(_event, checked) => {
                         setEnableRunStepStatusFilter(checked);
                       }}
@@ -1764,21 +1797,25 @@ const TestReporterSelector = observer(
                   <FormControlLabel
                     value='none'
                     label='None'
+                    disabled={useLatestTestCaseProperties}
                     control={<Radio size='small' />}
                   />
                   <FormControlLabel
                     value='onlyTestCaseResult'
                     label='Test case level'
+                    disabled={useLatestTestCaseProperties}
                     control={<Radio size='small' />}
                   />
                   <FormControlLabel
                     value='onlyTestStepsResult'
                     label='Step level'
+                    disabled={useLatestTestCaseProperties}
                     control={<Radio size='small' />}
                   />
                   <FormControlLabel
                     value='both'
                     label='Both levels'
+                    disabled={useLatestTestCaseProperties}
                     control={<Radio size='small' />}
                   />
                 </RadioGroup>
