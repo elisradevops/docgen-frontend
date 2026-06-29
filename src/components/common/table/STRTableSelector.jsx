@@ -35,6 +35,10 @@ const initialStepsExecutionState = {
     requirementInclusionMode: 'linkedRequirement',
     testReqQuery: null,
     flatSuiteTestCases: false,
+    fieldDisplayMapping: {},
+    fieldVisibility: {},
+    fieldOrder: {},
+    columnMetadata: null,
   },
 };
 

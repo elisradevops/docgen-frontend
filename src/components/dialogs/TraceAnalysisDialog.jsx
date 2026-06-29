@@ -25,6 +25,9 @@ const defaultSelectedQueries = {
   reqTestQuery: null,
   testReqQuery: null,
   includeCommonColumnsMode: 'both',
+  fieldDisplayMapping: {},
+  fieldVisibility: {},
+  fieldOrder: {},
 };
 
 const TraceAnalysisDialog = observer(
@@ -78,7 +81,7 @@ const TraceAnalysisDialog = observer(
 
     const handleClose = () => {
       // If query mode is selected but no query is chosen, reset to default
-      if (traceAnalysisRequest.traceAnalysisMode === 'query' && !traceAnalysisRequest.reqTestQuery?.value) {
+      if (traceAnalysisRequest.traceAnalysisMode === 'query' && !traceAnalysisRequest.reqTestQuery?.value && !traceAnalysisRequest.testReqQuery?.value) {
         const resetRequest = { ...defaultSelectedQueries, traceAnalysisMode: 'none' };
         onTraceAnalysisChange(resetRequest);
       } else {

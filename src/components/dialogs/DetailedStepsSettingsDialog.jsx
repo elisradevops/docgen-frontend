@@ -14,9 +14,10 @@ import {
   DialogActions,
 } from '@mui/material';
 import StairsIcon from '@mui/icons-material/Stairs';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import QueryTree from '../common/QueryTree';
 import OverlayLoader from '../common/OverlayLoader';
+import FieldDisplayMappingDialog from './FieldDisplayMappingDialog';
 
 const DetailedStepsSettingsDialog = ({
   store,
@@ -29,6 +30,24 @@ const DetailedStepsSettingsDialog = ({
   useState(() => {
     if (prevStepExecution) setStepExecutionState(prevStepExecution);
   }, [prevStepExecution]);
+
+  // Fetch per-side valid columns from backend when the trace query changes (query mode only)
+  useEffect(() => {
+    const { requirementInclusionMode, testReqQuery } = stepExecutionState.generateRequirements || {};
+    if (requirementInclusionMode !== 'query' || !testReqQuery) return;
+    let cancelled = false;
+    store.fetchTraceColumns({ reqTestQuery: undefined, testReqQuery }).then((result) => {
+      if (cancelled) return;
+      setStepExecutionState((prev) => ({
+        ...prev,
+        generateRequirements: { ...prev.generateRequirements, columnMetadata: result },
+      }));
+    }).catch(() => {
+      // best-effort: failure is non-blocking, dialog falls back to merged columns
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepExecutionState.generateRequirements?.requirementInclusionMode, stepExecutionState.generateRequirements?.testReqQuery?.id]);
   const attachmentTypeElements = (attachmentProp) => {
     const getRadioGroup = (name, value, onChange) => (
       <RadioGroup
@@ -190,6 +209,35 @@ const DetailedStepsSettingsDialog = ({
           />
         </RadioGroup>
       </div>
+
+      <Box sx={{ mt: 1 }}>
+        <FieldDisplayMappingDialog
+          fieldDisplayMapping={stepExecutionState.generateRequirements.fieldDisplayMapping || {}}
+          onMappingChange={(mapping) =>
+            setStepExecutionState((prev) => ({
+              ...prev,
+              generateRequirements: { ...prev.generateRequirements, fieldDisplayMapping: mapping },
+            }))
+          }
+          fieldVisibility={stepExecutionState.generateRequirements.fieldVisibility || {}}
+          onVisibilityChange={(visibility) =>
+            setStepExecutionState((prev) => ({
+              ...prev,
+              generateRequirements: { ...prev.generateRequirements, fieldVisibility: visibility },
+            }))
+          }
+          fieldOrder={stepExecutionState.generateRequirements.fieldOrder || {}}
+          onOrderChange={(order) =>
+            setStepExecutionState((prev) => ({
+              ...prev,
+              generateRequirements: { ...prev.generateRequirements, fieldOrder: order },
+            }))
+          }
+          traceAnalysisMode={stepExecutionState.generateRequirements.requirementInclusionMode}
+          testReqQuery={stepExecutionState.generateRequirements.testReqQuery}
+          columnMetadata={stepExecutionState.generateRequirements.columnMetadata}
+        />
+      </Box>
     </Box>
   );
 

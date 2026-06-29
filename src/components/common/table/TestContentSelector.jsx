@@ -19,6 +19,7 @@ import {
   Divider,
 } from '@mui/material';
 import TraceAnalysisDialog from '../../dialogs/TraceAnalysisDialog';
+import FieldDisplayMappingDialog from '../../dialogs/FieldDisplayMappingDialog';
 import { observer } from 'mobx-react';
 import { validateQuery } from '../../../utils/queryValidation';
 import { toast } from 'react-toastify';
@@ -37,6 +38,10 @@ const defaultSelectedQueries = {
   reqTestQuery: null,
   testReqQuery: null,
   includeCommonColumnsMode: 'both',
+  fieldDisplayMapping: {},
+  fieldVisibility: {},
+  fieldOrder: {},
+  columnMetadata: null,
 };
 
 const defaultLinkedMomRequest = {
@@ -410,6 +415,24 @@ const TestContentSelector = observer(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectorTag, store.sharedQueries]);
 
+    // Fetch per-side valid columns from backend when trace queries change (query mode only)
+    useEffect(() => {
+      if (traceAnalysisRequest.traceAnalysisMode !== 'query') return;
+      if (!traceAnalysisRequest.reqTestQuery && !traceAnalysisRequest.testReqQuery) return;
+      let cancelled = false;
+      store.fetchTraceColumns({
+        reqTestQuery: traceAnalysisRequest.reqTestQuery,
+        testReqQuery: traceAnalysisRequest.testReqQuery,
+      }).then((result) => {
+        if (cancelled) return;
+        setTraceAnalysisRequest((prev) => ({ ...prev, columnMetadata: result }));
+      }).catch(() => {
+        // best-effort: failure is non-blocking, dialog falls back to merged columns
+      });
+      return () => { cancelled = true; };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [traceAnalysisRequest.traceAnalysisMode, traceAnalysisRequest.reqTestQuery?.id, traceAnalysisRequest.testReqQuery?.id]);
+
     // Re-apply saved test plan (and then suites) once test plans become available
     useEffect(() => {
       const saved = savedDataRef.current;
@@ -590,12 +613,32 @@ const TestContentSelector = observer(
                   settings={traceAnalysisSummary || []}
                   emptyMessage='Pull requirements traceability based on linked items or queries.'
                   actions={
-                    <TraceAnalysisDialog
-                      store={store}
-                      sharedQueries={store.sharedQueries}
-                      prevTraceAnalysisRequest={traceAnalysisRequest}
-                      onTraceAnalysisChange={setTraceAnalysisRequest}
-                    />
+                    <Stack direction='row' spacing={1}>
+                      <TraceAnalysisDialog
+                        store={store}
+                        sharedQueries={store.sharedQueries}
+                        prevTraceAnalysisRequest={traceAnalysisRequest}
+                        onTraceAnalysisChange={setTraceAnalysisRequest}
+                      />
+                      <FieldDisplayMappingDialog
+                        fieldDisplayMapping={traceAnalysisRequest.fieldDisplayMapping || {}}
+                        onMappingChange={(mapping) =>
+                          setTraceAnalysisRequest((prev) => ({ ...prev, fieldDisplayMapping: mapping }))
+                        }
+                        fieldVisibility={traceAnalysisRequest.fieldVisibility || {}}
+                        onVisibilityChange={(visibility) =>
+                          setTraceAnalysisRequest((prev) => ({ ...prev, fieldVisibility: visibility }))
+                        }
+                        fieldOrder={traceAnalysisRequest.fieldOrder || {}}
+                        onOrderChange={(order) =>
+                          setTraceAnalysisRequest((prev) => ({ ...prev, fieldOrder: order }))
+                        }
+                        traceAnalysisMode={traceAnalysisRequest.traceAnalysisMode}
+                        reqTestQuery={traceAnalysisRequest.reqTestQuery}
+                        testReqQuery={traceAnalysisRequest.testReqQuery}
+                        columnMetadata={traceAnalysisRequest.columnMetadata}
+                      />
+                    </Stack>
                   }
                 />
               </Stack>

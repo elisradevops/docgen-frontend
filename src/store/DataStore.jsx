@@ -712,6 +712,7 @@ class DocGenDataStore {
       setHistoricalQueries: action,
       fetchFieldsByType: action,
       setFieldsByType: action,
+      fetchTraceColumns: action,
       setHistoricalAsOfResult: action,
       setHistoricalCompareResult: action,
       fetchHistoricalAsOfResults: action,
@@ -876,6 +877,7 @@ class DocGenDataStore {
     historicalDateFavoritesLoadingState: false,
     testSuiteListLoading: false,
     fieldsByTypeLoadingState: false,
+    traceColumnsLoadingState: false,
     contentControlsLoadingState: false,
     documentsLoadingState: false,
     templatesLoadingState: false,
@@ -1871,6 +1873,22 @@ class DocGenDataStore {
         .finally(() => {
           this.loadingState.fieldsByTypeLoadingState = false;
         });
+    }
+  }
+
+  async fetchTraceColumns({ reqTestQuery, testReqQuery } = {}) {
+    runInAction(() => { this.loadingState.traceColumnsLoadingState = true; });
+    try {
+      return await this.azureRestClient.getTraceColumns({
+        reqTestQuery,
+        testReqQuery,
+        teamProjectId: this.teamProject,
+      });
+    } catch (err) {
+      logger.error(`Error fetching trace columns: ${err.message}`);
+      return { Requirement: [], 'Test Case': [] };
+    } finally {
+      runInAction(() => { this.loadingState.traceColumnsLoadingState = false; });
     }
   }
 
