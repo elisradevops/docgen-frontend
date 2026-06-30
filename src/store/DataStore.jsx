@@ -1685,6 +1685,11 @@ class DocGenDataStore {
         normalizedPath,
       );
       const data = this.mapHistoricalQueriesFromSharedTree(sharedQueryPayload);
+      if (data.length === 0) {
+        toast.warn(
+          'No historical queries found. If queries are expected, some query folders may have failed to load — check server logs.',
+        );
+      }
       this.setHistoricalQueries(data);
       return this.historicalQueries;
     } catch (err) {
