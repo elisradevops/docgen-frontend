@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -7,6 +8,10 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  Popover,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -42,7 +47,17 @@ import { CSS } from '@dnd-kit/utilities';
 import { COLOR_REQ, COLOR_TEST_CASE } from '../../constants/traceColors';
 
 const TYPE_COLORS = { Requirement: COLOR_REQ, 'Test Case': COLOR_TEST_CASE };
+// TODO: theme token — no equivalent in tokens.js; replace when palette is extended
 const TYPE_COLORS_SELECTED = { Requirement: '#b8cfe6', 'Test Case': '#cdc5df' };
+
+function TabBadge({ type, count }) {
+  if (!count) return null;
+  return (
+    <Box component='span' sx={{ ml: 0.75, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', bgcolor: TYPE_COLORS_SELECTED[type], borderRadius: '10px', px: 0.75, minWidth: 18, height: 18, fontSize: '0.68rem', fontWeight: 700, lineHeight: 1, color: 'text.primary' }}>
+      {count}
+    </Box>
+  );
+}
 
 // ADO referenceNames + linked-mode pseudo-keys that are always shown and never dragged
 const ALWAYS_VISIBLE_REFS = new Set(['System.Id', 'System.Title', 'Req ID', 'Test Case ID', 'Title']);
@@ -54,36 +69,50 @@ const LINKED_REQ_COLUMNS = {
   'Test Case': [],
 };
 
+// Returns { 'req-test': { Requirement, 'Test Case' }, 'test-req': { Requirement, 'Test Case' } }
 function deriveFieldList(traceAnalysisMode, reqTestQuery, testReqQuery, columnMetadata) {
-  if (traceAnalysisMode === 'linkedRequirement') return LINKED_REQ_COLUMNS;
-  if (traceAnalysisMode !== 'query') return { Requirement: [], 'Test Case': [] };
-
-  // When backend-verified per-side metadata is available (null = not yet fetched), use it.
-  // This distinguishes "fetch completed, side has zero configurable columns" from "not fetched yet".
-  if (columnMetadata !== null && columnMetadata !== undefined) {
-    const filterMeta = (cols) =>
-      (cols || []).filter(
-        (c) => c?.referenceName && !EXCLUDED_FIELD_REFS.has(c.referenceName) && !ALWAYS_VISIBLE_REFS.has(c.referenceName)
-      );
-    return {
-      Requirement: filterMeta(columnMetadata.Requirement),
-      'Test Case': filterMeta(columnMetadata['Test Case']),
-    };
+  if (traceAnalysisMode === 'linkedRequirement') {
+    return { 'req-test': LINKED_REQ_COLUMNS, 'test-req': LINKED_REQ_COLUMNS };
+  }
+  if (traceAnalysisMode !== 'query') {
+    return { 'req-test': { Requirement: [], 'Test Case': [] }, 'test-req': { Requirement: [], 'Test Case': [] } };
   }
 
-  // Fallback: merge both queries' declared columns for both sides (legacy / loading state)
-  const seen = new Set();
-  const merged = [];
-  for (const cols of [reqTestQuery?.columns, testReqQuery?.columns].filter(Boolean)) {
-    for (const col of cols) {
+  const filterMeta = (cols) =>
+    (cols || []).filter(
+      (c) => c?.referenceName && !EXCLUDED_FIELD_REFS.has(c.referenceName) && !ALWAYS_VISIBLE_REFS.has(c.referenceName)
+    );
+
+  const fallbackFromQuery = (query) => {
+    const seen = new Set();
+    const cols = [];
+    for (const col of (query?.columns || [])) {
       if (!col?.referenceName || seen.has(col.referenceName)) continue;
       if (EXCLUDED_FIELD_REFS.has(col.referenceName)) continue;
       if (ALWAYS_VISIBLE_REFS.has(col.referenceName)) continue;
       seen.add(col.referenceName);
-      merged.push({ referenceName: col.referenceName, name: col.name });
+      cols.push({ referenceName: col.referenceName, name: col.name });
     }
-  }
-  return { Requirement: merged, 'Test Case': merged };
+    return cols;
+  };
+
+  const resolveQuerySides = (queryKey, query) => {
+    const meta = columnMetadata?.[queryKey];
+    if (meta) {
+      return {
+        Requirement: filterMeta(meta.Requirement),
+        'Test Case': filterMeta(meta['Test Case']),
+      };
+    }
+    // Fallback: use this query's own declared columns for both sides (loading / no metadata)
+    const fb = fallbackFromQuery(query);
+    return { Requirement: fb, 'Test Case': fb };
+  };
+
+  return {
+    'req-test': resolveQuerySides('req-test', reqTestQuery),
+    'test-req': resolveQuerySides('test-req', testReqQuery),
+  };
 }
 
 function countMods(mappingByType, visibilityByType, type) {
@@ -200,138 +229,213 @@ const FieldDisplayMappingDialog = ({
   traceAnalysisMode = 'none',
   reqTestQuery = null,
   testReqQuery = null,
-  columnMetadata = null, // null = not yet fetched; { Requirement:[], 'Test Case':[] } = fetched (may be empty)
+  columnMetadata = {}, // {} = not yet fetched / loading; { 'req-test': { Requirement, 'Test Case' }, 'test-req': { ... } } = fetched per query
+  iconOnly = false,
 }) => {
   const [open, setOpen] = useState(false);
+  const [infoAnchor, setInfoAnchor] = useState(null);
   const [workingMapping, setWorkingMapping] = useState({});
   const [workingVisibility, setWorkingVisibility] = useState({});
   const [workingOrder, setWorkingOrder] = useState({});
   const [selectedType, setSelectedType] = useState('Requirement');
+  const [selectedQuery, setSelectedQuery] = useState(() => reqTestQuery ? 'req-test' : 'test-req');
+  useEffect(() => {
+    if (!open) return;
+    setSelectedQuery(reqTestQuery ? 'req-test' : 'test-req');
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const [searchText, setSearchText] = useState('');
 
-  const fieldsByType = useMemo(
+  // Auto-correct selectedQuery if the previously selected query is no longer available
+  useEffect(() => {
+    if (selectedQuery === 'req-test' && !reqTestQuery && testReqQuery) setSelectedQuery('test-req');
+    if (selectedQuery === 'test-req' && !testReqQuery && reqTestQuery) setSelectedQuery('req-test');
+  }, [reqTestQuery, testReqQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fieldsByQuery = useMemo(
     () => deriveFieldList(traceAnalysisMode, reqTestQuery, testReqQuery, columnMetadata),
     [traceAnalysisMode, reqTestQuery, testReqQuery, columnMetadata]
   );
+  const fieldsByType = fieldsByQuery[selectedQuery] || { Requirement: [], 'Test Case': [] };
 
   useEffect(() => {
     if (!open) return;
     setWorkingMapping({ ...fieldDisplayMapping });
     setWorkingVisibility({ ...fieldVisibility });
 
-    // Initialize order per type: respect saved order, append any new fields not yet ordered
+    // Initialize order per query per side: respect saved order, append new fields
     const initOrder = {};
-    for (const [type, fields] of Object.entries(fieldsByType)) {
-      const existing = fieldOrder[type] || [];
-      const knownRefs = new Set(existing);
-      initOrder[type] = [
-        ...existing.filter((ref) => fields.some((f) => f.referenceName === ref)),
-        ...fields.filter((f) => !knownRefs.has(f.referenceName)).map((f) => f.referenceName),
-      ];
+    for (const [queryKey, sides] of Object.entries(fieldsByQuery)) {
+      initOrder[queryKey] = {};
+      for (const [side, fields] of Object.entries(sides)) {
+        const existing = fieldOrder?.[queryKey]?.[side] || [];
+        const knownRefs = new Set(existing);
+        initOrder[queryKey][side] = [
+          ...existing.filter((ref) => fields.some((f) => f.referenceName === ref)),
+          ...fields.filter((f) => !knownRefs.has(f.referenceName)).map((f) => f.referenceName),
+        ];
+      }
     }
     setWorkingOrder(initOrder);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Ordered visible fields for current tab
+  // Augment workingOrder with fields that arrived after dialog opened (e.g. late columnMetadata fetch).
+  // Append-only: never resets mapping/visibility; identity-stable when nothing changes.
+  useEffect(() => {
+    if (!open) return;
+    setWorkingOrder((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [queryKey, sides] of Object.entries(fieldsByQuery)) {
+        const nextSides = { ...(next[queryKey] || {}) };
+        for (const [side, fields] of Object.entries(sides)) {
+          const existing = nextSides[side] || [];
+          const known = new Set(existing);
+          const additions = fields
+            .filter((f) => !known.has(f.referenceName))
+            .map((f) => f.referenceName);
+          if (additions.length) {
+            nextSides[side] = [...existing, ...additions];
+            changed = true;
+          }
+        }
+        next[queryKey] = nextSides;
+      }
+      return changed ? next : prev;
+    });
+  }, [open, fieldsByQuery]);
+
+  // Ordered visible fields for current query + side tab
   const visibleFields = useMemo(() => {
     const allFields = fieldsByType[selectedType] || [];
-    const order = workingOrder[selectedType] || [];
+    const order = workingOrder[selectedQuery]?.[selectedType] || [];
 
     // Sort by order, unknown refs appended
     const byRef = Object.fromEntries(allFields.map((f) => [f.referenceName, f]));
+    const orderSet = new Set(order);
     const orderedRefs = [
       ...order.filter((ref) => byRef[ref]),
-      ...allFields.filter((f) => !order.includes(f.referenceName)).map((f) => f.referenceName),
+      ...allFields.filter((f) => !orderSet.has(f.referenceName)).map((f) => f.referenceName),
     ];
     const sorted = orderedRefs.map((ref) => byRef[ref]).filter(Boolean);
 
     if (!searchText.trim()) return sorted;
     const lower = searchText.toLowerCase();
     return sorted.filter((f) => f.name.toLowerCase().includes(lower));
-  }, [fieldsByType, selectedType, searchText, workingOrder]);
+  }, [fieldsByType, selectedType, selectedQuery, searchText, workingOrder]);
 
-  const modReq = useMemo(() => countMods(workingMapping, workingVisibility, 'Requirement'), [workingMapping, workingVisibility]);
-  const modTest = useMemo(() => countMods(workingMapping, workingVisibility, 'Test Case'), [workingMapping, workingVisibility]);
+  // Per-side counts for the active query (used for in-dialog badges and reset logic)
+  const modReq = useMemo(() => countMods(workingMapping[selectedQuery] || {}, workingVisibility[selectedQuery] || {}, 'Requirement'), [workingMapping, workingVisibility, selectedQuery]);
+  const modTest = useMemo(() => countMods(workingMapping[selectedQuery] || {}, workingVisibility[selectedQuery] || {}, 'Test Case'), [workingMapping, workingVisibility, selectedQuery]);
   const modCountByType = { Requirement: modReq, 'Test Case': modTest };
-  const totalCount = modReq + modTest;
+  // Total across all queries for the trigger button
+  const totalCount = useMemo(() => {
+    let n = 0;
+    for (const qKey of ['req-test', 'test-req']) {
+      n += countMods(workingMapping[qKey] || {}, workingVisibility[qKey] || {}, 'Requirement');
+      n += countMods(workingMapping[qKey] || {}, workingVisibility[qKey] || {}, 'Test Case');
+    }
+    return n;
+  }, [workingMapping, workingVisibility]);
+  // Per-direction total for the direction pills
+  const modByDirection = useMemo(() => {
+    const forKey = (key) =>
+      countMods(workingMapping[key] || {}, workingVisibility[key] || {}, 'Requirement') +
+      countMods(workingMapping[key] || {}, workingVisibility[key] || {}, 'Test Case');
+    return { 'req-test': forKey('req-test'), 'test-req': forKey('test-req') };
+  }, [workingMapping, workingVisibility]);
 
   const handleFieldOverride = (referenceName, value) => {
     setWorkingMapping((prev) => {
-      const typeMap = { ...(prev[selectedType] || {}) };
+      const querySlice = { ...(prev[selectedQuery] || {}) };
+      const typeMap = { ...(querySlice[selectedType] || {}) };
       if (value.trim()) typeMap[referenceName] = value;
       else delete typeMap[referenceName];
-      return { ...prev, [selectedType]: typeMap };
+      querySlice[selectedType] = typeMap;
+      return { ...prev, [selectedQuery]: querySlice };
     });
   };
 
   const handleToggleVisibility = (referenceName) => {
     if (ALWAYS_VISIBLE_REFS.has(referenceName)) return;
     setWorkingVisibility((prev) => {
-      const typeMap = { ...(prev[selectedType] || {}) };
+      const querySlice = { ...(prev[selectedQuery] || {}) };
+      const typeMap = { ...(querySlice[selectedType] || {}) };
       if (typeMap[referenceName] === false) delete typeMap[referenceName];
       else typeMap[referenceName] = false;
-      return { ...prev, [selectedType]: typeMap };
+      querySlice[selectedType] = typeMap;
+      return { ...prev, [selectedQuery]: querySlice };
     });
   };
 
   const allHidden =
     visibleFields.length > 0 &&
-    visibleFields.every((f) => workingVisibility[selectedType]?.[f.referenceName] === false);
+    visibleFields.every((f) => workingVisibility[selectedQuery]?.[selectedType]?.[f.referenceName] === false);
 
   const handleToggleAll = () => {
     setWorkingVisibility((prev) => {
-      const typeMap = { ...(prev[selectedType] || {}) };
+      const querySlice = { ...(prev[selectedQuery] || {}) };
+      const typeMap = { ...(querySlice[selectedType] || {}) };
       if (allHidden) visibleFields.forEach((f) => delete typeMap[f.referenceName]);
       else visibleFields.forEach((f) => { typeMap[f.referenceName] = false; });
-      return { ...prev, [selectedType]: typeMap };
+      querySlice[selectedType] = typeMap;
+      return { ...prev, [selectedQuery]: querySlice };
     });
   };
 
   const handleClear = () => {
-    setWorkingMapping((prev) => { const n = { ...prev }; delete n[selectedType]; return n; });
-    setWorkingVisibility((prev) => { const n = { ...prev }; delete n[selectedType]; return n; });
+    setWorkingMapping((prev) => {
+      const q = { ...(prev[selectedQuery] || {}) };
+      delete q[selectedType];
+      return { ...prev, [selectedQuery]: q };
+    });
+    setWorkingVisibility((prev) => {
+      const q = { ...(prev[selectedQuery] || {}) };
+      delete q[selectedType];
+      return { ...prev, [selectedQuery]: q };
+    });
     setWorkingOrder((prev) => {
       const base = fieldsByType[selectedType] || [];
-      return { ...prev, [selectedType]: base.map((f) => f.referenceName) };
+      const q = { ...(prev[selectedQuery] || {}) };
+      q[selectedType] = base.map((f) => f.referenceName);
+      return { ...prev, [selectedQuery]: q };
     });
   };
 
   const handleDragEnd = ({ active, over }) => {
     if (!over || active.id === over.id) return;
     setWorkingOrder((prev) => {
-      const items = prev[selectedType] || visibleFields.map((f) => f.referenceName);
+      const q = { ...(prev[selectedQuery] || {}) };
+      const items = q[selectedType] || visibleFields.map((f) => f.referenceName);
       const oldIdx = items.indexOf(String(active.id));
       const newIdx = items.indexOf(String(over.id));
       if (oldIdx === -1 || newIdx === -1) return prev;
-      return { ...prev, [selectedType]: arrayMove(items, oldIdx, newIdx) };
+      q[selectedType] = arrayMove(items, oldIdx, newIdx);
+      return { ...prev, [selectedQuery]: q };
     });
   };
 
   const handleClose = () => {
-    const clean = (src) => Object.fromEntries(Object.entries(src).filter(([, v]) => v && Object.keys(v).length > 0));
-    onMappingChange(clean(workingMapping));
-    if (onVisibilityChange) onVisibilityChange(clean(workingVisibility));
+    const cleanSides = (sides) =>
+      Object.fromEntries(Object.entries(sides || {}).filter(([, v]) => v && Object.keys(v).length > 0));
+    const cleanQueries = (src) =>
+      Object.fromEntries(
+        Object.entries(src || {})
+          .map(([qKey, sides]) => [qKey, cleanSides(sides)])
+          .filter(([, sides]) => Object.keys(sides).length > 0)
+      );
+    onMappingChange(cleanQueries(workingMapping));
+    if (onVisibilityChange) onVisibilityChange(cleanQueries(workingVisibility));
     if (onOrderChange) onOrderChange({ ...workingOrder });
     setOpen(false);
   };
 
-  const isDisabled = traceAnalysisMode === 'none';
+  const isDisabled = traceAnalysisMode === 'none' || (iconOnly && !testReqQuery);
   const hasMappings = modCountByType[selectedType] > 0;
-  const renamedCount = Object.keys(workingMapping[selectedType] || {}).length;
-  const hiddenCount = Object.values(workingVisibility[selectedType] || {}).filter((v) => v === false).length;
+  const renamedCount = Object.keys(workingMapping[selectedQuery]?.[selectedType] || {}).length;
+  const hiddenCount = Object.values(workingVisibility[selectedQuery]?.[selectedType] || {}).filter((v) => v === false).length;
   const statusParts = [];
   if (renamedCount > 0) statusParts.push(`${renamedCount} renamed`);
   if (hiddenCount > 0) statusParts.push(`${hiddenCount} hidden`);
-
-  const TabBadge = ({ type }) => {
-    const count = modCountByType[type];
-    if (!count) return null;
-    return (
-      <Box component='span' sx={{ ml: 0.75, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', bgcolor: TYPE_COLORS_SELECTED[type], borderRadius: '10px', px: 0.75, minWidth: 18, height: 18, fontSize: '0.68rem', fontWeight: 700, lineHeight: 1, color: 'text.primary' }}>
-        {count}
-      </Box>
-    );
-  };
 
   const typeColor = TYPE_COLORS[selectedType];
 
@@ -339,44 +443,205 @@ const FieldDisplayMappingDialog = ({
 
   return (
     <>
-      <Tooltip title={isDisabled ? 'Enable trace analysis first' : 'Configure which columns appear and how they are labelled in the trace tables'}>
-        <span>
-          <Button
-            variant='outlined'
-            color='secondary'
-            onClick={() => setOpen(true)}
-            disabled={isDisabled}
-            endIcon={
-              totalCount > 0 ? (
-                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                  {modReq > 0 && (
-                    <Chip label={`Req: ${modReq}`} size='small' sx={{ height: 20, bgcolor: TYPE_COLORS_SELECTED['Requirement'], color: 'text.primary', fontWeight: 700, fontSize: '0.68rem', '& .MuiChip-label': { px: 0.75 } }} />
-                  )}
-                  {modTest > 0 && (
-                    <Chip label={`TC: ${modTest}`} size='small' sx={{ height: 20, bgcolor: TYPE_COLORS_SELECTED['Test Case'], color: 'text.primary', fontWeight: 700, fontSize: '0.68rem', '& .MuiChip-label': { px: 0.75 } }} />
-                  )}
+      {iconOnly ? (
+        <Tooltip title={isDisabled ? 'Select a query first' : 'Column Settings'}>
+          <span>
+            <IconButton
+              onClick={() => setOpen(true)}
+              disabled={isDisabled}
+              color='secondary'
+              size='small'
+              sx={{ position: 'relative', mt: 0.5 }}
+            >
+              <EditNoteIcon />
+              {totalCount > 0 && (
+                <Box sx={{ position: 'absolute', top: 2, right: 2, width: 14, height: 14, bgcolor: 'primary.main', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700, color: '#fff', pointerEvents: 'none' }}>
+                  {totalCount}
                 </Box>
-              ) : (
-                <EditNoteIcon />
-              )
-            }
-            sx={{ width: '100%', whiteSpace: 'nowrap' }}
-          >
-            Column Settings
-          </Button>
-        </span>
-      </Tooltip>
+              )}
+            </IconButton>
+          </span>
+        </Tooltip>
+      ) : (
+        <Tooltip title={
+          traceAnalysisMode === 'none'
+            ? 'Enable trace analysis first'
+            : traceAnalysisMode === 'linkedRequirement'
+            ? 'Configure linked requirement column display'
+            : 'Configure columns for both trace directions — Req → TC and TC → Req settings are independent'
+        }>
+          <span>
+            <Button
+              variant='outlined'
+              color='secondary'
+              onClick={() => setOpen(true)}
+              disabled={isDisabled}
+              endIcon={
+                totalCount > 0 ? (
+                  <Chip label={totalCount} size='small' sx={{ height: 20, bgcolor: 'primary.main', color: '#fff', fontWeight: 700, fontSize: '0.68rem', '& .MuiChip-label': { px: 0.75 } }} />
+                ) : (
+                  <EditNoteIcon />
+                )
+              }
+              sx={{ width: '100%', whiteSpace: 'nowrap' }}
+            >
+              Column Settings
+            </Button>
+          </span>
+        </Tooltip>
+      )}
 
       <Dialog open={open} onClose={handleClose} maxWidth='sm' fullWidth PaperProps={{ sx: { borderRadius: 2, minWidth: 480 } }}>
         <DialogTitle sx={{ pb: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}>
           <Stack direction='row' alignItems='flex-start' justifyContent='space-between'>
-            <Box>
-              <Typography variant='h6' component='div' sx={{ lineHeight: 1.3 }}>Column Settings</Typography>
-              <Typography variant='caption' color='text.secondary'>Show/hide, rename, or reorder columns in the generated trace tables</Typography>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Stack direction='row' alignItems='center' spacing={0.5}>
+                <Typography variant='h6' component='div' sx={{ lineHeight: 1.3 }}>Column Settings</Typography>
+                <Tooltip title='How to use' arrow>
+                  <IconButton size='small' onClick={(e) => setInfoAnchor(e.currentTarget)} sx={{ color: 'text.disabled', '&:hover': { color: 'text.secondary' } }}>
+                    <InfoOutlinedIcon sx={{ fontSize: 17 }} />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+              <Popover
+                open={Boolean(infoAnchor)}
+                anchorEl={infoAnchor}
+                onClose={() => setInfoAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                PaperProps={{ sx: { maxWidth: 320, borderRadius: 2, p: 0 } }}
+              >
+                <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+                  <Typography variant='subtitle2' sx={{ fontWeight: 700 }}>How to use Column Settings</Typography>
+                </Box>
+                <List dense disablePadding sx={{ px: 1, pb: 1 }}>
+                  <ListItem sx={{ alignItems: 'flex-start', py: 0.5 }}>
+                    <ListItemText
+                      primary='Direction chips (Req → TC / TC → Req)'
+                      secondary='Switch between the two trace query directions. Each direction has fully independent column settings.'
+                      primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                  <ListItem sx={{ alignItems: 'flex-start', py: 0.5 }}>
+                    <ListItemText
+                      primary='Requirement / Test Case tabs'
+                      secondary='Switch between the two work item types within the selected direction.'
+                      primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                  <ListItem sx={{ alignItems: 'flex-start', py: 0.5 }}>
+                    <ListItemText
+                      primary='Column tile — click to show / hide'
+                      secondary='Click a tile to toggle column visibility. Strikethrough means the column is hidden in the output.'
+                      primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                  <ListItem sx={{ alignItems: 'flex-start', py: 0.5 }}>
+                    <ListItemText
+                      primary='Rename field — type a display name'
+                      secondary='Override the column header in the document. Leave blank to use the original ADO field name.'
+                      primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                  <ListItem sx={{ alignItems: 'flex-start', py: 0.5 }}>
+                    <ListItemText
+                      primary='Drag handle — reorder columns'
+                      secondary='Drag rows up or down to change the column order in the generated trace tables.'
+                      primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                  <ListItem sx={{ alignItems: 'flex-start', py: 0.5 }}>
+                    <ListItemText
+                      primary='Reset'
+                      secondary='Clears all renames and visibility overrides for the current direction and side.'
+                      primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                </List>
+              </Popover>
+              {traceAnalysisMode === 'query' && (reqTestQuery || testReqQuery) ? (
+                reqTestQuery && testReqQuery ? (
+                  <Stack direction='row' spacing={0.75} alignItems='center' sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
+                    <Tooltip title={reqTestQuery?.title ?? 'No query selected for this direction'} arrow>
+                      <span>
+                        <Chip
+                          label={
+                            <Box component='span' sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              Req → TC
+                              {modByDirection['req-test'] > 0 && (
+                                <Box component='span' sx={{ fontSize: '0.62rem', fontWeight: 700, bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '10px', px: 0.6, py: 0.1, lineHeight: 1.4 }}>
+                                  {modByDirection['req-test']}
+                                </Box>
+                              )}
+                            </Box>
+                          }
+                          size='small'
+                          clickable={!!reqTestQuery}
+                          disabled={!reqTestQuery}
+                          onClick={reqTestQuery ? () => { setSelectedQuery('req-test'); setSearchText(''); } : undefined}
+                          sx={{
+                            fontWeight: selectedQuery === 'req-test' ? 600 : 400,
+                            bgcolor: selectedQuery === 'req-test' ? '#b8cfe6' : 'transparent',
+                            border: '1px solid',
+                            borderColor: selectedQuery === 'req-test' ? '#b8cfe6' : 'divider',
+                            transition: 'all 0.15s ease',
+                            '&:hover': { bgcolor: selectedQuery === 'req-test' ? '#a8bfd6' : 'action.hover' },
+                          }}
+                        />
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={testReqQuery?.title ?? 'No query selected for this direction'} arrow>
+                      <span>
+                        <Chip
+                          label={
+                            <Box component='span' sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              TC → Req
+                              {modByDirection['test-req'] > 0 && (
+                                <Box component='span' sx={{ fontSize: '0.62rem', fontWeight: 700, bgcolor: 'rgba(0,0,0,0.15)', borderRadius: '10px', px: 0.6, py: 0.1, lineHeight: 1.4 }}>
+                                  {modByDirection['test-req']}
+                                </Box>
+                              )}
+                            </Box>
+                          }
+                          size='small'
+                          clickable={!!testReqQuery}
+                          disabled={!testReqQuery}
+                          onClick={testReqQuery ? () => { setSelectedQuery('test-req'); setSearchText(''); } : undefined}
+                          sx={{
+                            fontWeight: selectedQuery === 'test-req' ? 600 : 400,
+                            bgcolor: selectedQuery === 'test-req' ? '#cdc5df' : 'transparent',
+                            border: '1px solid',
+                            borderColor: selectedQuery === 'test-req' ? '#cdc5df' : 'divider',
+                            transition: 'all 0.15s ease',
+                            '&:hover': { bgcolor: selectedQuery === 'test-req' ? '#bdb5cf' : 'action.hover' },
+                          }}
+                        />
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={(selectedQuery === 'req-test' ? reqTestQuery?.title : testReqQuery?.title) ?? ''} arrow>
+                      <Typography variant='caption' sx={{ color: 'text.disabled', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>
+                        {selectedQuery === 'req-test' ? reqTestQuery?.title : testReqQuery?.title}
+                      </Typography>
+                    </Tooltip>
+                  </Stack>
+                ) : (
+                  <Typography variant='caption' sx={{ color: 'text.secondary', mt: 0.5, display: 'block' }}>
+                    {reqTestQuery ? `Req → TC: ${reqTestQuery.title}` : `TC → Req: ${testReqQuery.title}`}
+                  </Typography>
+                )
+              ) : (
+                <Typography variant='caption' color='text.secondary'>Show/hide, rename, or reorder columns in the generated trace tables</Typography>
+              )}
             </Box>
             <Tooltip title={hasMappings ? `Reset ${selectedType} columns` : 'No changes to reset'}>
               <span>
-                <Button size='small' color='warning' onClick={handleClear} disabled={!hasMappings} startIcon={<DeleteSweepIcon />} sx={{ textTransform: 'none', mt: 0.25 }}>
+                <Button size='small' color='warning' onClick={handleClear} disabled={!hasMappings} startIcon={<DeleteSweepIcon />} sx={{ textTransform: 'none', mt: 0.25, flexShrink: 0 }}>
                   Reset
                 </Button>
               </span>
@@ -386,7 +651,14 @@ const FieldDisplayMappingDialog = ({
 
         <DialogContent sx={{ pt: '12px !important' }}>
           <Stack spacing={1.5}>
-            {/* Side tabs */}
+
+            {traceAnalysisMode === 'linkedRequirement' && (
+              <Alert severity='info' sx={{ py: 0.5 }}>
+                In linked mode only Customer ID is configurable. Switch to query mode for full column control.
+              </Alert>
+            )}
+
+            {/* Side tabs — fill colors restored */}
             <ToggleButtonGroup
               value={selectedType}
               exclusive
@@ -401,8 +673,8 @@ const FieldDisplayMappingDialog = ({
                 '& .MuiToggleButton-root[value="Test Case"].Mui-selected': { backgroundColor: TYPE_COLORS_SELECTED['Test Case'], color: 'text.primary', fontWeight: 600, '&:hover': { backgroundColor: TYPE_COLORS_SELECTED['Test Case'] } },
               }}
             >
-              <ToggleButton value='Requirement'><Box sx={{ display: 'flex', alignItems: 'center' }}>Requirement<TabBadge type='Requirement' /></Box></ToggleButton>
-              <ToggleButton value='Test Case'><Box sx={{ display: 'flex', alignItems: 'center' }}>Test Case<TabBadge type='Test Case' /></Box></ToggleButton>
+              <ToggleButton value='Requirement'><Box sx={{ display: 'flex', alignItems: 'center' }}>Requirement<TabBadge type='Requirement' count={modCountByType['Requirement']} /></Box></ToggleButton>
+              <ToggleButton value='Test Case'><Box sx={{ display: 'flex', alignItems: 'center' }}>Test Case<TabBadge type='Test Case' count={modCountByType['Test Case']} /></Box></ToggleButton>
             </ToggleButtonGroup>
 
             {/* Linked-requirements notice */}
@@ -458,8 +730,8 @@ const FieldDisplayMappingDialog = ({
                       key={field.referenceName}
                       field={field}
                       selectedType={selectedType}
-                      workingMapping={workingMapping}
-                      workingVisibility={workingVisibility}
+                      workingMapping={workingMapping[selectedQuery] || {}}
+                      workingVisibility={workingVisibility[selectedQuery] || {}}
                       typeColor={typeColor}
                       onToggleVisibility={handleToggleVisibility}
                       onFieldOverride={handleFieldOverride}
