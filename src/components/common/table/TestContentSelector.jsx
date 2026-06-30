@@ -41,7 +41,7 @@ const defaultSelectedQueries = {
   fieldDisplayMapping: {},
   fieldVisibility: {},
   fieldOrder: {},
-  columnMetadata: null,
+  columnMetadata: {},
 };
 
 const defaultLinkedMomRequest = {
@@ -232,6 +232,16 @@ const TestContentSelector = observer(
       (incoming) => {
         if (!incoming || !store.sharedQueries) return;
         const validated = { ...incoming };
+        // Sanitize legacy type-keyed maps (pre-per-query-column-settings shape)
+        const sanitizeFieldMap = (raw) => {
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+          if ('Requirement' in raw || 'Test Case' in raw) return {};
+          return raw;
+        };
+        validated.fieldDisplayMapping = sanitizeFieldMap(incoming.fieldDisplayMapping);
+        validated.fieldVisibility = sanitizeFieldMap(incoming.fieldVisibility);
+        validated.fieldOrder = sanitizeFieldMap(incoming.fieldOrder);
+        validated.columnMetadata = {}; // always re-fetched; never trust persisted metadata
         if (incoming.reqTestQuery && store.sharedQueries?.acquiredTrees?.reqTestTree) {
           const validReqTestQuery = validateQuery(
             [store.sharedQueries.acquiredTrees.reqTestTree],
@@ -324,7 +334,7 @@ const TestContentSelector = observer(
           savedDataRef.current = dataToSave;
           logger.debug(`[${selectorTag}] applySavedData: applied`);
         } catch (error) {
-          console.error('Error loading saved data:', error);
+          logger.error('Error loading saved data:', error);
           toast.error(`Error loading favorite data: ${error.message}`);
         }
       },
@@ -502,9 +512,6 @@ const TestContentSelector = observer(
           traceAnalysisRequest.traceAnalysisMode === 'linkedRequirement'
             ? 'Requirements from linked trace'
             : 'Requirements from queries',
-          traceAnalysisRequest.includeCommonColumnsMode !== 'both'
-            ? `Common columns: ${traceAnalysisRequest.includeCommonColumnsMode}`
-            : null,
         ].filter(Boolean)
       : undefined;
 
@@ -613,7 +620,7 @@ const TestContentSelector = observer(
                   settings={traceAnalysisSummary || []}
                   emptyMessage='Pull requirements traceability based on linked items or queries.'
                   actions={
-                    <Stack direction='row' spacing={1}>
+                    <Box sx={{ display: 'flex', gap: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 0.5 }}>
                       <TraceAnalysisDialog
                         store={store}
                         sharedQueries={store.sharedQueries}
@@ -636,9 +643,9 @@ const TestContentSelector = observer(
                         traceAnalysisMode={traceAnalysisRequest.traceAnalysisMode}
                         reqTestQuery={traceAnalysisRequest.reqTestQuery}
                         testReqQuery={traceAnalysisRequest.testReqQuery}
-                        columnMetadata={traceAnalysisRequest.columnMetadata}
+                        columnMetadata={traceAnalysisRequest.columnMetadata || {}}
                       />
-                    </Stack>
+                    </Box>
                   }
                 />
               </Stack>

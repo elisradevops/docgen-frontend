@@ -713,6 +713,7 @@ class DocGenDataStore {
       fetchFieldsByType: action,
       setFieldsByType: action,
       fetchTraceColumns: action,
+      fetchQueryDefinition: action,
       setHistoricalAsOfResult: action,
       setHistoricalCompareResult: action,
       fetchHistoricalAsOfResults: action,
@@ -878,6 +879,7 @@ class DocGenDataStore {
     testSuiteListLoading: false,
     fieldsByTypeLoadingState: false,
     traceColumnsLoadingState: false,
+    queryDefinitionLoadingState: false,
     contentControlsLoadingState: false,
     documentsLoadingState: false,
     templatesLoadingState: false,
@@ -1683,6 +1685,11 @@ class DocGenDataStore {
         normalizedPath,
       );
       const data = this.mapHistoricalQueriesFromSharedTree(sharedQueryPayload);
+      if (data.length === 0) {
+        toast.warn(
+          'No historical queries found. If queries are expected, some query folders may have failed to load — check server logs.',
+        );
+      }
       this.setHistoricalQueries(data);
       return this.historicalQueries;
     } catch (err) {
@@ -1886,9 +1893,21 @@ class DocGenDataStore {
       });
     } catch (err) {
       logger.error(`Error fetching trace columns: ${err.message}`);
-      return { Requirement: [], 'Test Case': [] };
+      return {};
     } finally {
       runInAction(() => { this.loadingState.traceColumnsLoadingState = false; });
+    }
+  }
+
+  async fetchQueryDefinition({ queryId } = {}) {
+    runInAction(() => { this.loadingState.queryDefinitionLoadingState = true; });
+    try {
+      return await this.azureRestClient.getQueryDefinition(queryId, this.teamProject);
+    } catch (err) {
+      logger.error(`Error fetching query definition: ${err.message}`);
+      return null;
+    } finally {
+      runInAction(() => { this.loadingState.queryDefinitionLoadingState = false; });
     }
   }
 

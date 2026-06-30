@@ -126,8 +126,8 @@ const STDGuide = () => {
             </ListItem>
             <ListItem sx={{ pl: 6 }}>
               <ListItemText
-                primary='Include Common Columns'
-                secondary='Choose how to handle duplicate columns between query sources.'
+                primary='Column Settings'
+                secondary='Rename, show/hide, or reorder columns independently for each query (Req → TC and TC → Req). Settings are per-query and per-side (Requirement / Test Case). Columns are refreshed from ADO each time you select a query.'
               />
             </ListItem>
           </List>

@@ -135,6 +135,19 @@ export default class AzureDevopsRestApi {
     });
   }
 
+  async getQueryDefinition(queryId = null, teamProjectId = '') {
+    return this._wrap(async () => {
+      const res = await axios.get(
+        `${C.jsonDocument_url}/azure/queries/${encodeURIComponent(queryId || '')}/definition`,
+        {
+          headers: this._headers(),
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
+        },
+      );
+      return res.data;
+    });
+  }
+
   async getHistoricalQueries(teamProjectId = '', path = 'shared') {
     return this._wrap(async () => {
       const res = await axios.get(`${C.jsonDocument_url}/azure/queries/historical`, {

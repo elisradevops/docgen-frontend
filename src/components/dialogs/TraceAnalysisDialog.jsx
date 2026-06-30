@@ -15,7 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import QueryTree from '../common/QueryTree';
 import OverlayLoader from '../common/OverlayLoader';
 import { observer } from 'mobx-react';
@@ -51,7 +51,7 @@ const TraceAnalysisDialog = observer(
             reqTestTree: reqTestQueries?.reqTestTree ? [reqTestQueries.reqTestTree] : [],
             testReqTree: reqTestQueries?.testReqTree ? [reqTestQueries.testReqTree] : [],
           }))
-        : setQueryTrees(defaultSelectedQueries);
+        : setQueryTrees({ reqTestTree: [], testReqTree: [] });
     }, [sharedQueries.acquiredTrees]);
 
     const handleTraceAnalysisChange = (value) => {
@@ -63,20 +63,34 @@ const TraceAnalysisDialog = observer(
       }
     };
 
-    const handleCommonColumnChange = (value) => {
-      setTraceAnalysisRequest((prev) => ({ ...prev, includeCommonColumnsMode: value }));
-    };
-
     const handleClickOpen = () => {
       setOpenDialog(true);
     };
 
-    const onReqTestQuerySelected = (selectedQuery) => {
-      setTraceAnalysisRequest((prev) => ({ ...prev, reqTestQuery: selectedQuery }));
+    const reqTestTokenRef = useRef(0);
+    const onReqTestQuerySelected = async (selectedQuery) => {
+      const token = ++reqTestTokenRef.current;
+      let next = selectedQuery;
+      if (selectedQuery?.id) {
+        const fresh = await store.fetchQueryDefinition({ queryId: selectedQuery.id });
+        if (reqTestTokenRef.current !== token) return;
+        if (fresh) next = { ...selectedQuery, columns: fresh.columns, ...(fresh.wiql ? { wiql: fresh.wiql } : {}) };
+      }
+      if (reqTestTokenRef.current !== token) return;
+      setTraceAnalysisRequest((prev) => ({ ...prev, reqTestQuery: next }));
     };
 
-    const onTestReqQuerySelected = (selectedQuery) => {
-      setTraceAnalysisRequest((prev) => ({ ...prev, testReqQuery: selectedQuery }));
+    const testReqTokenRef = useRef(0);
+    const onTestReqQuerySelected = async (selectedQuery) => {
+      const token = ++testReqTokenRef.current;
+      let next = selectedQuery;
+      if (selectedQuery?.id) {
+        const fresh = await store.fetchQueryDefinition({ queryId: selectedQuery.id });
+        if (testReqTokenRef.current !== token) return;
+        if (fresh) next = { ...selectedQuery, columns: fresh.columns, ...(fresh.wiql ? { wiql: fresh.wiql } : {}) };
+      }
+      if (testReqTokenRef.current !== token) return;
+      setTraceAnalysisRequest((prev) => ({ ...prev, testReqQuery: next }));
     };
 
     const handleClose = () => {
@@ -127,37 +141,6 @@ const TraceAnalysisDialog = observer(
       </Box>
     );
 
-    const includeSpecialColumnsToggle = (
-      <Box>
-        <FormLabel id='include-special-columns-radio'>Include Common Columns</FormLabel>
-        <RadioGroup
-          defaultValue='both'
-          row
-          name='include-special-columns-radio'
-          value={traceAnalysisRequest.includeCommonColumnsMode}
-          onChange={(event) => {
-            handleCommonColumnChange(event.target.value);
-          }}
-        >
-          <FormControlLabel
-            value='both'
-            label='Both'
-            control={<Radio />}
-          />
-          <FormControlLabel
-            value='reqOnly'
-            label='Requirement Only'
-            control={<Radio />}
-          />
-          <FormControlLabel
-            value='testOnly'
-            label='Test Case Only'
-            control={<Radio />}
-          />
-        </RadioGroup>
-      </Box>
-    );
-
     return (
       <>
         <Tooltip title='Open Trace Analysis Dialog'>
@@ -202,7 +185,6 @@ const TraceAnalysisDialog = observer(
                     timeout='auto'
                     unmountOnExit
                   >
-                    {includeSpecialColumnsToggle}
                     <Box>
                       <Typography variant='subtitle1'>Select a Requirement to Test Case Query</Typography>
                       <div>
