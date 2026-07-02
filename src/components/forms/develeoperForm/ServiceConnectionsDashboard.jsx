@@ -16,7 +16,10 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
 import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
 import AccessTimeRoundedIcon from '@mui/icons-material/AccessTimeRounded';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { getServiceConnectionsHealth } from '../../../store/data/docManagerApi';
+import packageJson from '../../../../package.json';
+import { buildServiceVersionsText } from './serviceVersions';
 
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
 const AUTO_REFRESH_SECONDS = Math.ceil(AUTO_REFRESH_MS / 1000);
@@ -380,6 +383,32 @@ const summarizeDashboardHealth = (services = []) => {
   };
 };
 
+const copyTextToClipboard = async (text) => {
+  const value = String(text ?? '');
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    /* empty */
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'absolute';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const ServiceConnectionsDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [isBackgroundRefreshing, setIsBackgroundRefreshing] = useState(false);
@@ -388,8 +417,10 @@ const ServiceConnectionsDashboard = () => {
   const [healthPayload, setHealthPayload] = useState(null);
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(AUTO_REFRESH_SECONDS);
   const [highlightedKeys, setHighlightedKeys] = useState([]);
+  const [copyStatus, setCopyStatus] = useState('');
   const previousStatusRef = useRef({});
   const highlightTimeoutRef = useRef(null);
+  const copyStatusTimeoutRef = useRef(null);
 
   const fetchHealth = useCallback(async (silent = false) => {
     if (silent) {
@@ -443,6 +474,9 @@ const ServiceConnectionsDashboard = () => {
     return () => {
       if (highlightTimeoutRef.current) {
         window.clearTimeout(highlightTimeoutRef.current);
+      }
+      if (copyStatusTimeoutRef.current) {
+        window.clearTimeout(copyStatusTimeoutRef.current);
       }
     };
   }, []);
@@ -503,11 +537,27 @@ const ServiceConnectionsDashboard = () => {
     return summarizeDashboardHealth(services);
   }, [services]);
 
+  const serviceVersionsText = useMemo(
+    () => buildServiceVersionsText(services, packageJson.version),
+    [services],
+  );
+
   const overallMeta = getStatusMeta(healthPayload?.status, healthPayload?.connectionStatus);
 
   const handleManualRefresh = () => {
     setSecondsUntilRefresh(AUTO_REFRESH_SECONDS);
     void fetchHealth(false);
+  };
+
+  const handleCopyVersions = async () => {
+    const copied = await copyTextToClipboard(serviceVersionsText);
+    setCopyStatus(copied ? 'copied' : 'failed');
+    if (copyStatusTimeoutRef.current) {
+      window.clearTimeout(copyStatusTimeoutRef.current);
+    }
+    copyStatusTimeoutRef.current = window.setTimeout(() => {
+      setCopyStatus('');
+    }, 2200);
   };
 
   return (
@@ -627,6 +677,53 @@ const ServiceConnectionsDashboard = () => {
         <Typography variant='caption' color='text.secondary'>
           Last check: {formatDateTime(healthPayload?.checkedAt)}
         </Typography>
+
+        <Paper
+          variant='outlined'
+          sx={{
+            p: 1.5,
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            alignItems: { xs: 'stretch', md: 'flex-start' },
+            justifyContent: 'space-between',
+            gap: 1.5,
+            backgroundColor: 'rgba(255, 255, 255, 0.72)',
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant='subtitle2' sx={{ fontWeight: 700 }}>
+              Service Versions
+            </Typography>
+            <Typography
+              component='pre'
+              variant='body2'
+              sx={{
+                m: 0,
+                mt: 0.6,
+                fontFamily: 'monospace',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {serviceVersionsText}
+            </Typography>
+          </Box>
+          <Stack spacing={0.5} alignItems={{ xs: 'stretch', md: 'flex-end' }}>
+            <Button
+              size='small'
+              variant='outlined'
+              startIcon={<ContentCopyIcon />}
+              onClick={handleCopyVersions}
+            >
+              {copyStatus === 'copied' ? 'Copied' : 'Copy versions'}
+            </Button>
+            {copyStatus === 'failed' ? (
+              <Typography variant='caption' color='error'>
+                Copy failed
+              </Typography>
+            ) : null}
+          </Stack>
+        </Paper>
 
         <Divider sx={{ borderColor: (theme) => theme.palette.divider }} />
 
