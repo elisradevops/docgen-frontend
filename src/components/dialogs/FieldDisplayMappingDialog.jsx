@@ -336,6 +336,14 @@ const FieldDisplayMappingDialog = ({
     }
     return n;
   }, [workingMapping, workingVisibility]);
+  const triggerTotalCount = useMemo(() => {
+    let n = 0;
+    for (const qKey of ['req-test', 'test-req']) {
+      n += countMods(fieldDisplayMapping[qKey] || {}, fieldVisibility[qKey] || {}, 'Requirement');
+      n += countMods(fieldDisplayMapping[qKey] || {}, fieldVisibility[qKey] || {}, 'Test Case');
+    }
+    return n;
+  }, [fieldDisplayMapping, fieldVisibility]);
   // Per-direction total for the direction pills
   const modByDirection = useMemo(() => {
     const forKey = (key) =>
@@ -454,9 +462,9 @@ const FieldDisplayMappingDialog = ({
               sx={{ position: 'relative', mt: 0.5 }}
             >
               <EditNoteIcon />
-              {totalCount > 0 && (
+              {triggerTotalCount > 0 && (
                 <Box sx={{ position: 'absolute', top: 2, right: 2, width: 14, height: 14, bgcolor: 'primary.main', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700, color: '#fff', pointerEvents: 'none' }}>
-                  {totalCount}
+                  {triggerTotalCount}
                 </Box>
               )}
             </IconButton>
@@ -477,8 +485,8 @@ const FieldDisplayMappingDialog = ({
               onClick={() => setOpen(true)}
               disabled={isDisabled}
               endIcon={
-                totalCount > 0 ? (
-                  <Chip label={totalCount} size='small' sx={{ height: 20, bgcolor: 'primary.main', color: '#fff', fontWeight: 700, fontSize: '0.68rem', '& .MuiChip-label': { px: 0.75 } }} />
+                triggerTotalCount > 0 ? (
+                  <Chip label={triggerTotalCount} size='small' sx={{ height: 20, bgcolor: 'primary.main', color: '#fff', fontWeight: 700, fontSize: '0.68rem', '& .MuiChip-label': { px: 0.75 } }} />
                 ) : (
                   <EditNoteIcon />
                 )
