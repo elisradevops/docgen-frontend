@@ -19,6 +19,8 @@ import {
   Typography,
   InputAdornment,
   Stack,
+  Skeleton,
+  LinearProgress,
 } from '@mui/material';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import SearchIcon from '@mui/icons-material/Search';
@@ -29,6 +31,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
@@ -45,10 +48,23 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { COLOR_REQ, COLOR_TEST_CASE } from '../../constants/traceColors';
+import { ALWAYS_VISIBLE_REFS, deriveFieldList } from '../../utils/traceColumnFields';
 
 const TYPE_COLORS = { Requirement: COLOR_REQ, 'Test Case': COLOR_TEST_CASE };
 // TODO: theme token — no equivalent in tokens.js; replace when palette is extended
 const TYPE_COLORS_SELECTED = { Requirement: '#b8cfe6', 'Test Case': '#cdc5df' };
+
+// Placeholder row shown while columns are being fetched from ADO, matching SortableFieldRow's shape.
+const COLUMN_ROW_SKELETON_COUNT = 5;
+function ColumnRowSkeleton() {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, px: 0.5 }}>
+      <Skeleton variant='circular' width={16} height={16} sx={{ flexShrink: 0 }} />
+      <Skeleton variant='rounded' width={150} height={34} sx={{ flexShrink: 0 }} />
+      <Skeleton variant='text' sx={{ flex: 1 }} />
+    </Box>
+  );
+}
 
 function TabBadge({ type, count }) {
   if (!count) return null;
@@ -57,62 +73,6 @@ function TabBadge({ type, count }) {
       {count}
     </Box>
   );
-}
-
-// ADO referenceNames + linked-mode pseudo-keys that are always shown and never dragged
-const ALWAYS_VISIBLE_REFS = new Set(['System.Id', 'System.Title', 'Req ID', 'Test Case ID', 'Title']);
-const EXCLUDED_FIELD_REFS = new Set(['System.WorkItemType']);
-
-// Locked columns in linked mode (only Customer ID is configurable)
-const LINKED_REQ_COLUMNS = {
-  Requirement: [{ referenceName: 'Customer ID', name: 'Customer ID' }],
-  'Test Case': [],
-};
-
-// Returns { 'req-test': { Requirement, 'Test Case' }, 'test-req': { Requirement, 'Test Case' } }
-function deriveFieldList(traceAnalysisMode, reqTestQuery, testReqQuery, columnMetadata) {
-  if (traceAnalysisMode === 'linkedRequirement') {
-    return { 'req-test': LINKED_REQ_COLUMNS, 'test-req': LINKED_REQ_COLUMNS };
-  }
-  if (traceAnalysisMode !== 'query') {
-    return { 'req-test': { Requirement: [], 'Test Case': [] }, 'test-req': { Requirement: [], 'Test Case': [] } };
-  }
-
-  const filterMeta = (cols) =>
-    (cols || []).filter(
-      (c) => c?.referenceName && !EXCLUDED_FIELD_REFS.has(c.referenceName) && !ALWAYS_VISIBLE_REFS.has(c.referenceName)
-    );
-
-  const fallbackFromQuery = (query) => {
-    const seen = new Set();
-    const cols = [];
-    for (const col of (query?.columns || [])) {
-      if (!col?.referenceName || seen.has(col.referenceName)) continue;
-      if (EXCLUDED_FIELD_REFS.has(col.referenceName)) continue;
-      if (ALWAYS_VISIBLE_REFS.has(col.referenceName)) continue;
-      seen.add(col.referenceName);
-      cols.push({ referenceName: col.referenceName, name: col.name });
-    }
-    return cols;
-  };
-
-  const resolveQuerySides = (queryKey, query) => {
-    const meta = columnMetadata?.[queryKey];
-    if (meta) {
-      return {
-        Requirement: filterMeta(meta.Requirement),
-        'Test Case': filterMeta(meta['Test Case']),
-      };
-    }
-    // Fallback: use this query's own declared columns for both sides (loading / no metadata)
-    const fb = fallbackFromQuery(query);
-    return { Requirement: fb, 'Test Case': fb };
-  };
-
-  return {
-    'req-test': resolveQuerySides('req-test', reqTestQuery),
-    'test-req': resolveQuerySides('test-req', testReqQuery),
-  };
 }
 
 function countMods(mappingByType, visibilityByType, type) {
@@ -231,6 +191,8 @@ const FieldDisplayMappingDialog = ({
   testReqQuery = null,
   columnMetadata = {}, // {} = not yet fetched / loading; { 'req-test': { Requirement, 'Test Case' }, 'test-req': { ... } } = fetched per query
   iconOnly = false,
+  onRefreshColumns, // async () => void — re-fetch columnMetadata from ADO (semi-live)
+  isRefreshingColumns = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [infoAnchor, setInfoAnchor] = useState(null);
@@ -243,6 +205,14 @@ const FieldDisplayMappingDialog = ({
     if (!open) return;
     setSelectedQuery(reqTestQuery ? 'req-test' : 'test-req');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Semi-live columns: re-fetch from ADO every time the dialog is opened, so column
+  // additions/removals made in ADO since the last fetch are picked up without reselecting the query.
+  useEffect(() => {
+    if (!open) return;
+    onRefreshColumns?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const [searchText, setSearchText] = useState('');
 
   // Auto-correct selectedQuery if the previously selected query is no longer available
@@ -510,6 +480,20 @@ const FieldDisplayMappingDialog = ({
                     <InfoOutlinedIcon sx={{ fontSize: 17 }} />
                   </IconButton>
                 </Tooltip>
+                {onRefreshColumns && (
+                  <Tooltip title='Re-fetch columns from ADO' arrow>
+                    <span>
+                      <IconButton
+                        size='small'
+                        onClick={() => onRefreshColumns()}
+                        disabled={isRefreshingColumns}
+                        sx={{ color: 'text.disabled', '&:hover': { color: 'text.secondary' } }}
+                      >
+                        <RefreshIcon sx={{ fontSize: 17 }} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
               </Stack>
               <Popover
                 open={Boolean(infoAnchor)}
@@ -723,30 +707,39 @@ const FieldDisplayMappingDialog = ({
 
             <Divider />
 
+            {/* Thin progress bar while re-fetching columns that are already showing (refresh button / reopen) */}
+            {isRefreshingColumns && visibleFields.length > 0 && <LinearProgress sx={{ height: 2 }} />}
+
             {/* Column list */}
             <Box sx={{ maxHeight: 340, overflowY: 'auto', mx: -0.5, px: 0.5 }}>
-              {visibleFields.length === 0 && (
-                <Typography variant='body2' color='text.secondary' sx={{ py: 4, textAlign: 'center' }}>
-                  {traceAnalysisMode === 'query' ? 'Select trace queries to see available columns' : 'No configurable columns for this mode'}
-                </Typography>
-              )}
+              {isRefreshingColumns && visibleFields.length === 0 && traceAnalysisMode === 'query' ? (
+                Array.from({ length: COLUMN_ROW_SKELETON_COUNT }).map((_, i) => <ColumnRowSkeleton key={i} />)
+              ) : (
+                <>
+                  {visibleFields.length === 0 && (
+                    <Typography variant='body2' color='text.secondary' sx={{ py: 4, textAlign: 'center' }}>
+                      {traceAnalysisMode === 'query' ? 'Select trace queries to see available columns' : 'No configurable columns for this mode'}
+                    </Typography>
+                  )}
 
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={visibleFields.map((f) => f.referenceName)} strategy={verticalListSortingStrategy}>
-                  {visibleFields.map((field) => (
-                    <SortableFieldRow
-                      key={field.referenceName}
-                      field={field}
-                      selectedType={selectedType}
-                      workingMapping={workingMapping[selectedQuery] || {}}
-                      workingVisibility={workingVisibility[selectedQuery] || {}}
-                      typeColor={typeColor}
-                      onToggleVisibility={handleToggleVisibility}
-                      onFieldOverride={handleFieldOverride}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={visibleFields.map((f) => f.referenceName)} strategy={verticalListSortingStrategy}>
+                      {visibleFields.map((field) => (
+                        <SortableFieldRow
+                          key={field.referenceName}
+                          field={field}
+                          selectedType={selectedType}
+                          workingMapping={workingMapping[selectedQuery] || {}}
+                          workingVisibility={workingVisibility[selectedQuery] || {}}
+                          typeColor={typeColor}
+                          onToggleVisibility={handleToggleVisibility}
+                          onFieldOverride={handleFieldOverride}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                </>
+              )}
             </Box>
           </Stack>
         </DialogContent>

@@ -31,4 +31,26 @@ describe('FieldDisplayMappingDialog trigger badge', () => {
     expect(markup).toContain('Column Settings');
     expect(markup).toContain('>2<');
   });
+
+  test('renders with onRefreshColumns/isRefreshingColumns props without throwing', () => {
+    const onRefreshColumns = vi.fn();
+    const markup = renderToStaticMarkup(
+      <FieldDisplayMappingDialog
+        fieldDisplayMapping={{}}
+        onMappingChange={vi.fn()}
+        fieldVisibility={{}}
+        onVisibilityChange={vi.fn()}
+        fieldOrder={{}}
+        onOrderChange={vi.fn()}
+        traceAnalysisMode='query'
+        reqTestQuery={{ id: 'req-test-query', title: 'Req to TC' }}
+        onRefreshColumns={onRefreshColumns}
+        isRefreshingColumns={false}
+      />
+    );
+
+    expect(markup).toContain('Column Settings');
+    // Dialog is closed on initial render, so the refresh effect (tied to `open`) must not fire.
+    expect(onRefreshColumns).not.toHaveBeenCalled();
+  });
 });
