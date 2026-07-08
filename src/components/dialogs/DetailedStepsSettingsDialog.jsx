@@ -24,10 +24,13 @@ import {
 } from '@mui/material';
 import StairsIcon from '@mui/icons-material/Stairs';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'react-toastify';
 import QueryTree from '../common/QueryTree';
 import OverlayLoader from '../common/OverlayLoader';
 import FieldDisplayMappingDialog from './FieldDisplayMappingDialog';
+import { deriveFieldList } from '../../utils/traceColumnFields';
+import { describeColumnDrift, formatColumnDriftMessage, pruneStaleFieldConfig } from '../../utils/columnDrift';
 
 const DetailedStepsSettingsDialog = ({
   store,
@@ -42,21 +45,80 @@ const DetailedStepsSettingsDialog = ({
     if (prevStepExecution) setStepExecutionState(prevStepExecution);
   }, [prevStepExecution]);
 
-  // Fetch per-side valid columns from backend when the trace query changes (query mode only)
+  // Fetch per-side valid columns from backend — used both on trace query change and as the
+  // semi-live "refresh" the Column Settings dialog triggers on open / via its refresh button.
+  // A generation counter ensures a stale in-flight response never overwrites state once a
+  // newer request has been issued for a different query selection.
+  const [isRefreshingColumns, setIsRefreshingColumns] = useState(false);
+  const columnsFetchGenerationRef = useRef(0);
+
+  // Flags that stepExecutionState currently reflects a favorite load, so the next successful
+  // column fetch should check for ADO column drift vs. the saved config. store.selectedFavorite
+  // is the same signal useTabStatePersistence uses to distinguish a favorite load from a
+  // session restore, so this only fires on an actual favorite load.
+  const pendingFavoriteColumnCheckRef = useRef(false);
   useEffect(() => {
-    const { requirementInclusionMode, testReqQuery } = stepExecutionState.generateRequirements || {};
-    if (requirementInclusionMode !== 'query' || !testReqQuery) return;
-    let cancelled = false;
-    store.fetchTraceColumns({ reqTestQuery: undefined, testReqQuery }).then((result) => {
-      if (cancelled) return;
+    if (store.selectedFavorite?.dataToSave) pendingFavoriteColumnCheckRef.current = true;
+  }, [store.selectedFavorite]);
+
+  // Reassigned every render so it always closes over the LATEST stepExecutionState. Without
+  // this, a useCallback memoized only on [requirementInclusionMode, testReqQuery?.id] would keep
+  // using stale fieldOrder/fieldDisplayMapping/fieldVisibility on any refresh triggered without
+  // those changing (dialog refresh button, dialog reopen, reselecting the same favorite) —
+  // reporting a column as "removed" even after it was re-added in ADO.
+  const refreshTraceColumnsImplRef = useRef();
+  refreshTraceColumnsImplRef.current = async () => {
+    const { requirementInclusionMode, testReqQuery, fieldOrder, fieldVisibility, fieldDisplayMapping } =
+      stepExecutionState.generateRequirements || {};
+    if (requirementInclusionMode !== 'query' || !testReqQuery) {
+      pendingFavoriteColumnCheckRef.current = false;
+      return;
+    }
+    const generation = ++columnsFetchGenerationRef.current;
+    setIsRefreshingColumns(true);
+    try {
+      const result = await store.fetchTraceColumns({ reqTestQuery: undefined, testReqQuery });
+      if (generation !== columnsFetchGenerationRef.current) return; // superseded by a newer request
+
+      const fieldsByQuery = deriveFieldList(requirementInclusionMode, null, testReqQuery, result);
+      const queries = { 'test-req': testReqQuery };
+
+      // Prune saved rename/hide/order entries for columns no longer in ADO — otherwise a
+      // deleted column's stale entry keeps counting as a "pending change" in the trigger badge.
+      // Computed before the drift toast so the toast can tell the user whether this fix still
+      // needs saving.
+      const pruned = pruneStaleFieldConfig(fieldsByQuery, queries, fieldOrder, fieldVisibility, fieldDisplayMapping);
+
+      if (pendingFavoriteColumnCheckRef.current) {
+        pendingFavoriteColumnCheckRef.current = false;
+        const drift = describeColumnDrift(fieldsByQuery, queries, fieldOrder, fieldDisplayMapping, fieldVisibility);
+        const message = formatColumnDriftMessage(drift, 4, pruned.changed);
+        if (message) toast.info(message);
+      }
+
       setStepExecutionState((prev) => ({
         ...prev,
-        generateRequirements: { ...prev.generateRequirements, columnMetadata: result },
+        generateRequirements: {
+          ...prev.generateRequirements,
+          columnMetadata: result,
+          fieldOrder: pruned.fieldOrder,
+          fieldVisibility: pruned.fieldVisibility,
+          fieldDisplayMapping: pruned.fieldDisplayMapping,
+        },
       }));
-    }).catch(() => {
+    } catch {
       // best-effort: failure is non-blocking, dialog falls back to merged columns
-    });
-    return () => { cancelled = true; };
+    } finally {
+      if (generation === columnsFetchGenerationRef.current) setIsRefreshingColumns(false);
+    }
+  };
+
+  // Stable identity (safe to pass as a prop without causing extra effect re-runs) that always
+  // delegates to the latest implementation above.
+  const refreshTraceColumns = useCallback(() => refreshTraceColumnsImplRef.current(), []);
+
+  useEffect(() => {
+    refreshTraceColumns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepExecutionState.generateRequirements?.requirementInclusionMode, stepExecutionState.generateRequirements?.testReqQuery?.id]);
   const attachmentTypeElements = (attachmentProp) => {
@@ -325,6 +387,8 @@ const DetailedStepsSettingsDialog = ({
               traceAnalysisMode={stepExecutionState.generateRequirements.requirementInclusionMode}
               testReqQuery={stepExecutionState.generateRequirements.testReqQuery}
               columnMetadata={stepExecutionState.generateRequirements.columnMetadata}
+              onRefreshColumns={refreshTraceColumns}
+              isRefreshingColumns={isRefreshingColumns}
             />
           </Box>
         </Collapse>
