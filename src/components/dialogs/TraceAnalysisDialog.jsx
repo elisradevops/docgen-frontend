@@ -11,13 +11,16 @@ import {
   Grid,
   Radio,
   RadioGroup,
+  Stack,
   Tooltip,
   Typography,
 } from '@mui/material';
+import { Switch as AntdSwitch } from 'antd';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import React, { useEffect, useRef, useState } from 'react';
 import QueryTree from '../common/QueryTree';
 import OverlayLoader from '../common/OverlayLoader';
+import { colors } from '../../theme/tokens';
 import { observer } from 'mobx-react';
 
 const defaultSelectedQueries = {
@@ -28,6 +31,43 @@ const defaultSelectedQueries = {
   fieldDisplayMapping: {},
   fieldVisibility: {},
   fieldOrder: {},
+  sortBy: { 'req-test': 'query', 'test-req': 'query' },
+};
+
+const SORT_BY_TOOLTIP =
+  'Query: rows follow the order defined by the query itself. Suite: rows follow the suite order used in the generated test description.';
+const SORT_BY_DISABLED_TOOLTIP = 'Select a query to enable sorting.';
+
+export const SortByToggle = ({ direction, value, onChange, disabled }) => {
+  const isSuite = value === 'suite';
+  return (
+    <Stack
+      direction='row'
+      spacing={1}
+      alignItems='center'
+    >
+      <Typography
+        variant='body2'
+        color={disabled ? 'text.disabled' : 'text.secondary'}
+      >
+        Sort By
+      </Typography>
+      <Tooltip title={disabled ? SORT_BY_DISABLED_TOOLTIP : SORT_BY_TOOLTIP}>
+        {/* span wrapper: Tooltip needs a non-disabled child to receive hover events */}
+        <span>
+          <AntdSwitch
+            checked={isSuite}
+            disabled={disabled}
+            checkedChildren='Suite'
+            unCheckedChildren='Query'
+            onChange={(checked) => onChange(direction, checked ? 'suite' : 'query')}
+            style={{ backgroundColor: isSuite ? colors.success : colors.info }}
+            aria-label={`Sort by, ${direction}`}
+          />
+        </span>
+      </Tooltip>
+    </Stack>
+  );
 };
 
 const TraceAnalysisDialog = observer(
@@ -61,6 +101,13 @@ const TraceAnalysisDialog = observer(
       else {
         setTraceAnalysisRequest({ ...defaultSelectedQueries, traceAnalysisMode: value });
       }
+    };
+
+    const handleSortByChange = (direction, value) => {
+      setTraceAnalysisRequest((prev) => ({
+        ...prev,
+        sortBy: { ...(prev.sortBy ?? defaultSelectedQueries.sortBy), [direction]: value },
+      }));
     };
 
     const handleClickOpen = () => {
@@ -187,7 +234,13 @@ const TraceAnalysisDialog = observer(
                   >
                     <Box>
                       <Typography variant='subtitle1'>Select a Requirement to Test Case Query</Typography>
-                      <div>
+                      <Stack
+                        direction='row'
+                        spacing={2}
+                        alignItems='center'
+                        flexWrap='wrap'
+                        useFlexGap
+                      >
                         <QueryTree
                           data={queryTrees.reqTestTree}
                           prevSelectedQuery={traceAnalysisRequest.reqTestQuery}
@@ -195,9 +248,21 @@ const TraceAnalysisDialog = observer(
                           queryType='req-test'
                           isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
                         />
-                      </div>
+                        <SortByToggle
+                          direction='req-test'
+                          value={traceAnalysisRequest.sortBy?.['req-test'] ?? 'query'}
+                          onChange={handleSortByChange}
+                          disabled={!traceAnalysisRequest.reqTestQuery}
+                        />
+                      </Stack>
                       <Typography variant='subtitle1'>Select a Test Case to Requirement Query</Typography>
-                      <div>
+                      <Stack
+                        direction='row'
+                        spacing={2}
+                        alignItems='center'
+                        flexWrap='wrap'
+                        useFlexGap
+                      >
                         <QueryTree
                           data={queryTrees.testReqTree}
                           prevSelectedQuery={traceAnalysisRequest.testReqQuery}
@@ -205,7 +270,13 @@ const TraceAnalysisDialog = observer(
                           queryType='test-req'
                           isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
                         />
-                      </div>
+                        <SortByToggle
+                          direction='test-req'
+                          value={traceAnalysisRequest.sortBy?.['test-req'] ?? 'query'}
+                          onChange={handleSortByChange}
+                          disabled={!traceAnalysisRequest.testReqQuery}
+                        />
+                      </Stack>
                     </Box>
                   </Collapse>
                 </Grid>
