@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { describeColumnDrift, formatColumnDriftMessage, pruneStaleFieldConfig } from './columnDrift';
+import { describeColumnDrift, hasColumnDrift, pruneStaleFieldConfig } from './columnDrift';
 
 describe('describeColumnDrift', () => {
   test('resolves a dropped column label from the query\'s prior columns snapshot when no rename exists', () => {
@@ -102,50 +102,17 @@ describe('describeColumnDrift', () => {
   });
 });
 
-describe('formatColumnDriftMessage', () => {
-  test('returns null when nothing changed', () => {
-    expect(formatColumnDriftMessage({ dropped: [], added: [] })).toBeNull();
+describe('hasColumnDrift', () => {
+  test('false when both lists are empty', () => {
+    expect(hasColumnDrift({ dropped: [], added: [] })).toBe(false);
   });
 
-  test('formats a combined removed/added sentence with the renamed tag', () => {
-    const message = formatColumnDriftMessage({
-      dropped: [{ label: 'Customer ID', wasRenamed: true, wasHidden: false }],
-      added: ['Severity'],
-    });
-    expect(message).toContain('removed Customer ID (was renamed)');
-    expect(message).toContain('added Severity');
+  test('true when there are dropped columns', () => {
+    expect(hasColumnDrift({ dropped: [{ label: 'X', wasRenamed: false, wasHidden: false }], added: [] })).toBe(true);
   });
 
-  test('does not add a "(was ...)" suffix for a dropped column with no prior customization', () => {
-    const message = formatColumnDriftMessage({
-      dropped: [{ label: 'CustomerRequirementId', wasRenamed: false, wasHidden: false }],
-      added: [],
-    });
-    expect(message).toContain('removed CustomerRequirementId');
-    expect(message).not.toContain('(was');
-  });
-
-  test('truncates long lists with a "+N more" suffix', () => {
-    const dropped = ['A', 'B', 'C', 'D', 'E', 'F'].map((label) => ({ label, wasRenamed: false, wasHidden: false }));
-    const message = formatColumnDriftMessage({ dropped, added: [] }, 4);
-    expect(message).toContain('A, B, C, D +2 more');
-  });
-
-  test('omits the save-again hint by default', () => {
-    const message = formatColumnDriftMessage({
-      dropped: [{ label: 'CustomerRequirementId', wasRenamed: false, wasHidden: false }],
-      added: [],
-    });
-    expect(message).not.toContain('Save this favorite again');
-  });
-
-  test('appends a save-again hint when the drift was auto-pruned locally (wasPruned=true)', () => {
-    const message = formatColumnDriftMessage(
-      { dropped: [{ label: 'CustomerRequirementId', wasRenamed: false, wasHidden: false }], added: [] },
-      4,
-      true
-    );
-    expect(message).toContain('Save this favorite again to keep this fix.');
+  test('true when there are added columns', () => {
+    expect(hasColumnDrift({ dropped: [], added: ['Severity'] })).toBe(true);
   });
 });
 

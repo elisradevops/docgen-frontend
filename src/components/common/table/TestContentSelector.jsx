@@ -33,7 +33,8 @@ import { suiteIdCollection } from '../../../utils/sessionPersistence';
 import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
 import RestoreBackdrop from '../RestoreBackdrop';
 import { buildTestContentRequestData } from './testContentRequestData';
-import { describeColumnDrift, formatColumnDriftMessage, pruneStaleFieldConfig } from '../../../utils/columnDrift';
+import { describeColumnDrift, hasColumnDrift, pruneStaleFieldConfig } from '../../../utils/columnDrift';
+import ColumnDriftToast from '../ColumnDriftToast';
 
 const defaultSelectedQueries = {
   traceAnalysisMode: 'none',
@@ -476,8 +477,9 @@ const TestContentSelector = observer(
         if (pendingFavoriteColumnCheckRef.current) {
           pendingFavoriteColumnCheckRef.current = false;
           const drift = describeColumnDrift(fieldsByQuery, queries, current.fieldOrder, current.fieldDisplayMapping, current.fieldVisibility);
-          const message = formatColumnDriftMessage(drift, 4, pruned.changed);
-          if (message) toast.info(message);
+          if (hasColumnDrift(drift)) {
+            toast.info(<ColumnDriftToast drift={drift} wasPruned={pruned.changed} />, { autoClose: 10000 });
+          }
         }
 
         setTraceAnalysisRequest((prev) => ({
