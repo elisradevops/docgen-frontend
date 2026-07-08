@@ -45,6 +45,7 @@ const defaultSelectedQueries = {
   fieldVisibility: {},
   fieldOrder: {},
   columnMetadata: {},
+  sortBy: { 'req-test': 'query', 'test-req': 'query' },
 };
 
 const defaultLinkedMomRequest = {

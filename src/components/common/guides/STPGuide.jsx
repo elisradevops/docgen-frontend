@@ -135,6 +135,12 @@ const STPGuide = () => {
                 secondary='Rename, show/hide, or reorder columns independently for each query (Req → TC and TC → Req). Settings are per-query and per-side (Requirement / Test Case). Columns are refreshed from ADO each time you select a query.'
               />
             </ListItem>
+            <ListItem sx={{ pl: 6 }}>
+              <ListItemText
+                primary='Sort By (Query mode only)'
+                secondary='Set independently for each direction (Req → TC and TC → Req). Query: rows follow the order defined by the selected query. Suite: rows follow the suite order used in the generated test description; for Req → TC, requirements are ordered by their linked test case suite.'
+              />
+            </ListItem>
           </List>
         </Collapse>
 
