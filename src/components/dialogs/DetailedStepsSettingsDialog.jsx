@@ -28,9 +28,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-toastify';
 import QueryTree from '../common/QueryTree';
 import OverlayLoader from '../common/OverlayLoader';
+import ColumnDriftToast from '../common/ColumnDriftToast';
 import FieldDisplayMappingDialog from './FieldDisplayMappingDialog';
 import { deriveFieldList } from '../../utils/traceColumnFields';
-import { describeColumnDrift, formatColumnDriftMessage, pruneStaleFieldConfig } from '../../utils/columnDrift';
+import { describeColumnDrift, hasColumnDrift, pruneStaleFieldConfig } from '../../utils/columnDrift';
 
 const DetailedStepsSettingsDialog = ({
   store,
@@ -92,8 +93,9 @@ const DetailedStepsSettingsDialog = ({
       if (pendingFavoriteColumnCheckRef.current) {
         pendingFavoriteColumnCheckRef.current = false;
         const drift = describeColumnDrift(fieldsByQuery, queries, fieldOrder, fieldDisplayMapping, fieldVisibility);
-        const message = formatColumnDriftMessage(drift, 4, pruned.changed);
-        if (message) toast.info(message);
+        if (hasColumnDrift(drift)) {
+          toast.info(<ColumnDriftToast drift={drift} wasPruned={pruned.changed} />, { autoClose: 10000 });
+        }
       }
 
       setStepExecutionState((prev) => ({

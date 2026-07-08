@@ -53,30 +53,9 @@ export function describeColumnDrift(fieldsByQuery, queries, fieldOrder, fieldDis
   };
 }
 
-// Formats a drift result into a single human-readable sentence, truncating long lists.
-// wasPruned: true when pruneStaleFieldConfig actually changed something for this refresh — the
-// local session state is already fixed, but the favorite in the DB still has the stale entry
-// until the user explicitly saves again, so we tell them that instead of leaving them confused
-// about why the same "removed" toast keeps recurring on this favorite.
-export function formatColumnDriftMessage({ dropped, added }, maxPerList = 4, wasPruned = false) {
-  if (dropped.length === 0 && added.length === 0) return null;
-
-  const describeDropped = (d) => {
-    const tags = [];
-    if (d.wasRenamed) tags.push('renamed');
-    if (d.wasHidden) tags.push('hidden');
-    return tags.length ? `${d.label} (was ${tags.join(', ')})` : d.label;
-  };
-  const truncate = (list, formatter) =>
-    list.length > maxPerList
-      ? `${list.slice(0, maxPerList).map(formatter).join(', ')} +${list.length - maxPerList} more`
-      : list.map(formatter).join(', ');
-
-  const parts = [];
-  if (dropped.length) parts.push(`removed ${truncate(dropped, describeDropped)}`);
-  if (added.length) parts.push(`added ${truncate(added, (x) => x)}`);
-  const base = `Trace Analysis columns changed in ADO since this favorite was saved (${parts.join('; ')}).`;
-  return wasPruned ? `${base} Save this favorite again to keep this fix.` : base;
+// True when a drift result has anything worth showing to the user.
+export function hasColumnDrift({ dropped, added }) {
+  return dropped.length > 0 || added.length > 0;
 }
 
 // Removes referenceNames from saved fieldOrder/fieldVisibility/fieldDisplayMapping that no
