@@ -17,6 +17,12 @@ import { makeKey, tryLocalStorageGet, tryLocalStorageSet } from '../../../utils/
 import LoadingState from '../../common/LoadingState';
 import TocReminderToast from '../../common/customToasts/TocReminderToast';
 import FooterBar from '../../common/FooterBar';
+import MeetingSummarySelector from '../meetingSummary/MeetingSummarySelector';
+import {
+  createMeetingSummaryDocForm,
+  findMeetingSummaryTemplate,
+  isMeetingSummaryDocType,
+} from '../meetingSummary/meetingSummaryUtils';
 
 const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [loading, setLoading] = useState(false);
@@ -25,6 +31,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [selectedDocForm, setSelectedDocForm] = useState(null);
   const [docForm, setDocForm] = useState(null);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [meetingSummaryMode, setMeetingSummaryMode] = useState('portrait');
 
   useEffect(() => {
     if (store?.isAdoMode && store?.adoBootStatus !== 'ready') return;
@@ -40,11 +47,18 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       store
         .fetchDocFormsTemplates(docType)
         .then((docFormsControls) => {
-          setDocFormsControls(docFormsControls); // Set state after templates are fetched
-          if (docFormsControls.length > 0) {
-            const temp = docFormsControls.find((docForm) =>
-              docForm.documentTitle.toLowerCase().includes(docType.toLowerCase()),
-            );
+          const controls =
+            isMeetingSummaryDocType(docType) && (!Array.isArray(docFormsControls) || docFormsControls.length === 0)
+              ? [createMeetingSummaryDocForm()]
+              : Array.isArray(docFormsControls)
+                ? docFormsControls
+                : [];
+          setDocFormsControls(controls); // Set state after templates are fetched
+          if (controls.length > 0) {
+            const temp =
+              controls.find((docForm) =>
+                docForm.documentTitle.toLowerCase().includes(docType.toLowerCase()),
+              ) || controls[0];
             setDocForm(temp);
           }
         })
@@ -105,6 +119,11 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
           /* empty */
         }
 
+        const isMeetingSummaryTemplate = isMeetingSummaryDocType(docType);
+        if (isMeetingSummaryTemplate) {
+          chosen = findMeetingSummaryTemplate(templates, meetingSummaryMode);
+        }
+
         // 2) Prefer docType-specific default names inside 'shared'
         const base = (n) =>
           String(n || '')
@@ -124,17 +143,17 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                   : dt === 'sysrs'
                     ? ['SysRS', 'SYSRS']
                     : [];
-        if (!chosen) {
+        if (!chosen && !isMeetingSummaryTemplate) {
           chosen = sharedTemplates.find((t) => preferNames.includes(base(t.name))) || null;
         }
 
         // 3) Fallback: first shared
-        if (!chosen) {
+        if (!chosen && !isMeetingSummaryTemplate) {
           chosen = sharedTemplates[0] || null;
         }
 
         // 4) Final fallback: first overall
-        if (!chosen) {
+        if (!chosen && !isMeetingSummaryTemplate) {
           chosen = templates[0];
         }
 
@@ -154,7 +173,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
       }
     };
     pickDefaultTemplate();
-  }, [docType, selectedTeamProject, store, store.selectedTemplate, store?.isAdoMode, store?.adoBootStatus]);
+  }, [docType, selectedTeamProject, store, store.selectedTemplate, store?.isAdoMode, store?.adoBootStatus, meetingSummaryMode]);
 
   // Pre-seed validation as invalid for all currently rendered content controls to avoid initial flicker
   useEffect(() => {
@@ -421,7 +440,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   };
 
   const selectedTemplate = store.selectedTemplate;
-  const canRenderContent = !!selectedTemplate || String(docType || '').toLowerCase() === 'test-reporter';
+  const isMeetingSummary = isMeetingSummaryDocType(docType);
+  const canRenderContent = !!selectedTemplate || String(docType || '').toLowerCase() === 'test-reporter' || isMeetingSummary;
 
   return (
     <Stack
@@ -471,7 +491,15 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     spacing={1.5}
                     sx={{ width: '100%', m: 0 }}
                   >
-                    {docForm && docForm.contentControls
+                    {isMeetingSummary ? (
+                      <Grid size={12}>
+                        <MeetingSummarySelector
+                          store={store}
+                          sharedQueries={store.sharedQueries}
+                          onModeChange={setMeetingSummaryMode}
+                        />
+                      </Grid>
+                    ) : docForm && docForm.contentControls
                       ? docForm.contentControls.map((contentControl, key) => {
                           const wide = isWideControl(contentControl);
                           return (
