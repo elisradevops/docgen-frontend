@@ -75,6 +75,12 @@ const STRGuide = () => {
                 secondary='Append requirement coverage based on your trace config.'
               />
             </ListItem>
+            <ListItem sx={{ pl: 6 }}>
+              <ListItemText
+                primary='Column Settings'
+                secondary='Rename, show/hide, or reorder columns in the coverage table. Columns are refreshed from ADO each time you select a query.'
+              />
+            </ListItem>
           </List>
         </Collapse>
 

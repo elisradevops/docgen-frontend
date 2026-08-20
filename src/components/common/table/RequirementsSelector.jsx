@@ -15,7 +15,7 @@ import {
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import CategoryIcon from '@mui/icons-material/Category';
 import { observer } from 'mobx-react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import QueryTree from '../QueryTree';
 import { toast } from 'react-toastify';
 import SectionCard from '../../layout/SectionCard';
@@ -25,7 +25,7 @@ import RestoreBackdrop from '../RestoreBackdrop';
 
 /**
  * RequirementsSelector
- * Manages requirements queries and display mode with session/favorite restore via useTabStatePersistence.
+ * Manages requirements queries with session/favorite restore via useTabStatePersistence.
  * Used by both SRS and SysRS document variants.
  */
 
@@ -37,6 +37,7 @@ const defaultQueriesForSRS = {
 
 const defaultQueriesForSysRS = {
   systemRequirements: null,
+  customerRequirements: null,
   subsystemToSystemRequirements: null,
   systemToSubsystemRequirements: null,
 };
@@ -61,6 +62,7 @@ const RequirementsSelector = observer(
 
     const [queryTrees, setQueryTrees] = useState({
       systemRequirementsTree: [],
+      customerRequirementsTree: [],
       forwardTraceTree: [],
       reverseTraceTree: [],
     });
@@ -70,6 +72,7 @@ const RequirementsSelector = observer(
 
     // Indicator checkboxes (first is always required if queries exist)
     const [includeSystemRequirements, setIncludeSystemRequirements] = useState(false);
+    const [includeCustomerRequirements, setIncludeCustomerRequirements] = useState(false);
     const [includeSystemToSoftwareRequirements, setIncludeSystemToSoftwareRequirements] = useState(false);
     const [includeSoftwareToSystemRequirements, setIncludeSoftwareToSystemRequirements] = useState(false);
 
@@ -83,6 +86,7 @@ const RequirementsSelector = observer(
             isSysRs
               ? {
                   systemRequirements: saved.systemRequirements || null,
+                  customerRequirements: saved.customerRequirements || null,
                   subsystemToSystemRequirements: saved.subsystemToSystemRequirements || null,
                   systemToSubsystemRequirements: saved.systemToSubsystemRequirements || null,
                 }
@@ -93,9 +97,10 @@ const RequirementsSelector = observer(
                 },
           );
           setIncludeSystemRequirements(!!dataToSave?.includeSystemRequirements);
+          setIncludeCustomerRequirements(isSysRs ? !!dataToSave?.includeCustomerRequirements : false);
           setIncludeSystemToSoftwareRequirements(!!dataToSave?.includeSystemToSoftwareRequirements);
           setIncludeSoftwareToSystemRequirements(!!dataToSave?.includeSoftwareToSystemRequirements);
-          if (dataToSave?.displayMode) setDisplayMode(dataToSave.displayMode);
+          if (!isSysRs && dataToSave?.displayMode) setDisplayMode(dataToSave.displayMode);
           savedDataRef.current = dataToSave;
         } catch {
           toast.error('Error processing saved data');
@@ -107,6 +112,7 @@ const RequirementsSelector = observer(
     const resetLocalState = useCallback(() => {
       setQueriesRequest(isSysRs ? defaultQueriesForSysRS : defaultQueriesForSRS);
       setIncludeSystemRequirements(false);
+      setIncludeCustomerRequirements(false);
       setIncludeSystemToSoftwareRequirements(false);
       setIncludeSoftwareToSystemRequirements(false);
       setDisplayMode('hierarchical');
@@ -123,6 +129,9 @@ const RequirementsSelector = observer(
     // Handlers for selections
     const onSelectedSystemRequirementsQuery = useCallback((query) => {
       setQueriesRequest((prev) => ({ ...prev, systemRequirements: query }));
+    }, []);
+    const onSelectedCustomerRequirementsQuery = useCallback((query) => {
+      setQueriesRequest((prev) => ({ ...prev, customerRequirements: query }));
     }, []);
     const onSelectedForwardTraceQuery = useCallback(
       (query) => {
@@ -165,6 +174,10 @@ const RequirementsSelector = observer(
           systemRequirementsTree: acquired.systemRequirementsQueries?.systemRequirementsQueryTree
             ? [acquired.systemRequirementsQueries.systemRequirementsQueryTree]
             : [],
+          customerRequirementsTree:
+            isSysRs && acquired.customerRequirementsQueries?.systemRequirementsQueryTree
+              ? [acquired.customerRequirementsQueries.systemRequirementsQueryTree]
+              : [],
           forwardTraceTree: isSysRs
             ? acquired.subsystemToSystemRequirementsQueries
               ? [acquired.subsystemToSystemRequirementsQueries]
@@ -183,6 +196,7 @@ const RequirementsSelector = observer(
       } else {
         setQueryTrees({
           systemRequirementsTree: [],
+          customerRequirementsTree: [],
           forwardTraceTree: [],
           reverseTraceTree: [],
         });
@@ -199,6 +213,7 @@ const RequirementsSelector = observer(
         isSysRs
           ? {
               systemRequirements: dataToSave.systemRequirements || null,
+              customerRequirements: dataToSave.customerRequirements || null,
               subsystemToSystemRequirements: dataToSave.subsystemToSystemRequirements || null,
               systemToSubsystemRequirements: dataToSave.systemToSubsystemRequirements || null,
             }
@@ -213,6 +228,9 @@ const RequirementsSelector = observer(
     // Update document request
     const UpdateDocumentRequestObject = useCallback(() => {
       if (!store?.docType) return;
+
+      store.setContextName('');
+
       const backend = {};
       const selectedForwardTrace = isSysRs
         ? queriesRequest.subsystemToSystemRequirements
@@ -238,8 +256,24 @@ const RequirementsSelector = observer(
           backend.softwareToSystemRequirements = selectedReverseTrace;
         }
       }
+      if (isSysRs) {
+        backend.customerRequirements = includeCustomerRequirements
+          ? queriesRequest.customerRequirements || null
+          : null;
+      }
 
-      store.setContextName('');
+      const data = {
+        queriesRequest: backend,
+        includeSystemRequirements,
+        includeSystemToSoftwareRequirements,
+        includeSoftwareToSystemRequirements,
+      };
+
+      if (isSysRs) {
+        data.includeCustomerRequirements = includeCustomerRequirements;
+      } else {
+        data.displayMode = displayMode;
+      }
 
       addToDocumentRequestObject(
         {
@@ -247,19 +281,14 @@ const RequirementsSelector = observer(
           title: contentControlTitle,
           skin,
           headingLevel: 1,
-          data: {
-            queriesRequest: backend,
-            includeSystemRequirements,
-            includeSystemToSoftwareRequirements,
-            includeSoftwareToSystemRequirements,
-            displayMode,
-          },
+          data,
         },
         contentControlIndex,
       );
     }, [
       queriesRequest,
       includeSystemRequirements,
+      includeCustomerRequirements,
       includeSystemToSoftwareRequirements,
       includeSoftwareToSystemRequirements,
       store,
@@ -280,6 +309,7 @@ const RequirementsSelector = observer(
     }, [
       queriesRequest,
       includeSystemRequirements,
+      includeCustomerRequirements,
       includeSystemToSoftwareRequirements,
       includeSoftwareToSystemRequirements,
       displayMode,
@@ -330,6 +360,20 @@ const RequirementsSelector = observer(
             `Query: ${queriesRequest.systemRequirements.value || queriesRequest.systemRequirements.text || queriesRequest.systemRequirements.title || 'Custom'}`,
           ]
         : undefined;
+    const customerRequirementsSummary = useMemo(
+      () =>
+        includeCustomerRequirements && queriesRequest.customerRequirements
+          ? [
+              `Query: ${
+                queriesRequest.customerRequirements.value ||
+                queriesRequest.customerRequirements.text ||
+                queriesRequest.customerRequirements.title ||
+                'Custom'
+              }`,
+            ]
+          : undefined,
+      [includeCustomerRequirements, queriesRequest.customerRequirements],
+    );
     const systemToSoftwareSummary =
       includeSystemToSoftwareRequirements && selectedForwardTrace
         ? [
@@ -356,123 +400,125 @@ const RequirementsSelector = observer(
     return (
       <>
         <Stack spacing={1.5}>
-          <SectionCard
-            title='Display Mode'
-            description='Choose how to organize requirements in the document.'
-            compact
-          >
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Tooltip
-                title='Displays the full tree structure with all work item types (Features, Epics, and Requirements) showing parent-child relationships'
-                placement='top'
-                arrow
-              >
-                <Box
-                  onClick={() => setDisplayMode('hierarchical')}
-                  sx={{
-                    flex: 1,
-                    p: 2,
-                    border: '2px solid',
-                    borderColor: displayMode === 'hierarchical' ? 'primary.main' : 'divider',
-                    borderRadius: 1,
-                    cursor: 'pointer',
-                    backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'background.paper',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'action.hover',
-                    },
-                  }}
+          {!isSysRs ? (
+            <SectionCard
+              title='Display Mode'
+              description='Choose how to organize requirements in the document.'
+              compact
+            >
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Tooltip
+                  title='Displays the full tree structure with all work item types (Features, Epics, and Requirements) showing parent-child relationships'
+                  placement='top'
+                  arrow
                 >
-                  <Stack
-                    direction='row'
-                    spacing={1.5}
-                    alignItems='center'
+                  <Box
+                    onClick={() => setDisplayMode('hierarchical')}
+                    sx={{
+                      flex: 1,
+                      p: 2,
+                      border: '2px solid',
+                      borderColor: displayMode === 'hierarchical' ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'background.paper',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: displayMode === 'hierarchical' ? 'primary.main' : 'action.hover',
+                      },
+                    }}
                   >
-                    <AccountTreeIcon
-                      sx={{
-                        fontSize: 24,
-                        color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
-                      }}
-                    />
-                    <Box>
-                      <Typography
-                        variant='body2'
-                        fontWeight={displayMode === 'hierarchical' ? 'bold' : 'medium'}
-                        color={displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.primary'}
-                      >
-                        Hierarchical
-                      </Typography>
-                      <Typography
-                        variant='caption'
+                    <Stack
+                      direction='row'
+                      spacing={1.5}
+                      alignItems='center'
+                    >
+                      <AccountTreeIcon
                         sx={{
+                          fontSize: 24,
                           color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
-                          opacity: displayMode === 'hierarchical' ? 0.9 : 1,
                         }}
-                      >
-                        Full tree structure
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Box>
-              </Tooltip>
+                      />
+                      <Box>
+                        <Typography
+                          variant='body2'
+                          fontWeight={displayMode === 'hierarchical' ? 'bold' : 'medium'}
+                          color={displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.primary'}
+                        >
+                          Hierarchical
+                        </Typography>
+                        <Typography
+                          variant='caption'
+                          sx={{
+                            color: displayMode === 'hierarchical' ? 'primary.contrastText' : 'text.secondary',
+                            opacity: displayMode === 'hierarchical' ? 0.9 : 1,
+                          }}
+                        >
+                          Full tree structure
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </Tooltip>
 
-              <Tooltip
-                title='Groups only Requirement work items by their type, filtering out Features and Epics for a focused document'
-                placement='top'
-                arrow
-              >
-                <Box
-                  onClick={() => setDisplayMode('categorized')}
-                  sx={{
-                    flex: 1,
-                    p: 2,
-                    border: '2px solid',
-                    borderColor: displayMode === 'categorized' ? 'primary.main' : 'divider',
-                    borderRadius: 1,
-                    cursor: 'pointer',
-                    backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'background.paper',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      borderColor: 'primary.main',
-                      backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'action.hover',
-                    },
-                  }}
+                <Tooltip
+                  title='Groups only Requirement work items by their type, filtering out Features and Epics for a focused document'
+                  placement='top'
+                  arrow
                 >
-                  <Stack
-                    direction='row'
-                    spacing={1.5}
-                    alignItems='center'
+                  <Box
+                    onClick={() => setDisplayMode('categorized')}
+                    sx={{
+                      flex: 1,
+                      p: 2,
+                      border: '2px solid',
+                      borderColor: displayMode === 'categorized' ? 'primary.main' : 'divider',
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'background.paper',
+                      transition: 'all 0.2s',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        backgroundColor: displayMode === 'categorized' ? 'primary.main' : 'action.hover',
+                      },
+                    }}
                   >
-                    <CategoryIcon
-                      sx={{
-                        fontSize: 24,
-                        color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
-                      }}
-                    />
-                    <Box>
-                      <Typography
-                        variant='body2'
-                        fontWeight={displayMode === 'categorized' ? 'bold' : 'medium'}
-                        color={displayMode === 'categorized' ? 'primary.contrastText' : 'text.primary'}
-                      >
-                        Categorized
-                      </Typography>
-                      <Typography
-                        variant='caption'
+                    <Stack
+                      direction='row'
+                      spacing={1.5}
+                      alignItems='center'
+                    >
+                      <CategoryIcon
                         sx={{
+                          fontSize: 24,
                           color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
-                          opacity: displayMode === 'categorized' ? 0.9 : 1,
                         }}
-                      >
-                        By requirement type
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Box>
-              </Tooltip>
-            </Box>
-          </SectionCard>
+                      />
+                      <Box>
+                        <Typography
+                          variant='body2'
+                          fontWeight={displayMode === 'categorized' ? 'bold' : 'medium'}
+                          color={displayMode === 'categorized' ? 'primary.contrastText' : 'text.primary'}
+                        >
+                          Categorized
+                        </Typography>
+                        <Typography
+                          variant='caption'
+                          sx={{
+                            color: displayMode === 'categorized' ? 'primary.contrastText' : 'text.secondary',
+                            opacity: displayMode === 'categorized' ? 0.9 : 1,
+                          }}
+                        >
+                          By requirement type
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Box>
+                </Tooltip>
+              </Box>
+            </SectionCard>
+          ) : null}
 
           <SectionCard
             title={requirementsLabel}
@@ -509,98 +555,129 @@ const RequirementsSelector = observer(
             )}
           </SectionCard>
 
-          <SectionCard
-            title='Trace analysis'
-            description='Optionally include cross-level requirement mappings.'
-            compact
-            loading={loading}
-            loadingText='Loading queries...'
-          >
-            {isSysRs && (includeSystemToSoftwareRequirements || includeSoftwareToSystemRequirements) ? (
-              <Alert
-                severity='info'
-                sx={{ mb: 1.5 }}
-              >
-                If this document is a system-level specification - no traceability is required. For a
-                sub-system specification - the following trace tables are required.
-              </Alert>
-            ) : null}
-            <Grid
-              container
-              spacing={1.5}
+          {isSysRs ? (
+            <SectionCard
+              title='Customer/System Requirements Query (for Traceability)'
+              description='Select a query containing the customer or parent-system requirements to trace against. DocGen will extract only Requirement-type items from the query results regardless of query structure. Optional - leave off to skip Chapter 6 traceability.'
+              enableToggle='Include'
+              enabled={includeCustomerRequirements}
+              onToggle={(_event, checked) => setIncludeCustomerRequirements(checked)}
+              compact
+              loading={loading}
+              loadingText='Loading queries...'
             >
-              <Grid size={{ xs: 12, md: 6 }}>
+              {includeCustomerRequirements ? (
                 <Stack spacing={1}>
-                  <FormControlLabel
-                    disabled={loading || !queryTrees.forwardTraceTree?.length}
-                    control={
-                      <Checkbox
-                        checked={includeSystemToSoftwareRequirements}
-                        onChange={(_event, checked) => setIncludeSystemToSoftwareRequirements(checked)}
-                      />
-                    }
-                    label={firstTraceLabel}
+                  <SettingsDisplay
+                    title='Selected query'
+                    settings={customerRequirementsSummary || []}
+                    emptyMessage='No query selected yet.'
+                    boxProps={{ p: 0, bgcolor: 'transparent' }}
                   />
-                  <Collapse
-                    in={includeSystemToSoftwareRequirements}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <Stack spacing={1}>
-                      <SettingsDisplay
-                        title='Selected query'
-                        settings={systemToSoftwareSummary || []}
-                        emptyMessage='No query selected yet.'
-                        boxProps={{ p: 0, bgcolor: 'transparent' }}
-                      />
-                      <QueryTree
-                        data={queryTrees.forwardTraceTree}
-                        prevSelectedQuery={selectedForwardTrace}
-                        onSelectedQuery={onSelectedForwardTraceQuery}
-                        queryType={isSysRs ? 'subsystem-to-system' : 'system-to-software'}
-                        isLoading={loading}
-                      />
-                    </Stack>
-                  </Collapse>
-                </Stack>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Stack spacing={1}>
-                  <FormControlLabel
-                    disabled={loading || !queryTrees.reverseTraceTree?.length}
-                    control={
-                      <Checkbox
-                        checked={includeSoftwareToSystemRequirements}
-                        onChange={(_event, checked) => setIncludeSoftwareToSystemRequirements(checked)}
-                      />
-                    }
-                    label={secondTraceLabel}
+                  <QueryTree
+                    data={queryTrees.customerRequirementsTree}
+                    prevSelectedQuery={queriesRequest.customerRequirements}
+                    onSelectedQuery={onSelectedCustomerRequirementsQuery}
+                    queryType='customer-requirements'
+                    isLoading={loading}
                   />
-                  <Collapse
-                    in={includeSoftwareToSystemRequirements}
-                    timeout='auto'
-                    unmountOnExit
-                  >
-                    <Stack spacing={1}>
-                      <SettingsDisplay
-                        title='Selected query'
-                        settings={softwareToSystemSummary || []}
-                        emptyMessage='No query selected yet.'
-                        boxProps={{ p: 0, bgcolor: 'transparent' }}
-                      />
-                      <QueryTree
-                        data={queryTrees.reverseTraceTree}
-                        prevSelectedQuery={selectedReverseTrace}
-                        onSelectedQuery={onSelectedReverseTraceQuery}
-                        queryType={isSysRs ? 'system-to-subsystem' : 'software-to-system'}
-                        isLoading={loading}
-                      />
-                    </Stack>
-                  </Collapse>
                 </Stack>
+              ) : (
+                <Typography
+                  variant='body2'
+                  color='text.secondary'
+                >
+                  Enable to select the Customer/System requirements query.
+                </Typography>
+              )}
+            </SectionCard>
+          ) : null}
+
+          {!isSysRs && (
+            <SectionCard
+              title='Trace analysis'
+              description='Optionally include cross-level requirement mappings.'
+              compact
+              loading={loading}
+              loadingText='Loading queries...'
+            >
+              <Grid
+                container
+                spacing={1.5}
+              >
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Stack spacing={1}>
+                    <FormControlLabel
+                      disabled={loading || !queryTrees.forwardTraceTree?.length}
+                      control={
+                        <Checkbox
+                          checked={includeSystemToSoftwareRequirements}
+                          onChange={(_event, checked) => setIncludeSystemToSoftwareRequirements(checked)}
+                        />
+                      }
+                      label={firstTraceLabel}
+                    />
+                    <Collapse
+                      in={includeSystemToSoftwareRequirements}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <Stack spacing={1}>
+                        <SettingsDisplay
+                          title='Selected query'
+                          settings={systemToSoftwareSummary || []}
+                          emptyMessage='No query selected yet.'
+                          boxProps={{ p: 0, bgcolor: 'transparent' }}
+                        />
+                        <QueryTree
+                          data={queryTrees.forwardTraceTree}
+                          prevSelectedQuery={selectedForwardTrace}
+                          onSelectedQuery={onSelectedForwardTraceQuery}
+                          queryType='system-to-software'
+                          isLoading={loading}
+                        />
+                      </Stack>
+                    </Collapse>
+                  </Stack>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Stack spacing={1}>
+                    <FormControlLabel
+                      disabled={loading || !queryTrees.reverseTraceTree?.length}
+                      control={
+                        <Checkbox
+                          checked={includeSoftwareToSystemRequirements}
+                          onChange={(_event, checked) => setIncludeSoftwareToSystemRequirements(checked)}
+                        />
+                      }
+                      label={secondTraceLabel}
+                    />
+                    <Collapse
+                      in={includeSoftwareToSystemRequirements}
+                      timeout='auto'
+                      unmountOnExit
+                    >
+                      <Stack spacing={1}>
+                        <SettingsDisplay
+                          title='Selected query'
+                          settings={softwareToSystemSummary || []}
+                          emptyMessage='No query selected yet.'
+                          boxProps={{ p: 0, bgcolor: 'transparent' }}
+                        />
+                        <QueryTree
+                          data={queryTrees.reverseTraceTree}
+                          prevSelectedQuery={selectedReverseTrace}
+                          onSelectedQuery={onSelectedReverseTraceQuery}
+                          queryType='software-to-system'
+                          isLoading={loading}
+                        />
+                      </Stack>
+                    </Collapse>
+                  </Stack>
+                </Grid>
               </Grid>
-            </Grid>
-          </SectionCard>
+            </SectionCard>
+          )}
 
           {editingMode ? (
             <Box>

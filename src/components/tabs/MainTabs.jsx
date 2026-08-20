@@ -381,7 +381,7 @@ const MainTabs = observer(({ store, adoContext }) => {
   const isProjectSelected = Boolean(selectedTeamProject?.key && selectedTeamProject?.text);
   const isDocTypeTab = Array.isArray(store.documentTypes) && store.documentTypes.includes(selectedTab);
   const currentHasGuide = generateGuide(selectedTab) !== null;
-  const showHistoricalQueryButton = !!store.showDebugDocs;
+  const showHistoricalQueryButton = true;
 
   function generateGuide(docType) {
     switch (String(docType || '').toUpperCase()) {
@@ -528,15 +528,6 @@ const MainTabs = observer(({ store, adoContext }) => {
     setProjectClearable(false);
   };
 
-  useEffect(() => {
-    if (showHistoricalQueryButton) return;
-    if (selectedTab !== TAB_HISTORICAL) return;
-    const visibleDocTypes = Array.isArray(store.documentTypes) ? store.documentTypes : [];
-    const fallbackTab = visibleDocTypes.length > 0 ? visibleDocTypes[0] : TAB_DOCS;
-    setSelectedTab(fallbackTab);
-    setProjectClearable(fallbackTab === TAB_TEMPLATES);
-  }, [showHistoricalQueryButton, selectedTab, store.documentTypes]);
-
   const headerActions = (
     <>
       {showHistoricalQueryButton ? (
@@ -544,6 +535,7 @@ const MainTabs = observer(({ store, adoContext }) => {
           startIcon={<HistoryOutlinedIcon />}
           onClick={openHistoricalTab}
           disabled={adoBooting}
+          sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
         >
           Historical Query
         </StyledButton>

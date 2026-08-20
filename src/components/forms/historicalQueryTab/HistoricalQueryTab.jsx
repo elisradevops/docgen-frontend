@@ -123,6 +123,7 @@ const HistoricalQueryTab = observer(({ store }) => {
   const [baselineInput, setBaselineInput] = useState(() => getDefaultDateInput());
   const [compareToInput, setCompareToInput] = useState(() => getDefaultDateInput());
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [invalidQueryHint, setInvalidQueryHint] = useState('');
   const historicalControlIndex = 0;
 
   const queryTreeData = useMemo(() => {
@@ -290,6 +291,7 @@ const HistoricalQueryTab = observer(({ store }) => {
     }
     try {
       const result = await store.fetchHistoricalAsOfResults(queryId, asOfIso);
+      setInvalidQueryHint('');
       toast.success('Historical query snapshot loaded.');
       const skippedCount = Number(result?.skippedWorkItemsCount || 0);
       if (skippedCount > 0) {
@@ -298,7 +300,13 @@ const HistoricalQueryTab = observer(({ store }) => {
         );
       }
     } catch (error) {
-      const message = error?.response?.data?.message || error?.message || error;
+      const message = error?.response?.data?.message || error?.message || String(error);
+      if (/(^|\s)(TF\d{4,6}):/i.test(message)) {
+        setInvalidQueryHint(
+          `The selected query references an area or iteration path that no longer exists in Azure DevOps. ` +
+            `Open the query in ADO Boards → Queries and fix the filter.`,
+        );
+      }
       toast.error(`Failed loading historical query result: ${message}`);
     }
   };
@@ -314,6 +322,7 @@ const HistoricalQueryTab = observer(({ store }) => {
         compareValidation.baselineIso,
         compareValidation.compareToIso,
       );
+      setInvalidQueryHint('');
       toast.success('Historical compare completed.');
       const skippedDistinctCount = Number(result?.skippedWorkItems?.totalDistinct || 0);
       if (skippedDistinctCount > 0) {
@@ -322,7 +331,13 @@ const HistoricalQueryTab = observer(({ store }) => {
         );
       }
     } catch (error) {
-      const message = error?.response?.data?.message || error?.message || error;
+      const message = error?.response?.data?.message || error?.message || String(error);
+      if (/(^|\s)(TF\d{4,6}):/i.test(message)) {
+        setInvalidQueryHint(
+          `The selected query references an area or iteration path that no longer exists in Azure DevOps. ` +
+            `Open the query in ADO Boards → Queries and fix the filter.`,
+        );
+      }
       toast.error(`Failed comparing historical query snapshots: ${message}`);
     }
   };
@@ -462,6 +477,7 @@ const HistoricalQueryTab = observer(({ store }) => {
               prevSelectedQuery={selectedQuery}
               onSelectedQuery={(query) => {
                 setSelectedQuery(query || null);
+                setInvalidQueryHint('');
               }}
               queryType='historical-query'
               queryLabel='Shared Query'
@@ -469,10 +485,19 @@ const HistoricalQueryTab = observer(({ store }) => {
               width='100%'
             />
           </Box>
+          {invalidQueryHint ? (
+            <Alert
+              severity='warning'
+              sx={{ py: 0.5 }}
+              onClose={() => setInvalidQueryHint('')}
+            >
+              {invalidQueryHint}
+            </Alert>
+          ) : null}
 
           <Tabs
             value={mode}
-            onChange={(_event, value) => setMode(value)}
+            onChange={(_event, value) => { setMode(value); setInvalidQueryHint(''); }}
             aria-label='historical-query-mode'
           >
             <Tab

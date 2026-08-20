@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 /**
  * TestContentSelector (STD/STP)
  * Manages test plan/suites and related options for test-based document tabs.
@@ -19,6 +19,8 @@ import {
   Divider,
 } from '@mui/material';
 import TraceAnalysisDialog from '../../dialogs/TraceAnalysisDialog';
+import FieldDisplayMappingDialog from '../../dialogs/FieldDisplayMappingDialog';
+import { deriveFieldList } from '../../../utils/traceColumnFields';
 import { observer } from 'mobx-react';
 import { validateQuery } from '../../../utils/queryValidation';
 import { toast } from 'react-toastify';
@@ -31,12 +33,19 @@ import { suiteIdCollection } from '../../../utils/sessionPersistence';
 import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
 import RestoreBackdrop from '../RestoreBackdrop';
 import { buildTestContentRequestData } from './testContentRequestData';
+import { describeColumnDrift, hasColumnDrift, pruneStaleFieldConfig } from '../../../utils/columnDrift';
+import ColumnDriftToast from '../ColumnDriftToast';
 
 const defaultSelectedQueries = {
   traceAnalysisMode: 'none',
   reqTestQuery: null,
   testReqQuery: null,
   includeCommonColumnsMode: 'both',
+  fieldDisplayMapping: {},
+  fieldVisibility: {},
+  fieldOrder: {},
+  columnMetadata: {},
+  sortBy: { 'req-test': 'query', 'test-req': 'query' },
 };
 
 const defaultLinkedMomRequest = {
@@ -227,6 +236,16 @@ const TestContentSelector = observer(
       (incoming) => {
         if (!incoming || !store.sharedQueries) return;
         const validated = { ...incoming };
+        // Sanitize legacy type-keyed maps (pre-per-query-column-settings shape)
+        const sanitizeFieldMap = (raw) => {
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+          if ('Requirement' in raw || 'Test Case' in raw) return {};
+          return raw;
+        };
+        validated.fieldDisplayMapping = sanitizeFieldMap(incoming.fieldDisplayMapping);
+        validated.fieldVisibility = sanitizeFieldMap(incoming.fieldVisibility);
+        validated.fieldOrder = sanitizeFieldMap(incoming.fieldOrder);
+        validated.columnMetadata = {}; // always re-fetched; never trust persisted metadata
         if (incoming.reqTestQuery && store.sharedQueries?.acquiredTrees?.reqTestTree) {
           const validReqTestQuery = validateQuery(
             [store.sharedQueries.acquiredTrees.reqTestTree],
@@ -319,7 +338,7 @@ const TestContentSelector = observer(
           savedDataRef.current = dataToSave;
           logger.debug(`[${selectorTag}] applySavedData: applied`);
         } catch (error) {
-          console.error('Error loading saved data:', error);
+          logger.error('Error loading saved data:', error);
           toast.error(`Error loading favorite data: ${error.message}`);
         }
       },
@@ -410,6 +429,83 @@ const TestContentSelector = observer(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectorTag, store.sharedQueries]);
 
+    // Fetch per-side valid columns from backend — used both on trace query change and as the
+    // semi-live "refresh" the Column Settings dialog triggers on open / via its refresh button.
+    // A generation counter (not just a busy flag) ensures a stale in-flight response never
+    // overwrites state once a newer request has been issued for a different query selection.
+    const [isRefreshingColumns, setIsRefreshingColumns] = useState(false);
+    const columnsFetchGenerationRef = useRef(0);
+
+    // Flags that the state currently in traceAnalysisRequest came from a favorite load, so the
+    // next successful column fetch should check for ADO column drift vs. the saved config.
+    // store.selectedFavorite is the same signal useTabStatePersistence uses to distinguish a
+    // favorite load from a session restore, so this only fires on an actual favorite load.
+    const pendingFavoriteColumnCheckRef = useRef(false);
+    useEffect(() => {
+      if (store.selectedFavorite?.dataToSave) pendingFavoriteColumnCheckRef.current = true;
+    }, [store.selectedFavorite]);
+
+    // Reassigned every render so it always closes over the LATEST traceAnalysisRequest.
+    // Without this, a useCallback memoized only on [mode, reqTestQuery?.id, testReqQuery?.id]
+    // would keep using stale fieldOrder/fieldDisplayMapping/fieldVisibility on any refresh
+    // triggered without those ids changing (dialog refresh button, dialog reopen, reselecting
+    // the same favorite) — reporting a column as "removed" even after it was re-added in ADO.
+    const refreshTraceColumnsImplRef = useRef();
+    refreshTraceColumnsImplRef.current = async () => {
+      const current = traceAnalysisRequest;
+      if (current.traceAnalysisMode !== 'query' || (!current.reqTestQuery && !current.testReqQuery)) {
+        pendingFavoriteColumnCheckRef.current = false;
+        return;
+      }
+      const generation = ++columnsFetchGenerationRef.current;
+      setIsRefreshingColumns(true);
+      try {
+        const result = await store.fetchTraceColumns({
+          reqTestQuery: current.reqTestQuery,
+          testReqQuery: current.testReqQuery,
+        });
+        if (generation !== columnsFetchGenerationRef.current) return; // superseded by a newer request
+
+        const fieldsByQuery = deriveFieldList(current.traceAnalysisMode, current.reqTestQuery, current.testReqQuery, result);
+        const queries = { 'req-test': current.reqTestQuery, 'test-req': current.testReqQuery };
+
+        // Prune saved rename/hide/order entries for columns no longer in ADO — otherwise a
+        // deleted column's stale entry keeps counting as a "pending change" in the trigger badge
+        // forever, even though the dialog correctly stops showing that column. Computed before
+        // the drift toast so the toast can tell the user whether this fix still needs saving.
+        const pruned = pruneStaleFieldConfig(fieldsByQuery, queries, current.fieldOrder, current.fieldVisibility, current.fieldDisplayMapping);
+
+        if (pendingFavoriteColumnCheckRef.current) {
+          pendingFavoriteColumnCheckRef.current = false;
+          const drift = describeColumnDrift(fieldsByQuery, queries, current.fieldOrder, current.fieldDisplayMapping, current.fieldVisibility);
+          if (hasColumnDrift(drift)) {
+            toast.info(<ColumnDriftToast drift={drift} wasPruned={pruned.changed} />, { autoClose: 10000 });
+          }
+        }
+
+        setTraceAnalysisRequest((prev) => ({
+          ...prev,
+          columnMetadata: result,
+          fieldOrder: pruned.fieldOrder,
+          fieldVisibility: pruned.fieldVisibility,
+          fieldDisplayMapping: pruned.fieldDisplayMapping,
+        }));
+      } catch {
+        // best-effort: failure is non-blocking, dialog falls back to merged columns
+      } finally {
+        if (generation === columnsFetchGenerationRef.current) setIsRefreshingColumns(false);
+      }
+    };
+
+    // Stable identity (safe to pass as a prop without causing extra effect re-runs) that always
+    // delegates to the latest implementation above.
+    const refreshTraceColumns = useCallback(() => refreshTraceColumnsImplRef.current(), []);
+
+    useEffect(() => {
+      refreshTraceColumns();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [traceAnalysisRequest.traceAnalysisMode, traceAnalysisRequest.reqTestQuery?.id, traceAnalysisRequest.testReqQuery?.id]);
+
     // Re-apply saved test plan (and then suites) once test plans become available
     useEffect(() => {
       const saved = savedDataRef.current;
@@ -479,9 +575,6 @@ const TestContentSelector = observer(
           traceAnalysisRequest.traceAnalysisMode === 'linkedRequirement'
             ? 'Requirements from linked trace'
             : 'Requirements from queries',
-          traceAnalysisRequest.includeCommonColumnsMode !== 'both'
-            ? `Common columns: ${traceAnalysisRequest.includeCommonColumnsMode}`
-            : null,
         ].filter(Boolean)
       : undefined;
 
@@ -590,12 +683,34 @@ const TestContentSelector = observer(
                   settings={traceAnalysisSummary || []}
                   emptyMessage='Pull requirements traceability based on linked items or queries.'
                   actions={
-                    <TraceAnalysisDialog
-                      store={store}
-                      sharedQueries={store.sharedQueries}
-                      prevTraceAnalysisRequest={traceAnalysisRequest}
-                      onTraceAnalysisChange={setTraceAnalysisRequest}
-                    />
+                    <Box sx={{ display: 'flex', gap: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 0.5 }}>
+                      <TraceAnalysisDialog
+                        store={store}
+                        sharedQueries={store.sharedQueries}
+                        prevTraceAnalysisRequest={traceAnalysisRequest}
+                        onTraceAnalysisChange={setTraceAnalysisRequest}
+                      />
+                      <FieldDisplayMappingDialog
+                        fieldDisplayMapping={traceAnalysisRequest.fieldDisplayMapping || {}}
+                        onMappingChange={(mapping) =>
+                          setTraceAnalysisRequest((prev) => ({ ...prev, fieldDisplayMapping: mapping }))
+                        }
+                        fieldVisibility={traceAnalysisRequest.fieldVisibility || {}}
+                        onVisibilityChange={(visibility) =>
+                          setTraceAnalysisRequest((prev) => ({ ...prev, fieldVisibility: visibility }))
+                        }
+                        fieldOrder={traceAnalysisRequest.fieldOrder || {}}
+                        onOrderChange={(order) =>
+                          setTraceAnalysisRequest((prev) => ({ ...prev, fieldOrder: order }))
+                        }
+                        traceAnalysisMode={traceAnalysisRequest.traceAnalysisMode}
+                        reqTestQuery={traceAnalysisRequest.reqTestQuery}
+                        testReqQuery={traceAnalysisRequest.testReqQuery}
+                        columnMetadata={traceAnalysisRequest.columnMetadata || {}}
+                        onRefreshColumns={refreshTraceColumns}
+                        isRefreshingColumns={isRefreshingColumns}
+                      />
+                    </Box>
                   }
                 />
               </Stack>

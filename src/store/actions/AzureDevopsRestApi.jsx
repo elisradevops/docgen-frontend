@@ -113,10 +113,38 @@ export default class AzureDevopsRestApi {
     });
   }
 
+  async getTraceColumns({ reqTestQuery, testReqQuery, teamProjectId } = {}) {
+    return this._wrap(async () => {
+      const res = await axios.post(
+        `${C.jsonDocument_url}/azure/trace/columns`,
+        {
+          reqTestQuery,
+          testReqQuery,
+          teamProject: this._normalizeTeamProjectId(teamProjectId),
+        },
+        { headers: this._headers() },
+      );
+      return res.data;
+    });
+  }
+
   async getQueryResults(queryId = null, teamProjectId = '') {
     return this._wrap(async () => {
       const res = await axios.get(
         `${C.jsonDocument_url}/azure/queries/${encodeURIComponent(queryId || '')}/results`,
+        {
+          headers: this._headers(),
+          params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },
+        },
+      );
+      return res.data;
+    });
+  }
+
+  async getQueryDefinition(queryId = null, teamProjectId = '') {
+    return this._wrap(async () => {
+      const res = await axios.get(
+        `${C.jsonDocument_url}/azure/queries/${encodeURIComponent(queryId || '')}/definition`,
         {
           headers: this._headers(),
           params: { teamProjectId: this._normalizeTeamProjectId(teamProjectId) },

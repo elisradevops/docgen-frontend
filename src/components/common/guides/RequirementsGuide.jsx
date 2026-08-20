@@ -37,36 +37,40 @@ const RequirementsGuide = ({ variant = 'srs' } = {}) => {
         {guideTitle}
       </Typography>
       <List disablePadding>
-        <ListItemButton onClick={() => setOpenDisplayMode((prev) => !prev)}>
-          <ListItemIcon>{openDisplayMode ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
-          <ListItemText
-            primary='Display Mode'
-            secondary='Choose how requirements are organized in the generated document.'
-          />
-        </ListItemButton>
-        <Collapse
-          in={openDisplayMode}
-          timeout='auto'
-          unmountOnExit
-        >
-          <List
-            component='div'
-            disablePadding
-          >
-            <ListItem sx={{ pl: 6 }}>
+        {!isSysRs ? (
+          <>
+            <ListItemButton onClick={() => setOpenDisplayMode((prev) => !prev)}>
+              <ListItemIcon>{openDisplayMode ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
               <ListItemText
-                primary='Hierarchical'
-                secondary='Displays the full tree structure with all work item types including Features, Epics, and Requirements. This mode preserves the complete parent-child hierarchy from your Azure DevOps query, showing how requirements are organized under their parent Features and Epics.'
+                primary='Display Mode'
+                secondary='Choose how requirements are organized in the generated document.'
               />
-            </ListItem>
-            <ListItem sx={{ pl: 6 }}>
-              <ListItemText
-                primary='Categorized'
-                secondary='Groups only Requirement work items by their type. This mode filters out Features and Epics, focusing exclusively on Requirements and organizing them into sections based on requirement types for a cleaner, more focused document.'
-              />
-            </ListItem>
-          </List>
-        </Collapse>
+            </ListItemButton>
+            <Collapse
+              in={openDisplayMode}
+              timeout='auto'
+              unmountOnExit
+            >
+              <List
+                component='div'
+                disablePadding
+              >
+                <ListItem sx={{ pl: 6 }}>
+                  <ListItemText
+                    primary='Hierarchical'
+                    secondary='Displays the full tree structure with all work item types including Features, Epics, and Requirements. This mode preserves the complete parent-child hierarchy from your Azure DevOps query, showing how requirements are organized under their parent Features and Epics.'
+                  />
+                </ListItem>
+                <ListItem sx={{ pl: 6 }}>
+                  <ListItemText
+                    primary='Categorized'
+                    secondary='Groups only Requirement work items by their type. This mode filters out Features and Epics, focusing exclusively on Requirements and organizing them into sections based on requirement types for a cleaner, more focused document.'
+                  />
+                </ListItem>
+              </List>
+            </Collapse>
+          </>
+        ) : null}
 
         <ListItem>
           <ListItemText
@@ -75,40 +79,49 @@ const RequirementsGuide = ({ variant = 'srs' } = {}) => {
           />
         </ListItem>
 
-        <ListItemButton onClick={() => setOpenTraceability((prev) => !prev)}>
-          <ListItemIcon>{openTraceability ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
-          <ListItemText
-            primary='Traceability Sections'
-            secondary={
-              isSysRs
-                ? 'Include bidirectional traceability between System and Sub-System requirements.'
-                : 'Include bidirectional traceability between System and Software requirements.'
-            }
-          />
-        </ListItemButton>
-        <Collapse
-          in={openTraceability}
-          timeout='auto'
-          unmountOnExit
-        >
-          <List
-            component='div'
-            disablePadding
-          >
-            <ListItem sx={{ pl: 6 }}>
+        {isSysRs ? (
+          <ListItem>
+            <ListItemText
+              primary='Customer/System Requirements Query (for Traceability)'
+              secondary='Select a query containing the customer or parent-system requirements to trace against. DocGen will extract only Requirement-type items from the query results regardless of query structure. Optional - leave off to skip Chapter 6 traceability.'
+            />
+          </ListItem>
+        ) : null}
+
+        {!isSysRs && (
+          <>
+            <ListItemButton onClick={() => setOpenTraceability((prev) => !prev)}>
+              <ListItemIcon>{openTraceability ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
               <ListItemText
-                primary={forwardTraceLabel}
-                secondary={forwardTraceDescription}
+                primary='Traceability Sections'
+                secondary='Include bidirectional traceability between System and Software requirements.'
               />
-            </ListItem>
-            <ListItem sx={{ pl: 6 }}>
-              <ListItemText
-                primary={reverseTraceLabel}
-                secondary={reverseTraceDescription}
-              />
-            </ListItem>
-          </List>
-        </Collapse>
+            </ListItemButton>
+            <Collapse
+              in={openTraceability}
+              timeout='auto'
+              unmountOnExit
+            >
+              <List
+                component='div'
+                disablePadding
+              >
+                <ListItem sx={{ pl: 6 }}>
+                  <ListItemText
+                    primary={forwardTraceLabel}
+                    secondary={forwardTraceDescription}
+                  />
+                </ListItem>
+                <ListItem sx={{ pl: 6 }}>
+                  <ListItemText
+                    primary={reverseTraceLabel}
+                    secondary={reverseTraceDescription}
+                  />
+                </ListItem>
+              </List>
+            </Collapse>
+          </>
+        )}
 
         <ListItemButton onClick={() => setOpenNotes((prev) => !prev)}>
           <ListItemIcon>{openNotes ? <ExpandLess /> : <ExpandMore />}</ListItemIcon>
