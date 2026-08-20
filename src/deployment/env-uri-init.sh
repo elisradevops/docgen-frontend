@@ -16,19 +16,11 @@ fi
 echo "Using JSON_DOCUMENT_URL=$JSON_DOCUMENT_URL"
 
 # -----------------------------
-# Azure AD config (optional)
-# -----------------------------
-AZURE_CLIENT_ID="${AZURE_CLIENT_ID:-}"
-AZURE_TENANT_ID="${AZURE_TENANT_ID:-common}"
-
-# -----------------------------
 # Generate runtime config.js
 # -----------------------------
 cat > "$target_dir/config.js" <<EOF
 window.APP_CONFIG = {
-  JSON_DOCUMENT_URL: "$JSON_DOCUMENT_URL",
-  AZURE_CLIENT_ID: "$AZURE_CLIENT_ID",
-  AZURE_TENANT_ID: "$AZURE_TENANT_ID"
+  JSON_DOCUMENT_URL: "$JSON_DOCUMENT_URL"
 };
 EOF
 

@@ -613,6 +613,7 @@ class DocGenDataStore {
       linkTypes: observable,
       workItemTypes: observable,
       userDetails: observable,
+      windowsIdentityHint: observable,
       documents: observable,
       docType: observable,
       contextName: observable,
@@ -684,6 +685,7 @@ class DocGenDataStore {
       validateMewpExternalIngestionFiles: action,
       addContentControlToDocument: action,
       fetchUserDetails: action,
+      fetchWindowsIdentityHint: action,
       testCredentials: action,
       setCredentials: action,
       resolveTeamProjectByName: action,
@@ -768,6 +770,7 @@ class DocGenDataStore {
   adoBootStatus = 'idle';
   adoBootError = '';
   fetchUserDetailsPromise = null;
+  fetchWindowsIdentityHintPromise = null;
   fetchCollectionLinkTypesPromise = null;
   adoBootstrapPromise = null;
   adoBootstrapProjectKey = '';
@@ -784,6 +787,7 @@ class DocGenDataStore {
   fieldsByType = [];
   linkTypes = []; // list of link types
   userDetails = [];
+  windowsIdentityHint = null;
   linkTypesFilter = []; // list of selected links to filter by
   testPlansList = []; // list of testPlans
   testSuiteList = []; // list of testsuites
@@ -1482,6 +1486,41 @@ class DocGenDataStore {
       }
     })();
     return this.fetchUserDetailsPromise;
+  }
+
+  // Best-effort: resolve the caller's AD domain + sAMAccountName from their
+  // already-authenticated ADO identity, to prefill the on-prem SharePoint
+  // NTLM dialog. On-prem Windows-auth collections only; a no-op everywhere
+  // else (cloud/Entra orgs). Never throws, never touches auth state — this
+  // must stay fully isolated from fetchUserDetails' error handling, since a
+  // failure here is the expected common case, not a real auth problem.
+  async fetchWindowsIdentityHint() {
+    if (this.windowsIdentityHint) return this.windowsIdentityHint; // cached, including a cached negative result
+    if (this.fetchWindowsIdentityHintPromise) return this.fetchWindowsIdentityHintPromise;
+
+    const empty = { domain: null, account: null };
+    const userId = this.userDetails?.userId;
+    if (!this.hasAdoCredentials() || !userId) return empty; // not cached — creds/userId may arrive later
+
+    this.fetchWindowsIdentityHintPromise = (async () => {
+      try {
+        const data = await this.azureRestClient.getWindowsIdentity(userId);
+        const hint = { domain: data?.domain || null, account: data?.account || null };
+        runInAction(() => {
+          this.windowsIdentityHint = hint;
+        });
+        return hint;
+      } catch (err) {
+        logger.debug(`Windows identity hint unavailable: ${err?.message}`);
+        runInAction(() => {
+          this.windowsIdentityHint = empty; // cache the miss too — don't retry all session
+        });
+        return empty;
+      } finally {
+        this.fetchWindowsIdentityHintPromise = null;
+      }
+    })();
+    return this.fetchWindowsIdentityHintPromise;
   }
 
   //for setting the selected link type filters

@@ -9,6 +9,30 @@ const baseHeaders = {
   'Content-Type': 'application/json',
 };
 
+const getServerErrorMessage = (data) => {
+  if (!data) return 'Server request failed';
+  if (typeof data === 'string') return data;
+  const baseMessage =
+    (typeof data.message === 'string' && data.message.trim()) ||
+    (typeof data.error === 'string' && data.error.trim()) ||
+    (typeof data.error?.message === 'string' && data.error.message.trim()) ||
+    '';
+  if (data.dependency) {
+    // Name the failing downstream dependency (e.g. "minio", "azure-devops") and its
+    // URL instead of letting a bare status code (e.g. "code 401") reach the user
+    // with no indication of what actually rejected the request.
+    const detail = baseMessage || `request failed${data.code ? ` (${data.code})` : ''}`;
+    const location = data.url ? ` — ${data.url}` : '';
+    return `${detail} [${data.dependency}]${location}`;
+  }
+  if (baseMessage) return baseMessage;
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return 'Server request failed';
+  }
+};
+
 export const getBucketFileList = async (
   bucketName,
   docType = null,
@@ -25,7 +49,8 @@ export const getBucketFileList = async (
       docType !== null
         ? `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?docType=${docType}&isExternalUrl=${isExternalUrl}&recurse=${recurse}`
         : `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}&recurse=${recurse}`;
-    const urlToSend = projectName === null ? url : `${url}&projectName=${projectName}`;
+    const urlToSend =
+      projectName === null ? url : `${url}&projectName=${encodeURIComponent(projectName)}`;
     let res = await makeRequest(urlToSend, undefined, undefined, baseHeaders);
     return res.bucketFileList;
   } catch (err) {
@@ -144,7 +169,7 @@ export const sendDocumentToGenerator = async (docJson) => {
     if (err.response) {
       // If the error has a response, it comes from the server
       logger.error('Error response while sending document to generator:', err.response.data);
-      throw new Error(err.response.data.error);
+      throw new Error(getServerErrorMessage(err.response.data));
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while sending document to generator');
       throw new Error('Request timeout - server took too long to respond');
@@ -352,9 +377,9 @@ export const getServiceConnectionsHealth = async () => {
  * SharePoint Integration API Functions
  */
 
-// Note: OAuth is now handled entirely by frontend (SPA flow with PKCE)
-// See: src/utils/sharepointOAuth.js
-// Backend OAuth endpoints have been removed
+// Note: for SharePoint Online, `auth` is a Microsoft Graph access token the
+// user pastes into SharePointConnectDialog (e.g. from Graph Explorer) — no
+// Azure AD app registration or OAuth popup involved.
 
 /**
  * Tests SharePoint connection
@@ -378,6 +403,25 @@ export const testSharePointConnection = async (siteUrl, library, folder, auth) =
     return res.data;
   } catch (err) {
     logger.error(`Error testing SharePoint connection: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Resolves a pasted on-prem templates-folder URL (copied from the browser
+ * address bar) into { siteUrl, library, folder } — on-prem only. Online
+ * configs already work off one pasted sharing link with no resolution step.
+ */
+export const resolveSharePointUrl = async (url, credentials) => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/sharepoint/resolve-url`,
+      { url, credentials },
+      { headers: baseHeaders, timeout: 30000 }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error resolving SharePoint URL: ${err.message}`);
     throw new Error(err.response?.data?.message || err.message);
   }
 };
@@ -458,13 +502,13 @@ export const syncSharePointTemplates = async (siteUrl, library, folder, auth, bu
 };
 
 /**
- * Saves SharePoint configuration
+ * Saves the app-level SharePoint configuration (one per user, not per project)
  */
-export const saveSharePointConfig = async (userId, projectName, siteUrl, library, folder, displayName) => {
+export const saveSharePointConfig = async (userId, siteUrl, library, folder, displayName) => {
   try {
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/config`,
-      { userId, projectName, siteUrl, library, folder, displayName },
+      { userId, siteUrl, library, folder, displayName },
       { headers: baseHeaders, timeout: DEFAULT_TIMEOUT }
     );
     return res.data;
@@ -475,15 +519,11 @@ export const saveSharePointConfig = async (userId, projectName, siteUrl, library
 };
 
 /**
- * Gets SharePoint configuration
+ * Gets the app-level SharePoint configuration (one per user, not per project)
  */
-export const getSharePointConfig = async (userId, projectName) => {
+export const getSharePointConfig = async (userId) => {
   try {
-    const params = {};
-    if (projectName) params.projectName = projectName;
-    
     const res = await axios.get(`${C.jsonDocument_url}/sharepoint/config`, {
-      params,
       headers: {
         ...baseHeaders,
         'X-User-Id': userId || '',
@@ -501,31 +541,11 @@ export const getSharePointConfig = async (userId, projectName) => {
 };
 
 /**
- * Gets all SharePoint configurations for a user
+ * Deletes the app-level SharePoint configuration (one per user, not per project)
  */
-export const getAllSharePointConfigs = async (userId) => {
-  try {
-    const res = await axios.get(`${C.jsonDocument_url}/sharepoint/configs/all`, {
-      headers: {
-        ...baseHeaders,
-        'X-User-Id': userId || '',
-      },
-      timeout: DEFAULT_TIMEOUT,
-    });
-    return res.data;
-  } catch (err) {
-    logger.error(`Error getting SharePoint configs: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
-  }
-};
-
-/**
- * Deletes SharePoint configuration for a project
- */
-export const deleteSharePointConfig = async (userId, projectName) => {
+export const deleteSharePointConfig = async (userId) => {
   try {
     const res = await axios.delete(`${C.jsonDocument_url}/sharepoint/config`, {
-      params: { projectName },
       headers: {
         ...baseHeaders,
         'X-User-Id': userId || '',

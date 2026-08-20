@@ -26,3 +26,4 @@ yarn-error.log*
 /minio
 ado-extension/dist
 *.vsix
+docs/superpowers

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
 import { useCookies } from 'react-cookie';
 
@@ -50,6 +50,9 @@ import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { isAccessToken } from '../../utils/tokenUtils';
 
 const defaultItem = { key: '', text: '' };
+// Standalone mode only (see isAdoMode guards below) — in the ADO extension,
+// the current project always comes from adoContext, never from here.
+const LAST_SELECTED_TEAM_PROJECT_KEY = 'lastSelectedTeamProject';
 const StyledTabs = styled((props) => (
   <Tabs
     {...props}
@@ -170,7 +173,16 @@ const MainTabs = observer(({ store, adoContext }) => {
   const [selectedTab, setSelectedTab] = useState(TAB_DOCS);
   // eslint-disable-next-line no-unused-vars
   const [cookies, setCookie, removeCookie] = useCookies(['azureDevopsUrl', 'azureDevopsPat']);
-  const [selectedTeamProject, setSelectedTeamProject] = useState(defaultItem);
+  const [selectedTeamProject, setSelectedTeamProject] = useState(() => {
+    if (adoContext?.isAdo) return defaultItem;
+    try {
+      const saved = localStorage.getItem(LAST_SELECTED_TEAM_PROJECT_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Corrupted/unavailable storage — fall back to no selection.
+    }
+    return defaultItem;
+  });
   const [projectClearable, setProjectClearable] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const isAdoMode = !!adoContext?.isAdo;
@@ -219,6 +231,21 @@ const MainTabs = observer(({ store, adoContext }) => {
       })();
     }
   }, [cookies, isAdoMode, isAdoAccessToken, logout, store]);
+
+  // The project restored from localStorage (see the lazy initializer above)
+  // only sets local UI state — without this, the store's own project-scoped
+  // data (documentTypes, workItemTypes, ProjectBucketName, etc.) never gets
+  // (re)loaded, so every tab reading from the store looks empty/broken after
+  // a refresh even though the dropdown shows the right project. Standalone
+  // mode only; ADO mode has its own dedicated effect for this (below).
+  const appliedRestoredProjectRef = useRef(false);
+  useEffect(() => {
+    if (isAdoMode || appliedRestoredProjectRef.current) return;
+    if (!cookies.azureDevopsUrl || !cookies.azureDevopsPat) return;
+    if (!selectedTeamProject?.key || !selectedTeamProject?.text) return;
+    appliedRestoredProjectRef.current = true;
+    store.setTeamProject(selectedTeamProject.key, selectedTeamProject.text);
+  }, [isAdoMode, cookies, selectedTeamProject, store]);
 
   // Global 401 handling via browser event dispatched from DataStore handler
   useEffect(() => {
@@ -270,6 +297,24 @@ const MainTabs = observer(({ store, adoContext }) => {
     store.adoProjectResolveInFlight,
     debugEnabled,
   ]);
+
+  // Persist the standalone-mode project selection so it survives a page
+  // refresh — every project-scoped tab (and its store data) would otherwise
+  // reset to "no project" on every reload. Never runs in ADO mode — there,
+  // adoContext is always the source of truth and this must not fight with
+  // or overwrite it.
+  useEffect(() => {
+    if (isAdoMode) return;
+    try {
+      if (selectedTeamProject?.key) {
+        localStorage.setItem(LAST_SELECTED_TEAM_PROJECT_KEY, JSON.stringify(selectedTeamProject));
+      } else {
+        localStorage.removeItem(LAST_SELECTED_TEAM_PROJECT_KEY);
+      }
+    } catch {
+      // Storage unavailable — persistence is best-effort only.
+    }
+  }, [isAdoMode, selectedTeamProject]);
 
   // Keep selected tab in sync with available document types
   // Note: Do not override manual selection of special tabs (Docs/Templates/Developer).
