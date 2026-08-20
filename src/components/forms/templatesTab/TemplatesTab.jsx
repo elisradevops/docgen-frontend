@@ -66,6 +66,18 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   const projectName = useMemo(() => resolveProjectName(selectedTeamProject), [selectedTeamProject]);
   const hasProject = projectName !== 'shared';
 
+  // store.documentTypes lists every doc-generation tab, not just the ones
+  // that sync from a SharePoint file template — Test-Reporter builds its
+  // content from ADO test data with no .dotx/.docx involved at all (see
+  // MainTabs.jsx's isTestReporterTab, which skips template selection for
+  // it the same way). Exclude it here so the SharePoint dialog's guidance
+  // and folder-name validation don't claim a "Test-Reporter/" subfolder is
+  // valid when the backend's sync would reject it.
+  const templateDocTypes = useMemo(
+    () => (store.documentTypes || []).filter((dt) => String(dt).toLowerCase() !== 'test-reporter'),
+    [store.documentTypes]
+  );
+
   const [templates, setTemplates] = useState([]);
   const [deletingTemplateEtag, setDeletingTemplateEtag] = useState(null);
   const [searchText, setSearchText] = useState('');
@@ -902,6 +914,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         initialConfig={spConfig}
         identityHint={store.windowsIdentityHint}
         canSync={canSyncTemplates}
+        documentTypes={templateDocTypes}
       />
 
       <SharePointConflictDialog

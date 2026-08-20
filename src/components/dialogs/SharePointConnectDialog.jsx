@@ -17,16 +17,203 @@ import {
   Checkbox,
   InputAdornment,
   IconButton,
+  Popper,
+  Paper,
+  Stack,
+  Fade,
 } from '@mui/material';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import { resolveSharePointUrl, listSharePointFiles } from '../../store/data/docManagerApi';
 import { decodeJwtExpirySeconds, formatTokenExpiry } from '../../utils/graphToken';
 import { resolveIdentityPrefill } from './sharePointIdentityPrefill';
 import { isOnlineSharePointUrl as isOnlineUrl } from '../../utils/sharePointConnectionHealth';
+import { buildFolderPreviewMessage } from './sharePointFolderPreview';
 
 const MODE_ONPREM = 'onprem';
 const MODE_ONLINE = 'online';
+
+// Shown inside the folder-structure hint when no project is selected yet
+// (so store.documentTypes is empty) — illustrative only, not validated
+// against.
+const EXAMPLE_DOC_TYPES = ['STD', 'SVD', 'SRS'];
+
+// Made-up filenames for the one illustrated example folder — chosen to look
+// nothing alike on purpose, so "filenames can be anything" is shown, not
+// just stated.
+const EXAMPLE_FILES = ['Acme_STD_v3.dotx', 'Legacy Format.docx'];
+
+const FolderStructureHintContent = ({ documentTypes }) => {
+  const hasRealTypes = documentTypes && documentTypes.length > 0;
+  const types = hasRealTypes ? documentTypes : EXAMPLE_DOC_TYPES;
+
+  return (
+    <Box sx={{ maxWidth: 300 }}>
+      <Typography
+        variant='subtitle2'
+        sx={{ fontWeight: 700, mb: 0.25 }}
+      >
+        Expected folder layout
+      </Typography>
+      <Typography
+        variant='caption'
+        color='text.secondary'
+        sx={{ display: 'block', mb: 1 }}
+      >
+        Same for On-premises and Online — the folder you connect to needs one subfolder per template type:
+      </Typography>
+
+      {/* The full hierarchy, root through every real doc type — not one
+          detached example — so it's visible that every subfolder listed
+          is a direct child of the one folder you're pointing at, not a
+          disconnected set of accepted names. */}
+      <Stack
+        spacing={0.4}
+        sx={{ mb: 1.5 }}
+      >
+        <Stack
+          direction='row'
+          alignItems='center'
+          spacing={0.75}
+        >
+          <FolderOutlinedIcon
+            fontSize='small'
+            sx={{ color: 'text.secondary' }}
+          />
+          <Typography
+            variant='body2'
+            color='text.secondary'
+            sx={{ fontStyle: 'italic' }}
+          >
+            (the folder you connect to)
+          </Typography>
+        </Stack>
+        {types.map((dt, i) => (
+          <React.Fragment key={dt}>
+            <Stack
+              direction='row'
+              alignItems='center'
+              spacing={0.75}
+              sx={{ pl: 3 }}
+            >
+              <FolderOutlinedIcon
+                fontSize='small'
+                color='primary'
+              />
+              <Typography
+                variant='body2'
+                sx={{ fontWeight: 700, fontFamily: '"Roboto Mono", Consolas, monospace' }}
+              >
+                {dt}/
+              </Typography>
+            </Stack>
+            {/* Files illustrated under only the first folder — enough to
+                show "any filename works", without repeating it per type. */}
+            {i === 0 &&
+              EXAMPLE_FILES.map((fileName) => (
+                <Stack
+                  key={fileName}
+                  direction='row'
+                  alignItems='center'
+                  spacing={0.75}
+                  sx={{ pl: 6 }}
+                >
+                  <InsertDriveFileOutlinedIcon sx={{ fontSize: 15 }} color='disabled' />
+                  <Typography
+                    variant='caption'
+                    color='text.secondary'
+                    sx={{ fontFamily: '"Roboto Mono", Consolas, monospace' }}
+                  >
+                    {fileName}
+                  </Typography>
+                </Stack>
+              ))}
+          </React.Fragment>
+        ))}
+      </Stack>
+
+      <Typography
+        variant='caption'
+        color='text.secondary'
+        sx={{ display: 'block' }}
+      >
+        <Box
+          component='span'
+          sx={{ fontWeight: 700, color: 'text.primary' }}
+        >
+          Only the subfolder name matters.
+        </Box>{' '}
+        Filenames can be anything, and multiple templates per type are welcome — you'll choose which one to use
+        later.
+        {!hasRealTypes && ' Example types shown — the real set depends on the selected project.'}
+      </Typography>
+    </Box>
+  );
+};
+
+// Hover-triggered info affordance for the folder-URL fields. Deliberately a
+// themed Popper + Paper rather than MUI's Tooltip — Tooltip renders with a
+// fixed dark bubble regardless of the app's palette, which is the right
+// choice for a one-line label but reads as generic/unstyled for a content
+// block like this; Paper picks up the app's real background/elevation/radius.
+const FolderStructureInfoButton = ({ documentTypes }) => {
+  const [anchorEl, setAnchorEl] = useState(null);
+  const closeTimerRef = useRef(null);
+
+  const openFromIcon = (e) => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    setAnchorEl(e.currentTarget);
+  };
+  const cancelClose = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  };
+  const scheduleClose = () => {
+    closeTimerRef.current = setTimeout(() => setAnchorEl(null), 120);
+  };
+
+  return (
+    <>
+      <IconButton
+        aria-label='Expected folder structure'
+        edge='end'
+        size='small'
+        onMouseEnter={openFromIcon}
+        onMouseLeave={scheduleClose}
+        onFocus={openFromIcon}
+        onBlur={scheduleClose}
+      >
+        <InfoOutlinedIcon fontSize='small' />
+      </IconButton>
+      <Popper
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        placement='bottom-end'
+        transition
+        sx={{ zIndex: (theme) => theme.zIndex.tooltip }}
+        modifiers={[{ name: 'offset', options: { offset: [0, 8] } }]}
+      >
+        {({ TransitionProps }) => (
+          <Fade
+            {...TransitionProps}
+            timeout={120}
+          >
+            <Paper
+              elevation={4}
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
+              sx={{ p: 2, borderRadius: 2 }}
+            >
+              <FolderStructureHintContent documentTypes={documentTypes} />
+            </Paper>
+          </Fade>
+        )}
+      </Popper>
+    </>
+  );
+};
 
 /**
  * Single "Connect to SharePoint" dialog — replaces the old two-step
@@ -36,7 +223,15 @@ const MODE_ONLINE = 'online';
  * backend call, so the same file filtering/validation applies here as at
  * sync time) that must succeed before "Connect & Sync" is enabled.
  */
-const SharePointConnectDialog = ({ open, onClose, onConnect, initialConfig, identityHint, canSync = true }) => {
+const SharePointConnectDialog = ({
+  open,
+  onClose,
+  onConnect,
+  initialConfig,
+  identityHint,
+  canSync = true,
+  documentTypes = [],
+}) => {
   const [mode, setMode] = useState(MODE_ONPREM);
 
   // On-premises — paste-a-URL is the primary path; manual 3-field entry is
@@ -141,7 +336,7 @@ const SharePointConnectDialog = ({ open, onClose, onConnect, initialConfig, iden
         applyPreview(result, config);
       }
     } catch (error) {
-      setPreview({ status: 'error', message: error.message });
+      setPreview({ status: 'error', canConnect: false, message: error.message });
     } finally {
       setChecking(false);
     }
@@ -149,29 +344,16 @@ const SharePointConnectDialog = ({ open, onClose, onConnect, initialConfig, iden
 
   const applyPreview = (result, resolvedConfig) => {
     if (!result.success) {
-      setPreview({ status: 'error', message: result.message || 'Connection failed' });
+      setPreview({ status: 'error', canConnect: false, message: result.message || 'Connection failed' });
       return;
     }
     const files = result.files || [];
-    if (files.length === 0) {
-      setPreview({
-        status: 'warning',
-        message: 'No recognized document-type folders found here — check the folder path and try again.',
-        files,
-        resolvedConfig,
-      });
-      return;
-    }
-    setPreview({
-      status: 'success',
-      message: `Ready to connect — the full file list with dates and sizes will be shown on the next step.`,
-      files,
-      resolvedConfig,
-    });
+    const { status, canConnect, message } = buildFolderPreviewMessage({ files, documentTypes });
+    setPreview({ status, canConnect, message, files, resolvedConfig });
   };
 
   const handleConnectAndSync = () => {
-    if (preview?.status !== 'success') return;
+    if (!preview?.canConnect) return;
 
     const auth =
       mode === MODE_ONLINE ? { accessToken: accessToken.trim() } : { username: username.trim(), password, domain: domain.trim() };
@@ -225,6 +407,13 @@ const SharePointConnectDialog = ({ open, onClose, onConnect, initialConfig, iden
                     helperText='Paste the URL from your browser while viewing the templates folder in SharePoint'
                     sx={{ mb: 2 }}
                     autoFocus
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position='end'>
+                          <FolderStructureInfoButton documentTypes={documentTypes} />
+                        </InputAdornment>
+                      ),
+                    }}
                   />
                   <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 2 }}>
                     Farm not resolving this correctly?{' '}
@@ -355,6 +544,13 @@ const SharePointConnectDialog = ({ open, onClose, onConnect, initialConfig, iden
                 helperText='Paste "Copy link" on the templates folder, or just the address bar URL after navigating into it'
                 sx={{ mb: 2 }}
                 autoFocus
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position='end'>
+                      <FolderStructureInfoButton documentTypes={documentTypes} />
+                    </InputAdornment>
+                  ),
+                }}
               />
 
               <Alert severity='info' sx={{ mb: 2 }}>
@@ -431,7 +627,7 @@ const SharePointConnectDialog = ({ open, onClose, onConnect, initialConfig, iden
           onClick={handleConnectAndSync}
           variant='contained'
           color='primary'
-          disabled={preview?.status !== 'success'}
+          disabled={!preview?.canConnect}
         >
           {canSync ? 'Connect & Sync' : 'Connect'}
         </Button>
