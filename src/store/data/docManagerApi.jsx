@@ -9,30 +9,6 @@ const baseHeaders = {
   'Content-Type': 'application/json',
 };
 
-const getServerErrorMessage = (data) => {
-  if (!data) return 'Server request failed';
-  if (typeof data === 'string') return data;
-  const baseMessage =
-    (typeof data.message === 'string' && data.message.trim()) ||
-    (typeof data.error === 'string' && data.error.trim()) ||
-    (typeof data.error?.message === 'string' && data.error.message.trim()) ||
-    '';
-  if (data.dependency) {
-    // Name the failing downstream dependency (e.g. "minio", "azure-devops") and its
-    // URL instead of letting a bare status code (e.g. "code 401") reach the user
-    // with no indication of what actually rejected the request.
-    const detail = baseMessage || `request failed${data.code ? ` (${data.code})` : ''}`;
-    const location = data.url ? ` — ${data.url}` : '';
-    return `${detail} [${data.dependency}]${location}`;
-  }
-  if (baseMessage) return baseMessage;
-  try {
-    return JSON.stringify(data);
-  } catch {
-    return 'Server request failed';
-  }
-};
-
 export const getBucketFileList = async (
   bucketName,
   docType = null,
@@ -49,8 +25,7 @@ export const getBucketFileList = async (
       docType !== null
         ? `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?docType=${docType}&isExternalUrl=${isExternalUrl}&recurse=${recurse}`
         : `${C.jsonDocument_url}/minio/bucketFileList/${bucketName}?isExternalUrl=${isExternalUrl}&recurse=${recurse}`;
-    const urlToSend =
-      projectName === null ? url : `${url}&projectName=${encodeURIComponent(projectName)}`;
+    const urlToSend = projectName === null ? url : `${url}&projectName=${projectName}`;
     let res = await makeRequest(urlToSend, undefined, undefined, baseHeaders);
     return res.bucketFileList;
   } catch (err) {
@@ -169,7 +144,7 @@ export const sendDocumentToGenerator = async (docJson) => {
     if (err.response) {
       // If the error has a response, it comes from the server
       logger.error('Error response while sending document to generator:', err.response.data);
-      throw new Error(getServerErrorMessage(err.response.data));
+      throw new Error(err.response.data.error);
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while sending document to generator');
       throw new Error('Request timeout - server took too long to respond');
