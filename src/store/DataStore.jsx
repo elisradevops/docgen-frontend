@@ -776,12 +776,16 @@ class DocGenDataStore {
       setAdoBootStatus: action,
     });
     makeLoggable(this);
-    // Global 401 handler -> set flags and dispatch event for UI to react
+    // Global 401 handler -> set flags and dispatch event for UI to react.
+    // The event/UI reaction (toast + logout) must only fire on the
+    // transition INTO unauthorized, not on every repeated 401 while already
+    // unauthorized — otherwise a session stuck retrying against a dead PAT
+    // stacks one toast/logout per request instead of announcing it once.
     setAuthErrorHandler(() => {
-      if (this.lastAuthErrorStatus !== 401) {
-        this.lastAuthErrorStatus = 401;
-      }
+      const wasAlreadyUnauthorized = this.lastAuthErrorStatus === 401;
+      this.lastAuthErrorStatus = 401;
       this.isAuthenticated = false;
+      if (wasAlreadyUnauthorized) return;
       try {
         window.dispatchEvent(new CustomEvent('auth-unauthorized'));
         // Clear session-scoped debug-docs preference on logout/auth failure

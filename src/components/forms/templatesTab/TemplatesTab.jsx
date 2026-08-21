@@ -86,7 +86,10 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   const [spConfig, setSpConfig] = useState(null);
   const [spCredentials, setSpCredentials] = useState(null);
   // 'checking' | 'healthy' | 'unhealthy' | 'no-session'
-  const [connectionHealth, setConnectionHealth] = useState('no-session');
+  // Starts 'checking', not 'no-session' — the latter is a real verdict, and
+  // defaulting to it made a brand-new successful connection show "No active
+  // session" for the seconds before the first real check completes.
+  const [connectionHealth, setConnectionHealth] = useState('checking');
   const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -234,9 +237,15 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   // SharePoint sync handlers
   const cacheAuth = async (auth, remember) => {
     if (auth.accessToken) {
-      // Graph tokens are short-lived and low-sensitivity — always cached, no opt-in.
+      // Graph tokens are short-lived and low-sensitivity — always cached, no
+      // opt-in. Stored in localStorage (not sessionStorage): the token's own
+      // exp claim / the pre-flight connectivity check are what actually
+      // decide whether it's still usable, so there's no reason to also
+      // discard an otherwise-still-valid token just because the tab closed
+      // or a new tab was opened — same storage posture as the NTLM
+      // credentials below.
       const encrypted = await encryptForSession(JSON.stringify({ ...auth, timestamp: Date.now() }));
-      sessionStorage.setItem('sharepoint_oauth_token', encrypted);
+      localStorage.setItem('sharepoint_oauth_token', encrypted);
     } else if (remember) {
       // NTLM passwords require explicit opt-in before being persisted at
       // all — but unlike a bearer token, a password has no exp claim and
@@ -259,7 +268,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   };
 
   const clearCachedSharePointAuth = () => {
-    sessionStorage.removeItem('sharepoint_oauth_token');
+    localStorage.removeItem('sharepoint_oauth_token');
     localStorage.removeItem('sharepoint_credentials');
   };
 
@@ -302,6 +311,11 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
     let cancelled = false;
 
     const checkHealth = async () => {
+      // Set synchronously, before the first await — otherwise the card
+      // keeps showing whatever status it had before this run (often the
+      // stale/default 'no-session') for the whole duration of the storage
+      // read + network verification below.
+      setConnectionHealth('checking');
       const cached = await readCachedSharePointAuth();
       if (cancelled) return;
       if (!cached) {
@@ -314,7 +328,6 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         setConnectionHealth('unhealthy');
         return;
       }
-      setConnectionHealth('checking');
       const stillValid = await verifyCachedAuthStillValid(spConfig, cached.auth);
       if (cancelled) return;
       setConnectionHealth(stillValid ? 'healthy' : 'unhealthy');
@@ -341,7 +354,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
 
     if (spConfig) {
       // Try to use cached OAuth token first (for SharePoint Online)
-      const cachedTokenRaw = sessionStorage.getItem('sharepoint_oauth_token');
+      const cachedTokenRaw = localStorage.getItem('sharepoint_oauth_token');
 
       if (cachedTokenRaw) {
         try {
@@ -372,7 +385,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
           }
         } catch {
           // Decrypt/parse failure -> treat as no usable cache, not an error.
-          sessionStorage.removeItem('sharepoint_oauth_token');
+          localStorage.removeItem('sharepoint_oauth_token');
         }
       }
 
@@ -424,6 +437,14 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         await cacheAuth(auth, remember);
       } catch (err) {
         logger.warn('Could not cache SharePoint auth (crypto unavailable?); continuing without cache', err);
+        // The connection itself still works (auth is held in memory for
+        // this sync), but nothing was written to storage — every future
+        // health check will correctly, but silently, read as "no session".
+        // Say so up front instead of leaving that looking like a bug.
+        toast.warning(
+          "Connected, but this browser can't securely store the session — you'll need to reconnect after refreshing.",
+          { autoClose: 8000 }
+        );
       }
       // The credential is now actually written to storage — force a fresh
       // health check rather than leaving it to whatever the spConfig-change
@@ -489,15 +510,15 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       const currentProjectName = resolveProjectName(selectedTeamProject);
       const docType = store.docType || '';
 
-      const result = await checkSharePointConflicts(
-        config.siteUrl,
-        config.library,
-        config.folder,
+      const result = await checkSharePointConflicts({
+        siteUrl: config.siteUrl,
+        library: config.library,
+        folder: config.folder,
         auth,
         bucketName,
-        currentProjectName,
-        docType
-      );
+        projectName: currentProjectName,
+        docType,
+      });
 
       setSyncing(false);
 
@@ -530,12 +551,12 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
     }
   };
 
-  const handleConflictResolution = (filesToSkip) => {
+  const handleConflictResolution = (filesToSkip, docTypeOverrides) => {
     setShowConflictDialog(false);
-    performSync(filesToSkip, spCredentials, spConfig);
+    performSync(filesToSkip, spCredentials, spConfig, docTypeOverrides);
   };
 
-  const performSync = async (filesToSkip, credentials, config) => {
+  const performSync = async (filesToSkip, credentials, config, docTypeOverrides) => {
     try {
       setSyncing(true);
       const bucketName = 'templates';
@@ -548,16 +569,17 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       const configToUse = config || spConfig;
       const authToUse = credentials || spCredentials;
 
-      const result = await syncSharePointTemplates(
-        configToUse.siteUrl,
-        configToUse.library,
-        configToUse.folder,
-        authToUse,
+      const result = await syncSharePointTemplates({
+        siteUrl: configToUse.siteUrl,
+        library: configToUse.library,
+        folder: configToUse.folder,
+        auth: authToUse,
         bucketName,
-        currentProjectName,
+        projectName: currentProjectName,
         docType,
-        filesToSkip
-      );
+        skipFiles: filesToSkip,
+        docTypeOverrides,
+      });
 
       setSyncing(false);
 
@@ -924,6 +946,9 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         conflicts={conflictData?.conflicts || []}
         newFiles={conflictData?.newFiles || []}
         totalFiles={conflictData?.totalFiles || 0}
+        documentTypes={templateDocTypes}
+        truncated={conflictData?.truncated}
+        skippedFolders={conflictData?.skippedFolders || []}
       />
     </Stack>
   );

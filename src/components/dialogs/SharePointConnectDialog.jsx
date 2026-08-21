@@ -256,6 +256,25 @@ const SharePointConnectDialog = ({
   const [checking, setChecking] = useState(false);
   const [preview, setPreview] = useState(null); // { status: 'success'|'warning'|'error', message, files, resolvedConfig }
 
+  // Scan progress feedback — the actual scan is one request/response, not
+  // streaming, so there's no real per-file progress to show. This is
+  // purely a client-side elapsed-time readout so a deep/wide folder tree
+  // (which can take several seconds) doesn't look identical to a hang.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (!checking) {
+      setElapsedSeconds(0);
+      return undefined;
+    }
+    const startedAt = Date.now();
+    // Computed from a fixed start time, not incremented per tick — an
+    // incrementing counter drifts under background-tab timer throttling.
+    const intervalId = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [checking]);
+
   useEffect(() => {
     if (!open) return;
     setMode(initialConfig && isOnlineUrl(initialConfig.siteUrl) ? MODE_ONLINE : MODE_ONPREM);
@@ -348,7 +367,12 @@ const SharePointConnectDialog = ({
       return;
     }
     const files = result.files || [];
-    const { status, canConnect, message } = buildFolderPreviewMessage({ files, documentTypes });
+    const { status, canConnect, message } = buildFolderPreviewMessage({
+      files,
+      documentTypes,
+      truncated: result.truncated,
+      skippedFolders: result.skippedFolders,
+    });
     setPreview({ status, canConnect, message, files, resolvedConfig });
   };
 
@@ -605,6 +629,14 @@ const SharePointConnectDialog = ({
             sx={{ mb: 2 }}
           />
 
+          {checking && (
+            <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
+              {elapsedSeconds > 15
+                ? 'Still scanning — this folder has a lot of subfolders.'
+                : 'Scanning folders — larger or deeper structures can take longer.'}
+            </Typography>
+          )}
+
           {preview && (
             <Alert severity={preview.status} sx={{ mb: 1 }}>
               {preview.message}
@@ -621,7 +653,7 @@ const SharePointConnectDialog = ({
           disabled={checking}
           startIcon={checking && <CircularProgress size={16} />}
         >
-          {checking ? 'Checking...' : 'Test Connection'}
+          {checking ? `Checking… ${elapsedSeconds}s` : 'Test Connection'}
         </Button>
         <Button
           onClick={handleConnectAndSync}

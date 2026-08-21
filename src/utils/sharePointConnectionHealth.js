@@ -14,7 +14,7 @@ export const isOnlineSharePointUrl = (url) => !!url && url.toLowerCase().include
 // reports enough about it to judge health without necessarily needing a
 // network call yet. Returns null when nothing usable is cached here.
 export async function readCachedSharePointAuth() {
-  const cachedTokenRaw = sessionStorage.getItem('sharepoint_oauth_token');
+  const cachedTokenRaw = localStorage.getItem('sharepoint_oauth_token');
   if (cachedTokenRaw) {
     try {
       const tokenData = JSON.parse(await decryptForSession(cachedTokenRaw));

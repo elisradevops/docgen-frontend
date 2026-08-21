@@ -440,18 +440,29 @@ export const listSharePointFiles = async (siteUrl, library, folder, auth) => {
 };
 
 /**
- * Checks for conflicts with existing MinIO files
- * Supports both NTLM credentials and OAuth tokens
+ * Checks for conflicts with existing MinIO files.
+ * Takes a single options object — both this and syncSharePointTemplates
+ * needed a 9th param (docTypeOverrides) added on top of an already
+ * 7-8-positional-argument signature, so both were converted together.
  */
-export const checkSharePointConflicts = async (siteUrl, library, folder, auth, bucketName, projectName, docType) => {
+export const checkSharePointConflicts = async ({
+  siteUrl,
+  library,
+  folder,
+  auth,
+  bucketName,
+  projectName,
+  docType,
+  docTypeOverrides,
+}) => {
   try {
-    const body = { siteUrl, library, folder, bucketName, projectName, docType };
+    const body = { siteUrl, library, folder, bucketName, projectName, docType, docTypeOverrides };
     if (auth.accessToken) {
       body.oauthToken = auth;
     } else {
       body.credentials = auth;
     }
-    
+
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/check-conflicts`,
       body,
@@ -465,18 +476,30 @@ export const checkSharePointConflicts = async (siteUrl, library, folder, auth, b
 };
 
 /**
- * Syncs templates from SharePoint to MinIO
- * Supports both NTLM credentials and OAuth tokens
+ * Syncs templates from SharePoint to MinIO.
+ * Supports both NTLM credentials and OAuth tokens. `docTypeOverrides` is a
+ * { [relativePath]: docType } map from the review dialog's per-row
+ * selector — it wins over both SharePoint auto-detection and `docType`.
  */
-export const syncSharePointTemplates = async (siteUrl, library, folder, auth, bucketName, projectName, docType, skipFiles = []) => {
+export const syncSharePointTemplates = async ({
+  siteUrl,
+  library,
+  folder,
+  auth,
+  bucketName,
+  projectName,
+  docType,
+  skipFiles = [],
+  docTypeOverrides,
+}) => {
   try {
-    const body = { siteUrl, library, folder, bucketName, projectName, docType, skipFiles };
+    const body = { siteUrl, library, folder, bucketName, projectName, docType, skipFiles, docTypeOverrides };
     if (auth.accessToken) {
       body.oauthToken = auth;
     } else {
       body.credentials = auth;
     }
-    
+
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/sync-templates`,
       body,
