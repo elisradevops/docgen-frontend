@@ -21,6 +21,7 @@ import Highlighter from 'react-highlight-words';
 import LoadingState from '../../common/LoadingState';
 import SharePointConnectDialog from '../../dialogs/SharePointConnectDialog';
 import SharePointConflictDialog from '../../dialogs/SharePointConflictDialog';
+import SharePointSyncResultsDialog from '../../dialogs/SharePointSyncResultsDialog';
 import {
   checkSharePointConflicts,
   syncSharePointTemplates,
@@ -95,6 +96,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [conflictData, setConflictData] = useState(null);
+  const [syncResultsDialog, setSyncResultsDialog] = useState(null);
 
   const viewManuallyChangedRef = useRef(false);
   const [templateLibrary, setTemplateLibrary] = useState(() => (hasProject ? 'project' : 'shared'));
@@ -319,6 +321,18 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       const cached = await readCachedSharePointAuth();
       if (cancelled) return;
       if (!cached) {
+        // Nothing persisted — but this tab may still hold a working
+        // connection in memory (persistence can fail for legitimate
+        // reasons: "Remember credentials" wasn't checked, or this browser
+        // context can't use Web Crypto at all). Check that before
+        // declaring "no active session", which is only true if there's
+        // really nothing usable anywhere.
+        if (spCredentials) {
+          const stillValid = await verifyCachedAuthStillValid(spConfig, spCredentials);
+          if (cancelled) return;
+          setConnectionHealth(stillValid ? 'healthy-unsaved' : 'unhealthy');
+          return;
+        }
         setConnectionHealth('no-session');
         return;
       }
@@ -339,7 +353,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [spConfig, healthCheckNonce]);
+  }, [spConfig, healthCheckNonce, spCredentials]);
 
   const handleSharePointSync = async () => {
     // Sync only targets a project's own templates — never the shared library.
@@ -437,14 +451,14 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         await cacheAuth(auth, remember);
       } catch (err) {
         logger.warn('Could not cache SharePoint auth (crypto unavailable?); continuing without cache', err);
-        // The connection itself still works (auth is held in memory for
-        // this sync), but nothing was written to storage — every future
-        // health check will correctly, but silently, read as "no session".
-        // Say so up front instead of leaving that looking like a bug.
-        toast.warning(
-          "Connected, but this browser can't securely store the session — you'll need to reconnect after refreshing.",
-          { autoClose: 8000 }
-        );
+        // The connection itself still works (auth stays in memory for this
+        // tab, and the status card now correctly reports "connected, not
+        // remembered" via its spCredentials fallback rather than "no
+        // session"). The Connect dialog already explains this limitation
+        // proactively when storage is unavailable — this is now just a
+        // safety net for a genuinely unexpected cache failure (e.g. quota),
+        // so it stays short rather than repeating that explanation.
+        toast.warning("Connected, but this browser couldn't remember the session.", { autoClose: 5000 });
       }
       // The credential is now actually written to storage — force a fresh
       // health check rather than leaving it to whatever the spConfig-change
@@ -473,6 +487,10 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
     try {
       await deleteSharePointConfig(store.userDetails?.name);
       setSpConfig(null);
+      // Also clear the in-memory auth — the health check now falls back to
+      // this when nothing is persisted, so a stale value here would keep
+      // reporting "connected" right after an explicit Disconnect.
+      setSpCredentials(null);
       clearCachedSharePointAuth();
       try {
         await clearSessionKey();
@@ -508,7 +526,6 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       setSyncing(true);
       const bucketName = 'templates';
       const currentProjectName = resolveProjectName(selectedTeamProject);
-      const docType = store.docType || '';
 
       const result = await checkSharePointConflicts({
         siteUrl: config.siteUrl,
@@ -517,7 +534,6 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         auth,
         bucketName,
         projectName: currentProjectName,
-        docType,
       });
 
       setSyncing(false);
@@ -561,7 +577,6 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       setSyncing(true);
       const bucketName = 'templates';
       const currentProjectName = resolveProjectName(selectedTeamProject);
-      const docType = store.docType || '';
 
       // Use passed config/credentials, fallback to state if not provided
       // (handleConflictResolution's later, separate render already has
@@ -576,7 +591,6 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         auth: authToUse,
         bucketName,
         projectName: currentProjectName,
-        docType,
         skipFiles: filesToSkip,
         docTypeOverrides,
       });
@@ -607,6 +621,9 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         
         if (failedCount > 0) {
           toast.warning(message, { autoClose: 5000 });
+          // The toast is only ever a count — the per-file reason each
+          // failure actually has is otherwise never shown anywhere.
+          setSyncResultsDialog(result);
         } else if (syncedCount > 0) {
           toast.success(message, { autoClose: 3000 });
         } else if (identicalCount > 0) {
@@ -949,6 +966,12 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         documentTypes={templateDocTypes}
         truncated={conflictData?.truncated}
         skippedFolders={conflictData?.skippedFolders || []}
+      />
+
+      <SharePointSyncResultsDialog
+        open={!!syncResultsDialog}
+        onClose={() => setSyncResultsDialog(null)}
+        result={syncResultsDialog}
       />
     </Stack>
   );

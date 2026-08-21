@@ -32,6 +32,7 @@ import { decodeJwtExpirySeconds, formatTokenExpiry } from '../../utils/graphToke
 import { resolveIdentityPrefill } from './sharePointIdentityPrefill';
 import { isOnlineSharePointUrl as isOnlineUrl } from '../../utils/sharePointConnectionHealth';
 import { buildFolderPreviewMessage } from './sharePointFolderPreview';
+import { isSecureStorageAvailable } from '../../utils/secureStorage';
 
 const MODE_ONPREM = 'onprem';
 const MODE_ONLINE = 'online';
@@ -414,6 +415,14 @@ const SharePointConnectDialog = ({
             <Tab label='On-premises' value={MODE_ONPREM} />
             <Tab label='Online' value={MODE_ONLINE} />
           </Tabs>
+
+          {!isSecureStorageAvailable() && (
+            <Alert severity='info' sx={{ mb: 2 }}>
+              This browser can't remember your session here — it requires a secure (HTTPS) connection to DocGen.
+              You'll be reconnected for the current tab, but will need to reconnect after refreshing. Ask your
+              admin about enabling HTTPS if you'd like this to persist.
+            </Alert>
+          )}
 
           {mode === MODE_ONPREM ? (
             <>

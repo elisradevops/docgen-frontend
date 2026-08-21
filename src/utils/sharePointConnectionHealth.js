@@ -55,6 +55,15 @@ export function describeConnectionHealth(status) {
   switch (status) {
     case 'healthy':
       return { severity: 'success', message: '✓ Connected' };
+    case 'healthy-unsaved':
+      // Working connection for this tab, but nothing was persisted to
+      // storage (Remember wasn't checked, or this browser context can't
+      // use Web Crypto) — distinct from 'no-session' so a real, currently-
+      // working connection never reads as "reconnect to sync".
+      return {
+        severity: 'info',
+        message: "✓ Connected (this browser can't remember the session — you'll need to reconnect after refreshing)",
+      };
     case 'unhealthy':
       return { severity: 'error', message: '⚠ Session expired — reconnect to sync' };
     case 'checking':

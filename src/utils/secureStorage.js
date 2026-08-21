@@ -20,6 +20,16 @@
 // plan's Part A3), not an unchanged security property.
 import { getOrCreateKey, clearKey } from './indexedDbKeyStore';
 
+// Cheap, synchronous check — no key operation attempted. Lets a caller warn
+// the user proactively (e.g. before they connect) rather than only finding
+// out reactively when encryptForSession() throws after the fact. True
+// mainly fails when the page is served over plain http:// (not localhost) —
+// Web Crypto requires a secure context, a browser restriction no code here
+// can work around.
+export function isSecureStorageAvailable() {
+  return !!globalThis.crypto?.subtle && !!globalThis.indexedDB;
+}
+
 let keyPromise = null;
 
 function getKey() {

@@ -922,6 +922,10 @@ class DocGenDataStore {
   docTypeMeta = {};
   documentsPromise = null;
   templatesForDownloadPromise = null;
+  // Bookkeeping for fetchTemplatesListForDownload's stale-response guard —
+  // not MobX-observable, nothing reads these reactively.
+  templatesForDownloadTarget = null;
+  templatesForDownloadRequestId = 0;
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -2274,12 +2278,22 @@ class DocGenDataStore {
 
   //for fetching documents
   fetchTemplatesListForDownload(projectNameOverride = undefined) {
-    this.loadingState.templatesLoadingState = true;
     const effectiveProjectName =
       projectNameOverride !== undefined ? projectNameOverride : this.teamProjectName;
-    if (this.templatesForDownloadPromise) {
+
+    // Only dedupe against an in-flight request for the SAME project —
+    // previously this returned ANY in-flight promise regardless of target,
+    // so switching projects while a request for the old one was still
+    // pending silently discarded the new (correct) request and left
+    // templateForDownload showing the wrong project's files.
+    if (this.templatesForDownloadPromise && this.templatesForDownloadTarget === effectiveProjectName) {
       return this.templatesForDownloadPromise;
     }
+
+    this.loadingState.templatesLoadingState = true;
+    this.templatesForDownloadTarget = effectiveProjectName;
+    const requestId = ++this.templatesForDownloadRequestId;
+
     this.templatesForDownloadPromise = getBucketFileList('templates', null, true, effectiveProjectName, true)
       .then((data) => {
         // Process the data to fix the URLs
@@ -2304,7 +2318,12 @@ class DocGenDataStore {
           )}`;
         });
 
-        this.templateForDownload = processedData;
+        // A slower, now-superseded request (for a project the user has
+        // since switched away from) must not overwrite what a newer
+        // request already resolved.
+        if (requestId === this.templatesForDownloadRequestId) {
+          this.templateForDownload = processedData;
+        }
         return processedData;
       })
       .catch((err) => {
@@ -2314,8 +2333,16 @@ class DocGenDataStore {
         return [];
       })
       .finally(() => {
-        this.loadingState.templatesLoadingState = false;
-        this.templatesForDownloadPromise = null;
+        if (requestId === this.templatesForDownloadRequestId) {
+          this.loadingState.templatesLoadingState = false;
+        }
+        // Only clear the in-flight promise/target if nothing newer has
+        // superseded this request — otherwise a same-target caller
+        // shortly after would dedupe against a promise that's already
+        // stale relative to the current request.
+        if (this.templatesForDownloadTarget === effectiveProjectName && requestId === this.templatesForDownloadRequestId) {
+          this.templatesForDownloadPromise = null;
+        }
       });
     return this.templatesForDownloadPromise;
   }

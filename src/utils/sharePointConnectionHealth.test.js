@@ -38,4 +38,12 @@ describe('describeConnectionHealth', () => {
     expect(describeConnectionHealth('no-session').severity).toBe('warning');
     expect(describeConnectionHealth('something-unexpected').severity).toBe('warning');
   });
+
+  it('maps healthy-unsaved to an info severity, connected but not alarming', () => {
+    const result = describeConnectionHealth('healthy-unsaved');
+    expect(result.severity).toBe('info');
+    expect(result.message).toMatch(/connected/i);
+    // Must not read like the "nothing is working" no-session warning.
+    expect(result.message).not.toMatch(/reconnect to sync/i);
+  });
 });
