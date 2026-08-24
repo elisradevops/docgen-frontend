@@ -24,7 +24,8 @@ import {
   trySessionStorageRemove,
 } from '../utils/storage';
 import { setRequestQueueConfig } from '../utils/requestQueue';
-import { isAccessToken } from '../utils/tokenUtils';
+import { isAccessToken, toBearerToken } from '../utils/tokenUtils';
+import { loadAdoSdk } from '../adoSdk';
 import { sanitizeFileToken } from '../utils/fileUtils';
 import {
   mapHistoricalQueriesFromSharedTree,
@@ -756,6 +757,7 @@ class DocGenDataStore {
       addContentControlToDocument: action,
       fetchUserDetails: action,
       fetchWindowsIdentityHint: action,
+      ensureFreshAdoAccessToken: action,
       testCredentials: action,
       setCredentials: action,
       resolveTeamProjectByName: action,
@@ -845,6 +847,7 @@ class DocGenDataStore {
   adoBootError = '';
   fetchUserDetailsPromise = null;
   fetchWindowsIdentityHintPromise = null;
+  adoAccessTokenRefreshPromise = null;
   fetchCollectionLinkTypesPromise = null;
   adoBootstrapPromise = null;
   adoBootstrapProjectKey = '';
@@ -1602,6 +1605,43 @@ class DocGenDataStore {
     return this.fetchWindowsIdentityHintPromise;
   }
 
+  // The ADO extension access token is fetched exactly once at panel load
+  // (App.jsx's mount effect) and normally lives ~70 minutes. A tab left open
+  // longer than that (a meeting, a weekend) sends a dead token on the next
+  // generate action, which surfaces as a bare 401 several hops downstream at
+  // TFS. Re-acquire it fresh from the SDK immediately before any request
+  // that ships it to the backend, rather than trusting whatever was cached
+  // at boot. Always refetches (no client-side exp check) — getAccessToken()
+  // is a single cheap round-trip to the ADO host frame, called only on a
+  // user-initiated action, so trusting the host as the source of truth is
+  // simpler and more robust than duplicating its expiry logic here.
+  async ensureFreshAdoAccessToken() {
+    if (!this.isAdoMode) return; // no SDK to refetch from outside the ADO extension
+    if (this.adoAccessTokenRefreshPromise) return this.adoAccessTokenRefreshPromise;
+
+    this.adoAccessTokenRefreshPromise = (async () => {
+      try {
+        const SDK = await loadAdoSdk();
+        if (!SDK || typeof SDK.getAccessToken !== 'function') return;
+        const rawToken = await SDK.getAccessToken();
+        const bearerToken = toBearerToken(rawToken);
+        if (bearerToken) {
+          runInAction(() => {
+            this.setCredentials(this.adoOrgUrl, bearerToken);
+          });
+        }
+      } catch (err) {
+        // Fail open: a refetch hiccup must never block generation — the
+        // caller proceeds with whatever token it already had, which is no
+        // worse than today's behavior.
+        logger.warn(`Failed to refresh ADO access token before request; using existing token: ${err?.message}`);
+      } finally {
+        this.adoAccessTokenRefreshPromise = null;
+      }
+    })();
+    return this.adoAccessTokenRefreshPromise;
+  }
+
   //for setting the selected link type filters
   updateSelectedLinksFilter = (selectedLinkType) => {
     logger.debug(`selected linked Type ${JSON.stringify(selectedLinkType)}`);
@@ -1856,6 +1896,7 @@ class DocGenDataStore {
     if (!compareResult) {
       throw new Error('Missing historical compare result');
     }
+    await this.ensureFreshAdoAccessToken();
     await createIfBucketDoesNotExist(this.ProjectBucketName);
 
     const orgUrl = this.adoOrgUrl || azureDevopsUrl;
@@ -2397,6 +2438,7 @@ class DocGenDataStore {
     this.clearLoadedFavorite();
   };
   async sendRequestToDocGen() {
+    await this.ensureFreshAdoAccessToken();
     await createIfBucketDoesNotExist(this.ProjectBucketName);
     let docReq = this.requestJson;
     return sendDocumentToGenerator(docReq);
@@ -2743,6 +2785,7 @@ class DocGenDataStore {
   }
 
   async validateMewpExternalIngestionFiles(options = {}) {
+    await this.ensureFreshAdoAccessToken();
     const request = this.requestJson || {};
     const externalBugsFile = this.normalizeMewpExternalFileRef(options?.externalBugsFile || null);
     const externalL3L4File = this.normalizeMewpExternalFileRef(options?.externalL3L4File || null);

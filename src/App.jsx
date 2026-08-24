@@ -15,6 +15,7 @@ import {
   trySessionStorageRemove,
 } from './utils/storage';
 import { normalizeAdoOrgUrl } from './utils/adoUrlUtils';
+import { toBearerToken } from './utils/tokenUtils';
 
 const shouldLogDebug = () => {
   try {
@@ -120,12 +121,7 @@ function App({ store }) {
       setAdoContext(context);
       if (context?.isAdo && context.collectionUri && context.accessToken) {
         try {
-          const rawToken = String(context.accessToken || '').trim();
-          const bearerToken = rawToken
-            ? /^bearer[:\s]/i.test(rawToken)
-              ? rawToken
-              : `bearer:${rawToken}`
-            : '';
+          const bearerToken = toBearerToken(context.accessToken);
           store.setAdoMode(true);
           const normalizedOrgUrl = normalizeAdoOrgUrl(
             context.collectionUri,
