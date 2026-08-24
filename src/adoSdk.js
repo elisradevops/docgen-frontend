@@ -78,6 +78,14 @@ const configureRequireJs = () => {
   return req;
 };
 
+// Synchronous, unlike initAdoContext (which is async and returns
+// { isAdo: false } on any SDK-load failure). authTransport.js needs a
+// synchronous answer to pick a session transport before any request fires —
+// waiting on the full async SDK handshake would wrongly drop a genuinely
+// embedded iframe into cookie mode while that handshake is still pending
+// or failing.
+export const isAdoEmbedded = () => hasAdoHostSignals();
+
 export const loadAdoSdk = async () => {
   if (sdkPromise) return sdkPromise;
   sdkPromise = new Promise((resolve) => {

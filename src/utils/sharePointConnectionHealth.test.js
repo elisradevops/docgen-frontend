@@ -46,4 +46,10 @@ describe('describeConnectionHealth', () => {
     // Must not read like the "nothing is working" no-session warning.
     expect(result.message).not.toMatch(/reconnect to sync/i);
   });
+
+  it('maps requires-relink to a warning severity with a distinct re-link message', () => {
+    const result = describeConnectionHealth('requires-relink');
+    expect(result.severity).toBe('warning');
+    expect(result.message).toMatch(/re-link/i);
+  });
 });

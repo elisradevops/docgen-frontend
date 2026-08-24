@@ -21,18 +21,22 @@ import {
   Paper,
   Stack,
   Fade,
+  Chip,
 } from '@mui/material';
-import Visibility from '@mui/icons-material/Visibility';
-import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
+import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import { resolveSharePointUrl, listSharePointFiles } from '../../store/data/docManagerApi';
-import { decodeJwtExpirySeconds, formatTokenExpiry } from '../../utils/graphToken';
 import { resolveIdentityPrefill } from './sharePointIdentityPrefill';
 import { isOnlineSharePointUrl as isOnlineUrl } from '../../utils/sharePointConnectionHealth';
 import { buildFolderPreviewMessage } from './sharePointFolderPreview';
 import { isSecureStorageAvailable } from '../../utils/secureStorage';
+import { signIn as signInWithMicrosoft, getSessionInfo } from '../../utils/sharePointSession';
+import logger from '../../utils/logger';
+import { colors } from '../../theme/tokens';
 
 const MODE_ONPREM = 'onprem';
 const MODE_ONLINE = 'online';
@@ -233,7 +237,11 @@ const SharePointConnectDialog = ({
   canSync = true,
   documentTypes = [],
 }) => {
-  const [mode, setMode] = useState(MODE_ONPREM);
+  // Online is the default for a brand-new connection — it's the current,
+  // security-reviewed path (delegated sign-in, no shared passwords). A
+  // saved config still opens to whatever type it already is; only the
+  // no-config case defaults forward. See the effect below.
+  const [mode, setMode] = useState(MODE_ONLINE);
 
   // On-premises — paste-a-URL is the primary path; manual 3-field entry is
   // a fallback in case a given farm doesn't resolve GET .../_api/web the
@@ -248,10 +256,13 @@ const SharePointConnectDialog = ({
   const [domain, setDomain] = useState('');
   const [rememberCredentials, setRememberCredentials] = useState(false);
 
-  // Online
+  // Online — authenticates via a Backend-For-Frontend OAuth session (a
+  // popup sign-in), not a pasted token. `sessionInfo` is null until a
+  // sign-in completes; `signingIn` drives the button's loading state.
   const [shareLink, setShareLink] = useState('');
-  const [accessToken, setAccessToken] = useState('');
-  const [showToken, setShowToken] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState(null);
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInError, setSignInError] = useState(null);
 
   const [displayName, setDisplayName] = useState('');
   const [checking, setChecking] = useState(false);
@@ -278,7 +289,7 @@ const SharePointConnectDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    setMode(initialConfig && isOnlineUrl(initialConfig.siteUrl) ? MODE_ONLINE : MODE_ONPREM);
+    setMode(!initialConfig || isOnlineUrl(initialConfig.siteUrl) ? MODE_ONLINE : MODE_ONPREM);
     setDisplayName(initialConfig?.displayName || '');
     setPreview(null);
     if (initialConfig && !isOnlineUrl(initialConfig.siteUrl)) {
@@ -290,6 +301,29 @@ const SharePointConnectDialog = ({
       setShareLink(initialConfig.siteUrl || '');
     }
   }, [open, initialConfig]);
+
+  // Best-effort: on open, check whether a Microsoft sign-in session already
+  // exists (e.g. from an earlier connect this browser session) so the user
+  // isn't asked to sign in again unnecessarily. A failure here just means
+  // "not signed in yet" — the Sign in button below handles that normally,
+  // so no error state is surfaced for this specific check.
+  useEffect(() => {
+    if (!open) {
+      setSessionInfo(null);
+      return;
+    }
+    let cancelled = false;
+    getSessionInfo()
+      .then((info) => {
+        if (!cancelled && info?.success) setSessionInfo(info);
+      })
+      .catch(() => {
+        /* not signed in yet — normal, no error to surface */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Separate from the reset effect above — the identity hint resolves
   // asynchronously (a network call fired from TemplatesTab) and may land
@@ -315,10 +349,29 @@ const SharePointConnectDialog = ({
     if (next.domain !== domain) setDomain(next.domain);
   }, [open, identityHint, username, domain]);
 
-  const tokenExpirySeconds = accessToken ? decodeJwtExpirySeconds(accessToken.trim()) : null;
-  const tokenExpiryLabel = formatTokenExpiry(tokenExpirySeconds);
-
   const resetForNewCheck = () => setPreview(null);
+
+  const handleSignIn = async () => {
+    setSigningIn(true);
+    setSignInError(null);
+    try {
+      await signInWithMicrosoft();
+      const info = await getSessionInfo();
+      if (info?.success) {
+        setSessionInfo(info);
+      } else {
+        throw new Error('Sign-in did not complete');
+      }
+    } catch (error) {
+      // error.message is already the friendly, user-facing copy (see
+      // authPopup.js's describeAuthError) — the raw code/description is
+      // logged here for diagnosability without ever reaching the dialog.
+      logger.error('SharePoint Online sign-in failed:', error.code, error.description || error.message);
+      setSignInError(error.message || 'Sign-in failed');
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     setChecking(true);
@@ -327,10 +380,9 @@ const SharePointConnectDialog = ({
     try {
       if (mode === MODE_ONLINE) {
         if (!shareLink.trim()) throw new Error('Paste a SharePoint/OneDrive folder link');
-        if (!accessToken.trim()) throw new Error('Paste a Microsoft Graph access token');
+        if (!sessionInfo) throw new Error('Sign in with Microsoft first');
 
-        const auth = { accessToken: accessToken.trim() };
-        const result = await listSharePointFiles(shareLink.trim(), '', '', auth);
+        const result = await listSharePointFiles(shareLink.trim(), '', '');
         applyPreview(result, { siteUrl: shareLink.trim(), library: '', folder: '' });
         return;
       }
@@ -380,22 +432,26 @@ const SharePointConnectDialog = ({
   const handleConnectAndSync = () => {
     if (!preview?.canConnect) return;
 
-    const auth =
-      mode === MODE_ONLINE ? { accessToken: accessToken.trim() } : { username: username.trim(), password, domain: domain.trim() };
-
     const config = {
       ...preview.resolvedConfig,
       displayName: displayName.trim() || undefined,
     };
 
-    // Online tokens are always cached (short-lived, low sensitivity); NTLM
-    // passwords require explicit opt-in, matching the prior dialog's
-    // behavior — remember is meaningless/ignored for the Online branch.
-    onConnect({ config, auth, remember: mode === MODE_ONLINE ? true : rememberCredentials });
+    // Online mode has nothing to hand back here — the session lives
+    // server-side (see sharePointSession.js). `auth`/`remember` are
+    // on-prem-only now.
+    if (mode === MODE_ONLINE) {
+      onConnect({ config });
+      return;
+    }
+
+    const auth = { username: username.trim(), password, domain: domain.trim() };
+    onConnect({ config, auth, remember: rememberCredentials });
   };
 
   const handleModeChange = (_e, newMode) => {
     setMode(newMode);
+    setSignInError(null);
     resetForNewCheck();
   };
 
@@ -403,21 +459,46 @@ const SharePointConnectDialog = ({
     <Dialog open={open} onClose={onClose} maxWidth='sm' fullWidth>
       <DialogTitle>Connect to SharePoint</DialogTitle>
       <DialogContent>
-        {/* The Graph access token field is type="password" — Chrome requires a
-            <form> ancestor for password-type inputs, otherwise it logs a console
-            warning that includes the field's live value (i.e. the raw token). */}
+        {/* The on-prem Password field below is type="password" — Chrome requires
+            a <form> ancestor for password-type inputs, otherwise it logs a
+            console warning that includes the field's live value. */}
         <Box
           component="form"
           onSubmit={(e) => e.preventDefault()}
           sx={{ pt: 1 }}
         >
-          <Tabs value={mode} onChange={handleModeChange} sx={{ mb: 2 }}>
-            <Tab label='On-premises' value={MODE_ONPREM} />
-            <Tab label='Online' value={MODE_ONLINE} />
+          <Tabs value={mode} onChange={handleModeChange} sx={{ mb: 1 }}>
+            <Tab
+              value={MODE_ONLINE}
+              icon={<CloudOutlinedIcon fontSize='small' />}
+              iconPosition='start'
+              label={
+                <Stack direction='row' alignItems='center' spacing={1}>
+                  <span>Online</span>
+                  <Chip
+                    label='Recommended'
+                    size='small'
+                    sx={{
+                      height: 20,
+                      fontSize: '0.6875rem',
+                      fontWeight: 700,
+                      bgcolor: colors.secondary,
+                      color: colors.textPrimary,
+                    }}
+                  />
+                </Stack>
+              }
+            />
+            <Tab value={MODE_ONPREM} icon={<DnsOutlinedIcon fontSize='small' />} iconPosition='start' label='On-premises' />
           </Tabs>
+          <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 3 }}>
+            {mode === MODE_ONLINE
+              ? 'Sign in with your Microsoft account — always current, no shared passwords.'
+              : 'For connections to an internal, on-premises SharePoint network only. Requires domain credentials.'}
+          </Typography>
 
           {!isSecureStorageAvailable() && (
-            <Alert severity='info' sx={{ mb: 2 }}>
+            <Alert severity='info' sx={{ mb: 3 }}>
               This browser can't remember your session here — it requires a secure (HTTPS) connection to DocGen.
               You'll be reconnected for the current tab, but will need to reconnect after refreshing. Ask your
               admin about enabling HTTPS if you'd like this to persist.
@@ -426,6 +507,63 @@ const SharePointConnectDialog = ({
 
           {mode === MODE_ONPREM ? (
             <>
+              {/* Credentials first, location second — mirrors the Online tab
+                  (sign in, then say where) and matches reality: the folder
+                  URL can't be resolved without credentials either (see
+                  handleTestConnection's resolveSharePointUrl call below). */}
+              <TextField
+                fullWidth
+                label='Username *'
+                autoComplete='username'
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  resetForNewCheck();
+                }}
+                placeholder='john.doe'
+                helperText={
+                  identityHint?.account
+                    ? "Just the account name (e.g. jsmith) — no domain prefix. Enter the domain separately below. (pre-filled from Azure DevOps)"
+                    : "Just the account name (e.g. jsmith) — no domain prefix. Enter the domain separately below."
+                }
+                sx={{ mb: 3 }}
+                autoFocus={!identityHint?.account}
+              />
+              <TextField
+                fullWidth
+                type='password'
+                label='Password *'
+                autoComplete='current-password'
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  resetForNewCheck();
+                }}
+                sx={{ mb: 3 }}
+                autoFocus={!!identityHint?.account}
+              />
+              <TextField
+                fullWidth
+                label='Domain (Optional)'
+                value={domain}
+                onChange={(e) => {
+                  setDomain(e.target.value);
+                  resetForNewCheck();
+                }}
+                placeholder='COMPANY'
+                sx={{ mb: 3 }}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={rememberCredentials}
+                    onChange={(e) => setRememberCredentials(e.target.checked)}
+                  />
+                }
+                label='Remember credentials until you Disconnect (saved across browser restarts)'
+                sx={{ mb: 3 }}
+              />
+
               {!useManualEntry ? (
                 <>
                   <TextField
@@ -438,8 +576,7 @@ const SharePointConnectDialog = ({
                     }}
                     placeholder='http://sp-server/sites/project/Shared Documents/Templates'
                     helperText='Paste the URL from your browser while viewing the templates folder in SharePoint'
-                    sx={{ mb: 2 }}
-                    autoFocus
+                    sx={{ mb: 3 }}
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position='end'>
@@ -473,7 +610,7 @@ const SharePointConnectDialog = ({
                       resetForNewCheck();
                     }}
                     placeholder='http://sp-server/sites/project'
-                    sx={{ mb: 2 }}
+                    sx={{ mb: 3 }}
                   />
                   <TextField
                     fullWidth
@@ -484,7 +621,7 @@ const SharePointConnectDialog = ({
                       resetForNewCheck();
                     }}
                     placeholder='Shared Documents'
-                    sx={{ mb: 2 }}
+                    sx={{ mb: 3 }}
                   />
                   <TextField
                     fullWidth
@@ -495,7 +632,7 @@ const SharePointConnectDialog = ({
                       resetForNewCheck();
                     }}
                     placeholder='02 Engineering/Templates'
-                    sx={{ mb: 2 }}
+                    sx={{ mb: 3 }}
                   />
                   <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 2 }}>
                     <Link
@@ -511,60 +648,41 @@ const SharePointConnectDialog = ({
                   </Typography>
                 </>
               )}
-
-              <TextField
-                fullWidth
-                label='Username *'
-                autoComplete='username'
-                value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value);
-                  resetForNewCheck();
-                }}
-                placeholder='john.doe'
-                helperText={
-                  identityHint?.account
-                    ? "Just the account name (e.g. jsmith) — no domain prefix. Enter the domain separately below. (pre-filled from Azure DevOps)"
-                    : "Just the account name (e.g. jsmith) — no domain prefix. Enter the domain separately below."
-                }
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                type='password'
-                label='Password *'
-                autoComplete='current-password'
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  resetForNewCheck();
-                }}
-                sx={{ mb: 2 }}
-              />
-              <TextField
-                fullWidth
-                label='Domain (Optional)'
-                value={domain}
-                onChange={(e) => {
-                  setDomain(e.target.value);
-                  resetForNewCheck();
-                }}
-                placeholder='COMPANY'
-                sx={{ mb: 2 }}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={rememberCredentials}
-                    onChange={(e) => setRememberCredentials(e.target.checked)}
-                  />
-                }
-                label='Remember credentials until you Disconnect (saved across browser restarts)'
-                sx={{ mb: 1 }}
-              />
             </>
           ) : (
             <>
+              <Box sx={{ mb: 3 }}>
+                {sessionInfo ? (
+                  <Alert
+                    severity='success'
+                    icon={<CheckCircleOutlineIcon fontSize='inherit' />}
+                    action={
+                      <Link component='button' variant='body2' onClick={handleSignIn} sx={{ whiteSpace: 'nowrap' }}>
+                        Switch account
+                      </Link>
+                    }
+                    sx={{ alignItems: 'center' }}
+                  >
+                    Signed in as {sessionInfo.displayName || sessionInfo.userPrincipalName}
+                  </Alert>
+                ) : (
+                  <Button
+                    variant='outlined'
+                    onClick={handleSignIn}
+                    disabled={signingIn}
+                    startIcon={signingIn && <CircularProgress size={16} />}
+                    autoFocus
+                  >
+                    {signingIn ? `Signing in… ${elapsedSeconds}s` : 'Sign in with Microsoft'}
+                  </Button>
+                )}
+                {signInError && (
+                  <Alert severity='error' sx={{ mt: 1 }}>
+                    {signInError}
+                  </Alert>
+                )}
+              </Box>
+
               <TextField
                 fullWidth
                 label='SharePoint / OneDrive Folder Link *'
@@ -574,9 +692,13 @@ const SharePointConnectDialog = ({
                   resetForNewCheck();
                 }}
                 placeholder='https://tenant.sharepoint.com/:f:/s/site/... or the browser address bar URL'
-                helperText='Paste "Copy link" on the templates folder, or just the address bar URL after navigating into it'
-                sx={{ mb: 2 }}
-                autoFocus
+                helperText={
+                  sessionInfo
+                    ? 'Paste "Copy link" on the templates folder, or just the address bar URL after navigating into it'
+                    : 'Sign in with Microsoft above before testing the connection'
+                }
+                sx={{ mb: 3 }}
+                disabled={!sessionInfo}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position='end'>
@@ -585,58 +707,21 @@ const SharePointConnectDialog = ({
                   ),
                 }}
               />
-
-              <Alert severity='info' sx={{ mb: 2 }}>
-                <Typography variant='body2'>
-                  Paste a Microsoft Graph access token below. Get one from{' '}
-                  <a href='https://developer.microsoft.com/graph/graph-explorer' target='_blank' rel='noreferrer'>
-                    Graph Explorer
-                  </a>{' '}
-                  (sign in, run any query, copy from the "Access token" tab), or run:
-                  <br />
-                  <code>az account get-access-token --resource https://graph.microsoft.com --query accessToken -o tsv</code>
-                </Typography>
-              </Alert>
-
-              <TextField
-                fullWidth
-                type={showToken ? 'text' : 'password'}
-                autoComplete='off'
-                label='Microsoft Graph Access Token *'
-                value={accessToken}
-                onChange={(e) => {
-                  setAccessToken(e.target.value);
-                  resetForNewCheck();
-                }}
-                placeholder='eyJ0eXAiOiJKV1QiLCJhbGciOi...'
-                helperText={tokenExpiryLabel ? `Token ${tokenExpiryLabel}` : 'Paste the access token here'}
-                sx={{ mb: 2 }}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position='end'>
-                      <IconButton
-                        aria-label='toggle token visibility'
-                        onClick={() => setShowToken((s) => !s)}
-                        edge='end'
-                        size='small'
-                      >
-                        {showToken ? <VisibilityOff fontSize='small' /> : <Visibility fontSize='small' />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
             </>
           )}
 
-          <TextField
-            fullWidth
-            label='Display Name (Optional)'
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder='My SharePoint Templates'
-            sx={{ mb: 2 }}
-          />
+          {/* Shared across both tabs — visually separated with a divider so
+              it reads as connection metadata, not the last field of
+              whichever tab happens to be open. */}
+          <Box sx={{ pt: 3, mb: 3, borderTop: '1px solid', borderColor: 'divider' }}>
+            <TextField
+              fullWidth
+              label='Display Name (Optional)'
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder='My SharePoint Templates'
+            />
+          </Box>
 
           {checking && (
             <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
@@ -659,7 +744,11 @@ const SharePointConnectDialog = ({
         </Button>
         <Button
           onClick={handleTestConnection}
-          disabled={checking}
+          disabled={
+            checking ||
+            (mode === MODE_ONLINE && !sessionInfo) ||
+            (mode === MODE_ONPREM && (!username.trim() || !password))
+          }
           startIcon={checking && <CircularProgress size={16} />}
         >
           {checking ? `Checking… ${elapsedSeconds}s` : 'Test Connection'}

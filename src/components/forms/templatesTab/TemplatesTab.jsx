@@ -31,13 +31,13 @@ import {
   deleteSharePointConfig,
 } from '../../../store/data/docManagerApi';
 import { encryptForSession, decryptForSession, clearSessionKey } from '../../../utils/secureStorage';
-import { decodeJwtExpirySeconds } from '../../../utils/graphToken';
 import {
   HEALTH_CHECK_INTERVAL_MS,
   isOnlineSharePointUrl,
-  readCachedSharePointAuth,
+  readCachedOnPremCredentials,
   describeConnectionHealth,
 } from '../../../utils/sharePointConnectionHealth';
+import { getSessionInfo, signOut as signOutOfMicrosoft, isReauthRequired } from '../../../utils/sharePointSession';
 import logger from '../../../utils/logger';
 
 const resolveProjectName = (selectedTeamProject) => {
@@ -85,7 +85,15 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   const [searchedColumn, setSearchedColumn] = useState('');
   const searchInput = useRef(null);
   const [spConfig, setSpConfig] = useState(null);
-  const [spCredentials, setSpCredentials] = useState(null);
+  // On-prem NTLM credentials only now — Online authenticates via a
+  // server-side BFF session (see sharePointSession.js), which is never
+  // held in component state.
+  const [spOnPremCredentials, setSpOnPremCredentials] = useState(null);
+  // True when the backend's getConfig classified this saved Online config
+  // as unresolvable under the sharing-link-only flow (see the SharePoint
+  // OAuth design plan's relink migration) — takes priority over the normal
+  // health check.
+  const [requiresRelink, setRequiresRelink] = useState(false);
   // 'checking' | 'healthy' | 'unhealthy' | 'no-session'
   // Starts 'checking', not 'no-session' — the latter is a real verdict, and
   // defaulting to it made a brand-new successful connection show "No active
@@ -137,6 +145,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         const result = await getSharePointConfig(userId);
         if (result.success && result.config) {
           setSpConfig(result.config);
+          setRequiresRelink(!!result.requiresRelink);
         }
       } catch {
         // Config not found, that's okay
@@ -236,19 +245,12 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       ),
   });
 
-  // SharePoint sync handlers
+  // SharePoint sync handlers. `auth` is on-prem NTLM credentials only now —
+  // Online has nothing to cache here at all (the session lives server-side,
+  // see sharePointSession.js), so this is only ever called with `auth`
+  // present for the on-prem path; callers skip it entirely for Online.
   const cacheAuth = async (auth, remember) => {
-    if (auth.accessToken) {
-      // Graph tokens are short-lived and low-sensitivity — always cached, no
-      // opt-in. Stored in localStorage (not sessionStorage): the token's own
-      // exp claim / the pre-flight connectivity check are what actually
-      // decide whether it's still usable, so there's no reason to also
-      // discard an otherwise-still-valid token just because the tab closed
-      // or a new tab was opened — same storage posture as the NTLM
-      // credentials below.
-      const encrypted = await encryptForSession(JSON.stringify({ ...auth, timestamp: Date.now() }));
-      localStorage.setItem('sharepoint_oauth_token', encrypted);
-    } else if (remember) {
+    if (remember) {
       // NTLM passwords require explicit opt-in before being persisted at
       // all — but unlike a bearer token, a password has no exp claim and
       // doesn't rotate on its own clock, so once opted in it's remembered
@@ -270,7 +272,6 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   };
 
   const clearCachedSharePointAuth = () => {
-    localStorage.removeItem('sharepoint_oauth_token');
     localStorage.removeItem('sharepoint_credentials');
   };
 
@@ -300,35 +301,55 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
   // until the next interval tick).
   const [healthCheckNonce, setHealthCheckNonce] = useState(0);
 
-  // Live connection health: the card used to just show green whenever a
-  // config was saved, regardless of whether the cached credential still
-  // actually works. Check once on load, then on an interval, so a token that
-  // expires mid-session gets reflected instead of staying stale-green.
+  // Live connection health. Online and on-prem are judged very differently
+  // now: Online has no local credential to inspect at all — its health is
+  // whatever the server-side session endpoint says, and a poll interval
+  // would be pure overhead once a real API call's 401 reauth_required is
+  // the authoritative, event-driven signal (see startSyncFlow's catch
+  // block) — so Online checks once per relevant change and stops. On-prem
+  // keeps the original polling behavior: an NTLM password has no expiry
+  // signal of its own, so only a live test call (repeated on an interval)
+  // can catch it going stale mid-session.
   useEffect(() => {
     if (!spConfig) {
       setConnectionHealth('no-session');
-      return;
+      return undefined;
+    }
+
+    if (requiresRelink) {
+      setConnectionHealth('requires-relink');
+      return undefined;
     }
 
     let cancelled = false;
+    const online = isOnlineSharePointUrl(spConfig.siteUrl);
 
-    const checkHealth = async () => {
+    const checkOnlineHealth = async () => {
+      setConnectionHealth('checking');
+      try {
+        const info = await getSessionInfo();
+        if (cancelled) return;
+        setConnectionHealth(info?.success ? 'healthy' : 'no-session');
+      } catch {
+        if (cancelled) return;
+        setConnectionHealth('no-session');
+      }
+    };
+
+    const checkOnPremHealth = async () => {
       // Set synchronously, before the first await — otherwise the card
       // keeps showing whatever status it had before this run (often the
       // stale/default 'no-session') for the whole duration of the storage
       // read + network verification below.
       setConnectionHealth('checking');
-      const cached = await readCachedSharePointAuth();
+      const cached = await readCachedOnPremCredentials();
       if (cancelled) return;
       if (!cached) {
         // Nothing persisted — but this tab may still hold a working
-        // connection in memory (persistence can fail for legitimate
-        // reasons: "Remember credentials" wasn't checked, or this browser
-        // context can't use Web Crypto at all). Check that before
-        // declaring "no active session", which is only true if there's
-        // really nothing usable anywhere.
-        if (spCredentials) {
-          const stillValid = await verifyCachedAuthStillValid(spConfig, spCredentials);
+        // connection in memory ("Remember credentials" wasn't checked).
+        // Check that before declaring "no active session".
+        if (spOnPremCredentials) {
+          const stillValid = await verifyCachedAuthStillValid(spConfig, spOnPremCredentials);
           if (cancelled) return;
           setConnectionHealth(stillValid ? 'healthy-unsaved' : 'unhealthy');
           return;
@@ -336,26 +357,31 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
         setConnectionHealth('no-session');
         return;
       }
-      if (cached.expiredLocally) {
-        // Graph token's own exp claim already says it's dead — no need to
-        // spend a network call finding that out.
-        setConnectionHealth('unhealthy');
-        return;
-      }
       const stillValid = await verifyCachedAuthStillValid(spConfig, cached.auth);
       if (cancelled) return;
       setConnectionHealth(stillValid ? 'healthy' : 'unhealthy');
     };
 
-    checkHealth();
-    const intervalId = setInterval(checkHealth, HEALTH_CHECK_INTERVAL_MS);
+    if (online) {
+      checkOnlineHealth();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    checkOnPremHealth();
+    const intervalId = setInterval(checkOnPremHealth, HEALTH_CHECK_INTERVAL_MS);
     return () => {
       cancelled = true;
       clearInterval(intervalId);
     };
-  }, [spConfig, healthCheckNonce, spCredentials]);
+  }, [spConfig, healthCheckNonce, spOnPremCredentials, requiresRelink]);
 
-  const handleSharePointSync = async () => {
+  // Single "Sync from SharePoint" entry point, covering both connection
+  // types. Online has no client-side credential to inspect at all anymore
+  // — it asks the session endpoint directly. On-prem keeps the original
+  // cached-NTLM-credential-then-verify behavior.
+  const startSharePointSync = async () => {
     // Sync only targets a project's own templates — never the shared library.
     if (!canSyncTemplates) {
       toast.error(
@@ -366,43 +392,26 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       return;
     }
 
-    if (spConfig) {
-      // Try to use cached OAuth token first (for SharePoint Online)
-      const cachedTokenRaw = localStorage.getItem('sharepoint_oauth_token');
-
-      if (cachedTokenRaw) {
-        try {
-          const tokenData = JSON.parse(await decryptForSession(cachedTokenRaw));
-
-          // Check the token's REAL remaining lifetime (its exp claim), not
-          // an arbitrary fixed window — a JWT with 55 minutes left is fine
-          // to reuse; one with 3 minutes left is not, regardless of the
-          // old hardcoded 1-hour guess. If the token can't be decoded
-          // (opaque/non-JWT), don't gate on a guess at all — let the
-          // pre-flight testSharePointConnection check below be the judge.
-          const remainingSeconds = decodeJwtExpirySeconds(tokenData.accessToken);
-          const isRecent = remainingSeconds === null || remainingSeconds > 60;
-
-          if (isRecent && tokenData.accessToken) {
-            const auth = { accessToken: tokenData.accessToken };
-            setSyncing(true);
-            const stillValid = await verifyCachedAuthStillValid(spConfig, auth);
-            if (stillValid) {
-              proceedWithAuth(spConfig, auth);
-            } else {
-              setSyncing(false);
-              clearCachedSharePointAuth();
-              toast.info('Your SharePoint session expired — please reconnect.');
-              openConnectDialog();
-            }
-            return;
-          }
-        } catch {
-          // Decrypt/parse failure -> treat as no usable cache, not an error.
-          localStorage.removeItem('sharepoint_oauth_token');
-        }
+    if (spConfig && isOnlineSharePointUrl(spConfig.siteUrl)) {
+      if (requiresRelink) {
+        openConnectDialog();
+        return;
       }
+      try {
+        const info = await getSessionInfo();
+        if (info?.success) {
+          startSyncFlow(spConfig);
+          return;
+        }
+      } catch {
+        // Not signed in (or session expired) — fall through to the connect
+        // dialog below, which starts a fresh popup sign-in.
+      }
+      openConnectDialog();
+      return;
+    }
 
+    if (spConfig) {
       // Try to use cached NTLM credentials (for on-premise SharePoint) —
       // localStorage, no time cap: a password doesn't expire on its own
       // clock the way a token does, so the pre-flight check below (not a
@@ -418,7 +427,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
             setSyncing(true);
             const stillValid = await verifyCachedAuthStillValid(spConfig, auth);
             if (stillValid) {
-              proceedWithAuth(spConfig, auth);
+              startSyncFlow(spConfig, auth);
             } else {
               setSyncing(false);
               clearCachedSharePointAuth();
@@ -446,19 +455,27 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       await saveSharePointConfig(userId, config.siteUrl, config.library, config.folder, config.displayName);
 
       setSpConfig(config);
+      setRequiresRelink(false);
       setShowConnectDialog(false);
-      try {
-        await cacheAuth(auth, remember);
-      } catch (err) {
-        logger.warn('Could not cache SharePoint auth (crypto unavailable?); continuing without cache', err);
-        // The connection itself still works (auth stays in memory for this
-        // tab, and the status card now correctly reports "connected, not
-        // remembered" via its spCredentials fallback rather than "no
-        // session"). The Connect dialog already explains this limitation
-        // proactively when storage is unavailable — this is now just a
-        // safety net for a genuinely unexpected cache failure (e.g. quota),
-        // so it stays short rather than repeating that explanation.
-        toast.warning("Connected, but this browser couldn't remember the session.", { autoClose: 5000 });
+
+      // Online: nothing to cache — the session already lives server-side
+      // from the popup sign-in, so cacheAuth is skipped entirely (and with
+      // it, the "couldn't remember the session" warning, which no longer
+      // applies).
+      if (auth) {
+        try {
+          await cacheAuth(auth, remember);
+        } catch (err) {
+          logger.warn('Could not cache SharePoint auth (crypto unavailable?); continuing without cache', err);
+          // The connection itself still works (auth stays in memory for this
+          // tab, and the status card now correctly reports "connected, not
+          // remembered" via its spOnPremCredentials fallback rather than "no
+          // session"). The Connect dialog already explains this limitation
+          // proactively when storage is unavailable — this is now just a
+          // safety net for a genuinely unexpected cache failure (e.g. quota),
+          // so it stays short rather than repeating that explanation.
+          toast.warning("Connected, but this browser couldn't remember the session.", { autoClose: 5000 });
+        }
       }
       // The credential is now actually written to storage — force a fresh
       // health check rather than leaving it to whatever the spConfig-change
@@ -475,7 +492,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
 
       // Pass config/auth explicitly (not read back from state) — setSpConfig
       // above hasn't necessarily flushed yet in this same synchronous flow.
-      await proceedWithAuth(config, auth);
+      await startSyncFlow(config, auth);
     } catch (error) {
       toast.error(`Failed to connect: ${error.message}`);
       logger.error('SharePoint connect failed:', error);
@@ -487,15 +504,25 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
     try {
       await deleteSharePointConfig(store.userDetails?.name);
       setSpConfig(null);
-      // Also clear the in-memory auth — the health check now falls back to
-      // this when nothing is persisted, so a stale value here would keep
-      // reporting "connected" right after an explicit Disconnect.
-      setSpCredentials(null);
+      setRequiresRelink(false);
+      // Also clear the in-memory on-prem auth — the health check now falls
+      // back to this when nothing is persisted, so a stale value here would
+      // keep reporting "connected" right after an explicit Disconnect.
+      setSpOnPremCredentials(null);
       clearCachedSharePointAuth();
       try {
         await clearSessionKey();
       } catch (err) {
         logger.warn('Could not clear the persisted SharePoint encryption key; caches were still cleared', err);
+      }
+      // Revokes the server-side Online session (if one exists) and clears
+      // the in-memory bearer handle — leaves no server-side residue behind
+      // after an explicit Disconnect. Harmless/no-op when there was never
+      // an Online session to begin with.
+      try {
+        await signOutOfMicrosoft();
+      } catch (err) {
+        logger.warn('Could not revoke the SharePoint Online session; local state was still cleared', err);
       }
       toast.success('SharePoint connection removed.');
     } catch (error) {
@@ -506,7 +533,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
     }
   };
 
-  const proceedWithAuth = async (config, auth) => {
+  const startSyncFlow = async (config, auth) => {
     // Single chokepoint for every path into a sync (the "Sync from SharePoint"
     // button, and "Edit SharePoint connection" → Connect & Sync) — the
     // connection itself is app-level and editable without a project, but an
@@ -520,7 +547,11 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       return;
     }
     try {
-      setSpCredentials(auth);
+      // Online has no client-side credential to hold — `auth` is only ever
+      // present here for on-prem, and only on-prem needs to remember it in
+      // state (for the health check's "connected, not remembered" fallback
+      // and handleConflictResolution's later call).
+      if (auth) setSpOnPremCredentials(auth);
 
       // Check for conflicts
       setSyncing(true);
@@ -562,6 +593,11 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       }
     } catch (error) {
       setSyncing(false);
+      if (isReauthRequired(error)) {
+        toast.info('Your Microsoft sign-in expired — sign in again to continue.');
+        openConnectDialog();
+        return;
+      }
       toast.error(`Failed to check conflicts: ${error.message}`);
       logger.error('SharePoint conflict check failed:', error);
     }
@@ -569,7 +605,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
 
   const handleConflictResolution = (filesToSkip, docTypeOverrides) => {
     setShowConflictDialog(false);
-    performSync(filesToSkip, spCredentials, spConfig, docTypeOverrides);
+    performSync(filesToSkip, spOnPremCredentials, spConfig, docTypeOverrides);
   };
 
   const performSync = async (filesToSkip, credentials, config, docTypeOverrides) => {
@@ -582,7 +618,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       // (handleConflictResolution's later, separate render already has
       // flushed state, so it can rely on the fallback).
       const configToUse = config || spConfig;
-      const authToUse = credentials || spCredentials;
+      const authToUse = credentials || spOnPremCredentials;
 
       const result = await syncSharePointTemplates({
         siteUrl: configToUse.siteUrl,
@@ -640,6 +676,11 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
       }
     } catch (error) {
       setSyncing(false);
+      if (isReauthRequired(error)) {
+        toast.info('Your Microsoft sign-in expired — sign in again to continue.');
+        openConnectDialog();
+        return;
+      }
       toast.error(`Sync failed: ${error.message}`);
       logger.error('SharePoint sync failed:', error);
     }
@@ -828,7 +869,7 @@ const TemplatesTab = observer(({ store, selectedTeamProject }) => {
           <MuiButton
             variant="contained"
             startIcon={<CloudSyncIcon />}
-            onClick={handleSharePointSync}
+            onClick={startSharePointSync}
             disabled={syncing}
           >
             {syncing ? 'Syncing...' : 'Sync from SharePoint'}
