@@ -271,6 +271,7 @@ const MainTabs = observer(({ store, adoContext }) => {
     debugEnabled,
   ]);
 
+
   // Keep selected tab in sync with available document types
   // Note: Do not override manual selection of special tabs (Docs/Templates/Developer).
   useEffect(() => {

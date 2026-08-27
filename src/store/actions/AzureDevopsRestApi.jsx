@@ -47,8 +47,9 @@ export default class AzureDevopsRestApi {
   }
 
   async _wrap(callFn, options = {}) {
+    const { suppressAuthHandler, ...enqueueOptions } = options;
     try {
-      return await enqueueRequest(callFn, { key: 'ado', ...options });
+      return await enqueueRequest(callFn, { key: 'ado', ...enqueueOptions });
     } catch (err) {
       const status =
         err?.status || err?.response?.status || (/401/.test(`${err?.message}`) ? 401 : undefined);
@@ -61,8 +62,13 @@ export default class AzureDevopsRestApi {
       } catch {
         /* empty */
       }
-      // Some environments return 302 (redirect to interactive sign-in) for invalid creds; treat as auth failure too
-      if ((status === 401 || status === 302) && globalAuthErrorHandler) {
+      // Some environments return 302 (redirect to interactive sign-in) for invalid creds; treat as auth failure too.
+      // suppressAuthHandler lets a caller opt a specific low-stakes/best-effort
+      // call (e.g. the SharePoint NTLM-autofill identity hint) out of this
+      // escalation entirely — such a call must never be able to trigger the
+      // app's global sign-out flow, regardless of what status its own
+      // request happens to return.
+      if (!suppressAuthHandler && (status === 401 || status === 302) && globalAuthErrorHandler) {
         try {
           globalAuthErrorHandler(err);
           // eslint-disable-next-line no-unused-vars
@@ -445,6 +451,23 @@ export default class AzureDevopsRestApi {
         return res.data;
       },
       { priority: 'high' },
+    );
+  }
+
+  async getWindowsIdentity(identityId) {
+    return this._wrap(
+      async () => {
+        const res = await axios.get(`${C.jsonDocument_url}/azure/user/windows-identity`, {
+          headers: this._headers(),
+          params: { identityId: identityId || '' },
+        });
+        // Unlike getUserDetails, an HTML/sign-in-page body here must NOT be
+        // treated as an auth failure — this is a best-effort, niche hint
+        // and must never be able to trigger the app's global sign-out flow.
+        if (typeof res?.data === 'string') return { domain: null, account: null };
+        return res.data || { domain: null, account: null };
+      },
+      { priority: 'low', suppressAuthHandler: true },
     );
   }
 

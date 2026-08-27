@@ -20,3 +20,13 @@ export const getTokenKind = (token) => {
   if (!raw) return 'none';
   return isAccessToken(raw) ? 'access' : 'pat';
 };
+
+// Normalizes a raw SDK access token into the `bearer:<token>` form the store
+// expects, leaving an already-prefixed value (`bearer:...` or `bearer ...`)
+// untouched. Shared by App.jsx's initial credential setup and DataStore's
+// token-refresh guard so both format it identically.
+export const toBearerToken = (rawToken) => {
+  const raw = String(rawToken || '').trim();
+  if (!raw) return '';
+  return /^bearer[:\s]/i.test(raw) ? raw : `bearer:${raw}`;
+};

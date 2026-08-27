@@ -4,9 +4,23 @@ import { v4 as uuidV4 } from 'uuid';
 import logger from '../../utils/logger';
 import { setLastApiError } from '../../utils/debug';
 import { enqueueRequest } from '../../utils/requestQueue';
+import { authRequestConfig } from '../../utils/authTransport';
 const DEFAULT_TIMEOUT = 10000; // 10 seconds
 const baseHeaders = {
   'Content-Type': 'application/json',
+};
+
+// Merges the SharePoint-session transport's config (withCredentials +
+// either a CSRF header or an Authorization header — see authTransport.js)
+// into a call's own headers/timeout, without letting either side silently
+// clobber the other's headers via a naive object spread.
+const withSharePointSessionAuth = (config = {}) => {
+  const { headers: sessionHeaders, ...restSessionConfig } = authRequestConfig();
+  return {
+    ...config,
+    ...restSessionConfig,
+    headers: { ...config.headers, ...sessionHeaders },
+  };
 };
 
 const getServerErrorMessage = (data) => {
@@ -365,119 +379,169 @@ export const getServiceConnectionsHealth = async () => {
  * SharePoint Integration API Functions
  */
 
-// Note: OAuth is now handled entirely by frontend (SPA flow with PKCE)
-// See: src/utils/sharepointOAuth.js
-// Backend OAuth endpoints have been removed
+// Re-throws a plain Error carrying the backend's message, but ALSO
+// preserves `.status` and `.code` from the response — needed so
+// sharePointSession.js's isReauthRequired() can recognize a session that
+// expired mid-flow (the backend responds 401 { error: 'reauth_required' }
+// with no `message` field at all, so the default message-only rethrow
+// below would otherwise silently discard the one piece of information that
+// distinguishes "session expired, please reconnect" from any other failure).
+const wrapSharePointError = (err) => {
+  const wrapped = new Error(err.response?.data?.message || err.message);
+  wrapped.status = err.response?.status;
+  wrapped.code = err.response?.data?.error;
+  return wrapped;
+};
+
+// SharePoint Online authenticates via a Backend-For-Frontend OAuth session
+// (see sharePointSession.js / authTransport.js) — the browser never holds a
+// Graph token. `auth` below is on-prem NTLM credentials only, and is
+// omitted entirely for Online requests; every call still carries the
+// SharePoint session (cookie or bearer, via withSharePointSessionAuth),
+// which the backend requires for an Online siteUrl.
 
 /**
- * Tests SharePoint connection
- * Supports both NTLM credentials and OAuth tokens
+ * Tests SharePoint connection. `auth` is on-prem NTLM credentials; omit it
+ * entirely for SharePoint Online (the session carries authentication).
  */
 export const testSharePointConnection = async (siteUrl, library, folder, auth) => {
   try {
     const body = { siteUrl, library, folder };
-    // Check if auth is OAuth token or credentials
-    if (auth.accessToken) {
-      body.oauthToken = auth;
-    } else {
+    if (auth) {
       body.credentials = auth;
     }
-    
+
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/test-connection`,
       body,
-      { headers: baseHeaders, timeout: DEFAULT_TIMEOUT }
+      withSharePointSessionAuth({ headers: baseHeaders, timeout: DEFAULT_TIMEOUT })
     );
     return res.data;
   } catch (err) {
     logger.error(`Error testing SharePoint connection: ${err.message}`);
+    throw wrapSharePointError(err);
+  }
+};
+
+/**
+ * Resolves a pasted on-prem templates-folder URL (copied from the browser
+ * address bar) into { siteUrl, library, folder } — on-prem only. Online
+ * configs already work off one pasted sharing link with no resolution step.
+ */
+export const resolveSharePointUrl = async (url, credentials) => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/sharepoint/resolve-url`,
+      { url, credentials },
+      { headers: baseHeaders, timeout: 30000 }
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error resolving SharePoint URL: ${err.message}`);
     throw new Error(err.response?.data?.message || err.message);
   }
 };
 
 /**
- * Lists template files from SharePoint folder
- * Supports both NTLM credentials and OAuth tokens
+ * Lists template files from SharePoint folder. `auth` is on-prem NTLM
+ * credentials; omit it entirely for SharePoint Online.
  */
 export const listSharePointFiles = async (siteUrl, library, folder, auth) => {
   try {
     const body = { siteUrl, library, folder };
-    if (auth.accessToken) {
-      body.oauthToken = auth;
-    } else {
+    if (auth) {
       body.credentials = auth;
     }
-    
+
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/list-files`,
       body,
-      { headers: baseHeaders, timeout: 30000 } // 30 second timeout for listing files
+      withSharePointSessionAuth({ headers: baseHeaders, timeout: 30000 }) // 30 second timeout for listing files
     );
     return res.data;
   } catch (err) {
     logger.error(`Error listing SharePoint files: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
+    throw wrapSharePointError(err);
   }
 };
 
 /**
- * Checks for conflicts with existing MinIO files
- * Supports both NTLM credentials and OAuth tokens
+ * Checks for conflicts with existing MinIO files.
+ * Takes a single options object — both this and syncSharePointTemplates
+ * needed a 9th param (docTypeOverrides) added on top of an already
+ * 7-8-positional-argument signature, so both were converted together.
  */
-export const checkSharePointConflicts = async (siteUrl, library, folder, auth, bucketName, projectName, docType) => {
+export const checkSharePointConflicts = async ({
+  siteUrl,
+  library,
+  folder,
+  auth,
+  bucketName,
+  projectName,
+  docType,
+  docTypeOverrides,
+}) => {
   try {
-    const body = { siteUrl, library, folder, bucketName, projectName, docType };
-    if (auth.accessToken) {
-      body.oauthToken = auth;
-    } else {
+    const body = { siteUrl, library, folder, bucketName, projectName, docType, docTypeOverrides };
+    if (auth) {
       body.credentials = auth;
     }
-    
+
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/check-conflicts`,
       body,
-      { headers: baseHeaders, timeout: 60000 } // 60 second timeout
+      withSharePointSessionAuth({ headers: baseHeaders, timeout: 60000 }) // 60 second timeout
     );
     return res.data;
   } catch (err) {
     logger.error(`Error checking SharePoint conflicts: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
+    throw wrapSharePointError(err);
   }
 };
 
 /**
- * Syncs templates from SharePoint to MinIO
- * Supports both NTLM credentials and OAuth tokens
+ * Syncs templates from SharePoint to MinIO.
+ * Supports both NTLM credentials and OAuth tokens. `docTypeOverrides` is a
+ * { [relativePath]: docType } map from the review dialog's per-row
+ * selector — it wins over both SharePoint auto-detection and `docType`.
  */
-export const syncSharePointTemplates = async (siteUrl, library, folder, auth, bucketName, projectName, docType, skipFiles = []) => {
+export const syncSharePointTemplates = async ({
+  siteUrl,
+  library,
+  folder,
+  auth,
+  bucketName,
+  projectName,
+  docType,
+  skipFiles = [],
+  docTypeOverrides,
+}) => {
   try {
-    const body = { siteUrl, library, folder, bucketName, projectName, docType, skipFiles };
-    if (auth.accessToken) {
-      body.oauthToken = auth;
-    } else {
+    const body = { siteUrl, library, folder, bucketName, projectName, docType, skipFiles, docTypeOverrides };
+    if (auth) {
       body.credentials = auth;
     }
-    
+
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/sync-templates`,
       body,
-      { headers: baseHeaders, timeout: 300000 } // 5 minute timeout for sync
+      withSharePointSessionAuth({ headers: baseHeaders, timeout: 300000 }) // 5 minute timeout for sync
     );
     return res.data;
   } catch (err) {
     logger.error(`Error syncing SharePoint templates: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
+    throw wrapSharePointError(err);
   }
 };
 
 /**
- * Saves SharePoint configuration
+ * Saves the app-level SharePoint configuration (one per user, not per project)
  */
-export const saveSharePointConfig = async (userId, projectName, siteUrl, library, folder, displayName) => {
+export const saveSharePointConfig = async (userId, siteUrl, library, folder, displayName) => {
   try {
     const res = await axios.post(
       `${C.jsonDocument_url}/sharepoint/config`,
-      { userId, projectName, siteUrl, library, folder, displayName },
+      { userId, siteUrl, library, folder, displayName },
       { headers: baseHeaders, timeout: DEFAULT_TIMEOUT }
     );
     return res.data;
@@ -488,15 +552,11 @@ export const saveSharePointConfig = async (userId, projectName, siteUrl, library
 };
 
 /**
- * Gets SharePoint configuration
+ * Gets the app-level SharePoint configuration (one per user, not per project)
  */
-export const getSharePointConfig = async (userId, projectName) => {
+export const getSharePointConfig = async (userId) => {
   try {
-    const params = {};
-    if (projectName) params.projectName = projectName;
-    
     const res = await axios.get(`${C.jsonDocument_url}/sharepoint/config`, {
-      params,
       headers: {
         ...baseHeaders,
         'X-User-Id': userId || '',
@@ -514,31 +574,11 @@ export const getSharePointConfig = async (userId, projectName) => {
 };
 
 /**
- * Gets all SharePoint configurations for a user
+ * Deletes the app-level SharePoint configuration (one per user, not per project)
  */
-export const getAllSharePointConfigs = async (userId) => {
-  try {
-    const res = await axios.get(`${C.jsonDocument_url}/sharepoint/configs/all`, {
-      headers: {
-        ...baseHeaders,
-        'X-User-Id': userId || '',
-      },
-      timeout: DEFAULT_TIMEOUT,
-    });
-    return res.data;
-  } catch (err) {
-    logger.error(`Error getting SharePoint configs: ${err.message}`);
-    throw new Error(err.response?.data?.message || err.message);
-  }
-};
-
-/**
- * Deletes SharePoint configuration for a project
- */
-export const deleteSharePointConfig = async (userId, projectName) => {
+export const deleteSharePointConfig = async (userId) => {
   try {
     const res = await axios.delete(`${C.jsonDocument_url}/sharepoint/config`, {
-      params: { projectName },
       headers: {
         ...baseHeaders,
         'X-User-Id': userId || '',

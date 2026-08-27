@@ -24,7 +24,8 @@ import {
   trySessionStorageRemove,
 } from '../utils/storage';
 import { setRequestQueueConfig } from '../utils/requestQueue';
-import { isAccessToken } from '../utils/tokenUtils';
+import { isAccessToken, toBearerToken } from '../utils/tokenUtils';
+import { loadAdoSdk } from '../adoSdk';
 import { sanitizeFileToken } from '../utils/fileUtils';
 import {
   mapHistoricalQueriesFromSharedTree,
@@ -681,6 +682,7 @@ class DocGenDataStore {
       linkTypes: observable,
       workItemTypes: observable,
       userDetails: observable,
+      windowsIdentityHint: observable,
       documents: observable,
       docType: observable,
       contextName: observable,
@@ -754,6 +756,8 @@ class DocGenDataStore {
       validateMewpExternalIngestionFiles: action,
       addContentControlToDocument: action,
       fetchUserDetails: action,
+      fetchWindowsIdentityHint: action,
+      ensureFreshAdoAccessToken: action,
       testCredentials: action,
       setCredentials: action,
       resolveTeamProjectByName: action,
@@ -774,12 +778,16 @@ class DocGenDataStore {
       setAdoBootStatus: action,
     });
     makeLoggable(this);
-    // Global 401 handler -> set flags and dispatch event for UI to react
+    // Global 401 handler -> set flags and dispatch event for UI to react.
+    // The event/UI reaction (toast + logout) must only fire on the
+    // transition INTO unauthorized, not on every repeated 401 while already
+    // unauthorized — otherwise a session stuck retrying against a dead PAT
+    // stacks one toast/logout per request instead of announcing it once.
     setAuthErrorHandler(() => {
-      if (this.lastAuthErrorStatus !== 401) {
-        this.lastAuthErrorStatus = 401;
-      }
+      const wasAlreadyUnauthorized = this.lastAuthErrorStatus === 401;
+      this.lastAuthErrorStatus = 401;
       this.isAuthenticated = false;
+      if (wasAlreadyUnauthorized) return;
       try {
         window.dispatchEvent(new CustomEvent('auth-unauthorized'));
         // Clear session-scoped debug-docs preference on logout/auth failure
@@ -838,6 +846,8 @@ class DocGenDataStore {
   adoBootStatus = 'idle';
   adoBootError = '';
   fetchUserDetailsPromise = null;
+  fetchWindowsIdentityHintPromise = null;
+  adoAccessTokenRefreshPromise = null;
   fetchCollectionLinkTypesPromise = null;
   adoBootstrapPromise = null;
   adoBootstrapProjectKey = '';
@@ -854,6 +864,7 @@ class DocGenDataStore {
   fieldsByType = [];
   linkTypes = []; // list of link types
   userDetails = [];
+  windowsIdentityHint = null;
   linkTypesFilter = []; // list of selected links to filter by
   testPlansList = []; // list of testPlans
   testSuiteList = []; // list of testsuites
@@ -914,6 +925,10 @@ class DocGenDataStore {
   docTypeMeta = {};
   documentsPromise = null;
   templatesForDownloadPromise = null;
+  // Bookkeeping for fetchTemplatesListForDownload's stale-response guard —
+  // not MobX-observable, nothing reads these reactively.
+  templatesForDownloadTarget = null;
+  templatesForDownloadRequestId = 0;
 
   setDocumentTypeTitle(documentType) {
     this.documentTypeTitle = documentType;
@@ -1555,6 +1570,78 @@ class DocGenDataStore {
     return this.fetchUserDetailsPromise;
   }
 
+  // Best-effort: resolve the caller's AD domain + sAMAccountName from their
+  // already-authenticated ADO identity, to prefill the on-prem SharePoint
+  // NTLM dialog. On-prem Windows-auth collections only; a no-op everywhere
+  // else (cloud/Entra orgs). Never throws, never touches auth state — this
+  // must stay fully isolated from fetchUserDetails' error handling, since a
+  // failure here is the expected common case, not a real auth problem.
+  async fetchWindowsIdentityHint() {
+    if (this.windowsIdentityHint) return this.windowsIdentityHint; // cached, including a cached negative result
+    if (this.fetchWindowsIdentityHintPromise) return this.fetchWindowsIdentityHintPromise;
+
+    const empty = { domain: null, account: null };
+    const userId = this.userDetails?.userId;
+    if (!this.hasAdoCredentials() || !userId) return empty; // not cached — creds/userId may arrive later
+
+    this.fetchWindowsIdentityHintPromise = (async () => {
+      try {
+        const data = await this.azureRestClient.getWindowsIdentity(userId);
+        const hint = { domain: data?.domain || null, account: data?.account || null };
+        runInAction(() => {
+          this.windowsIdentityHint = hint;
+        });
+        return hint;
+      } catch (err) {
+        logger.debug(`Windows identity hint unavailable: ${err?.message}`);
+        runInAction(() => {
+          this.windowsIdentityHint = empty; // cache the miss too — don't retry all session
+        });
+        return empty;
+      } finally {
+        this.fetchWindowsIdentityHintPromise = null;
+      }
+    })();
+    return this.fetchWindowsIdentityHintPromise;
+  }
+
+  // The ADO extension access token is fetched exactly once at panel load
+  // (App.jsx's mount effect) and normally lives ~70 minutes. A tab left open
+  // longer than that (a meeting, a weekend) sends a dead token on the next
+  // generate action, which surfaces as a bare 401 several hops downstream at
+  // TFS. Re-acquire it fresh from the SDK immediately before any request
+  // that ships it to the backend, rather than trusting whatever was cached
+  // at boot. Always refetches (no client-side exp check) — getAccessToken()
+  // is a single cheap round-trip to the ADO host frame, called only on a
+  // user-initiated action, so trusting the host as the source of truth is
+  // simpler and more robust than duplicating its expiry logic here.
+  async ensureFreshAdoAccessToken() {
+    if (!this.isAdoMode) return; // no SDK to refetch from outside the ADO extension
+    if (this.adoAccessTokenRefreshPromise) return this.adoAccessTokenRefreshPromise;
+
+    this.adoAccessTokenRefreshPromise = (async () => {
+      try {
+        const SDK = await loadAdoSdk();
+        if (!SDK || typeof SDK.getAccessToken !== 'function') return;
+        const rawToken = await SDK.getAccessToken();
+        const bearerToken = toBearerToken(rawToken);
+        if (bearerToken) {
+          runInAction(() => {
+            this.setCredentials(this.adoOrgUrl, bearerToken);
+          });
+        }
+      } catch (err) {
+        // Fail open: a refetch hiccup must never block generation — the
+        // caller proceeds with whatever token it already had, which is no
+        // worse than today's behavior.
+        logger.warn(`Failed to refresh ADO access token before request; using existing token: ${err?.message}`);
+      } finally {
+        this.adoAccessTokenRefreshPromise = null;
+      }
+    })();
+    return this.adoAccessTokenRefreshPromise;
+  }
+
   //for setting the selected link type filters
   updateSelectedLinksFilter = (selectedLinkType) => {
     logger.debug(`selected linked Type ${JSON.stringify(selectedLinkType)}`);
@@ -1809,6 +1896,7 @@ class DocGenDataStore {
     if (!compareResult) {
       throw new Error('Missing historical compare result');
     }
+    await this.ensureFreshAdoAccessToken();
     await createIfBucketDoesNotExist(this.ProjectBucketName);
 
     const orgUrl = this.adoOrgUrl || azureDevopsUrl;
@@ -2231,12 +2319,22 @@ class DocGenDataStore {
 
   //for fetching documents
   fetchTemplatesListForDownload(projectNameOverride = undefined) {
-    this.loadingState.templatesLoadingState = true;
     const effectiveProjectName =
       projectNameOverride !== undefined ? projectNameOverride : this.teamProjectName;
-    if (this.templatesForDownloadPromise) {
+
+    // Only dedupe against an in-flight request for the SAME project —
+    // previously this returned ANY in-flight promise regardless of target,
+    // so switching projects while a request for the old one was still
+    // pending silently discarded the new (correct) request and left
+    // templateForDownload showing the wrong project's files.
+    if (this.templatesForDownloadPromise && this.templatesForDownloadTarget === effectiveProjectName) {
       return this.templatesForDownloadPromise;
     }
+
+    this.loadingState.templatesLoadingState = true;
+    this.templatesForDownloadTarget = effectiveProjectName;
+    const requestId = ++this.templatesForDownloadRequestId;
+
     this.templatesForDownloadPromise = getBucketFileList('templates', null, true, effectiveProjectName, true)
       .then((data) => {
         // Process the data to fix the URLs
@@ -2261,7 +2359,12 @@ class DocGenDataStore {
           )}`;
         });
 
-        this.templateForDownload = processedData;
+        // A slower, now-superseded request (for a project the user has
+        // since switched away from) must not overwrite what a newer
+        // request already resolved.
+        if (requestId === this.templatesForDownloadRequestId) {
+          this.templateForDownload = processedData;
+        }
         return processedData;
       })
       .catch((err) => {
@@ -2271,8 +2374,16 @@ class DocGenDataStore {
         return [];
       })
       .finally(() => {
-        this.loadingState.templatesLoadingState = false;
-        this.templatesForDownloadPromise = null;
+        if (requestId === this.templatesForDownloadRequestId) {
+          this.loadingState.templatesLoadingState = false;
+        }
+        // Only clear the in-flight promise/target if nothing newer has
+        // superseded this request — otherwise a same-target caller
+        // shortly after would dedupe against a promise that's already
+        // stale relative to the current request.
+        if (this.templatesForDownloadTarget === effectiveProjectName && requestId === this.templatesForDownloadRequestId) {
+          this.templatesForDownloadPromise = null;
+        }
       });
     return this.templatesForDownloadPromise;
   }
@@ -2327,6 +2438,7 @@ class DocGenDataStore {
     this.clearLoadedFavorite();
   };
   async sendRequestToDocGen() {
+    await this.ensureFreshAdoAccessToken();
     await createIfBucketDoesNotExist(this.ProjectBucketName);
     let docReq = this.requestJson;
     return sendDocumentToGenerator(docReq);
@@ -2673,6 +2785,7 @@ class DocGenDataStore {
   }
 
   async validateMewpExternalIngestionFiles(options = {}) {
+    await this.ensureFreshAdoAccessToken();
     const request = this.requestJson || {};
     const externalBugsFile = this.normalizeMewpExternalFileRef(options?.externalBugsFile || null);
     const externalL3L4File = this.normalizeMewpExternalFileRef(options?.externalL3L4File || null);
