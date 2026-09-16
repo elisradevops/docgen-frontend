@@ -130,3 +130,73 @@ describe('DataStore ensureFreshAdoAccessToken', () => {
     expect(store.adoToken).toBe('bearer:fresh-raw-token');
   });
 });
+
+describe('DataStore generateHistoricalCompareReport', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.stubGlobal('window', {
+      APP_CONFIG: { JSON_DOCUMENT_URL: 'http://api-gate' },
+      location: { search: '' },
+      dispatchEvent: vi.fn(),
+      sessionStorage: { length: 0, key: vi.fn(), removeItem: vi.fn() },
+    });
+  });
+
+  test('sends only queryId + as-of timestamps, not the full compareResult rows/diffs', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    sendDocumentToGenerator.mockResolvedValue({ ok: true });
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    const store = (await import('./DataStore')).default;
+
+    store.setAdoMode(false);
+    store.setCredentials('https://dev.azure.com/org/', 'bearer:token');
+    // Set the project fields directly rather than via setTeamProject(), which side-effects into
+    // a full bootstrapProjectData() cascade (fetchTestPlans, fetchDocuments, ...) that is
+    // irrelevant to — and unmocked for — this test.
+    store.teamProject = 'proj-id';
+    store.teamProjectName = 'MEWP';
+    store.ProjectBucketName = 'mewp';
+    store.setHistoricalCompareResult({
+      queryId: 'q-1',
+      queryName: 'Shared Query',
+      baseline: { asOf: '2025-12-22T17:08:00.000Z', total: 4 },
+      compareTo: { asOf: '2025-12-28T08:57:00.000Z', total: 4 },
+      summary: { updatedCount: 1 },
+      rows: [
+        {
+          id: 11,
+          compareStatus: 'Changed',
+          differences: [{ field: 'Description', baseline: '<p>old</p>', compareTo: '<p>new</p>' }],
+        },
+      ],
+    });
+
+    await store.generateHistoricalCompareReport();
+
+    expect(sendDocumentToGenerator).toHaveBeenCalledTimes(1);
+    const requestPayload = sendDocumentToGenerator.mock.calls[0][0];
+    const contentControl = requestPayload.contentControls[0];
+    expect(contentControl.data).toEqual({
+      teamProjectName: 'MEWP',
+      queryName: 'Shared Query',
+      queryId: 'q-1',
+      baselineAsOf: '2025-12-22T17:08:00.000Z',
+      compareToAsOf: '2025-12-28T08:57:00.000Z',
+    });
+    // The heavy part of the compare result (rows/differences/HTML) must not be in the request —
+    // content-control re-fetches it server-side from queryId + the two timestamps.
+    expect(contentControl.data.rows).toBeUndefined();
+    expect(contentControl.data.compareResult).toBeUndefined();
+    expect(JSON.stringify(requestPayload.contentControls)).not.toContain('Description');
+  });
+
+  test('throws when there is no historical compare result to report on', async () => {
+    const store = (await import('./DataStore')).default;
+    store.setHistoricalCompareResult(null);
+
+    await expect(store.generateHistoricalCompareReport()).rejects.toThrow(
+      'Missing historical compare result'
+    );
+  });
+});

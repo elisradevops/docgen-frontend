@@ -664,6 +664,8 @@ const MainTabs = observer(({ store, adoContext }) => {
                 </span>
               </Tooltip>
             </>
+          ) : selectedTab === TAB_HISTORICAL ? (
+            <FormattingSettingsDialog store={store} />
           ) : supportsSync ? (
             <Tooltip
               title={
