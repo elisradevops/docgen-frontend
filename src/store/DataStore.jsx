@@ -1917,6 +1917,25 @@ class DocGenDataStore {
       isExcelSpreadsheet: false,
     };
     const fileName = `${projectName}-historical-compare-${safeQueryName}-${this.getFormattedDate()}.docx`;
+    // inputSummary/inputDetails record the *inputs* that produced this report
+    // (query + the two as-of timestamps), not the full compareResult rows —
+    // those are already persisted in the generated .docx. Passing the real
+    // compareResult here as well used to serialize it a second time (once
+    // as contentControl.data, once JSON-escaped into inputDetails), roughly
+    // doubling the request size and pushing it past the body-size limit.
+    const inputsOnlyContentControl = {
+      title: contentControl.title,
+      type: contentControl.type,
+      skin: contentControl.skin,
+      headingLevel: contentControl.headingLevel,
+      data: {
+        teamProjectName: projectName,
+        queryName,
+        baselineAsOf: compareResult?.baseline?.asOf || '',
+        compareToAsOf: compareResult?.compareTo?.asOf || '',
+      },
+      isExcelSpreadsheet: false,
+    };
     const requestPayload = {
       tfsCollectionUri: orgUrl,
       PAT: token,
@@ -1930,13 +1949,13 @@ class DocGenDataStore {
           docType: 'Historical Query Compare',
           contextName: queryName,
           selectedTemplate: null,
-          contentControls: [contentControl],
+          contentControls: [inputsOnlyContentControl],
         }),
         inputDetails: buildInputDetails({
           docType: 'Historical Query Compare',
           contextName: queryName,
           selectedTemplate: null,
-          contentControls: [contentControl],
+          contentControls: [inputsOnlyContentControl],
         }),
         enableDirectDownload: false,
       },
