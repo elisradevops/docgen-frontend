@@ -129,6 +129,11 @@ const QueryTree = ({
       )}
       <TreeSelect
         showSearch
+        // antd's default treeNodeFilterProp is 'value'. Historical-query leaf
+        // values are ADO query GUIDs (see buildHistoricalQueryTree), so the
+        // default would silently prevent searching by query name. Filter on
+        // the visible title instead.
+        treeNodeFilterProp='title'
         allowClear
         aria-label={title}
         loading={status === 'loading'}
