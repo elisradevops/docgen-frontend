@@ -676,6 +676,8 @@ const HistoricalQueryTab = observer(({ store }) => {
                       variant='outlined'
                       color='primary'
                       endIcon={<SendOutlinedIcon />}
+                      loading={isGeneratingReport}
+                      loadingPosition='end'
                       onClick={downloadCompareReport}
                       disabled={!canSendRequest || isGeneratingReport}
                     >

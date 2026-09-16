@@ -1904,6 +1904,11 @@ class DocGenDataStore {
     const queryName = String(options?.queryName || compareResult?.queryName || 'historical-query');
     const safeQueryName = sanitizeFileToken(queryName) || 'historical-query';
     const projectName = this.teamProjectName || this.teamProject || 'project';
+    // The request carries only the query id and the two as-of timestamps, not the full
+    // compareResult (every row's diffs/HTML). Content-control re-runs the comparison
+    // server-side from these inputs, so the payload no longer scales with result size —
+    // it used to grow with the query, was JSON-escaped a second time into inputDetails,
+    // and had already pushed past the body-size limit on large queries.
     const contentControl = {
       title: 'historical-compare-report-content-control',
       type: 'historical-compare-report',
@@ -1912,11 +1917,15 @@ class DocGenDataStore {
       data: {
         teamProjectName: projectName,
         queryName,
-        compareResult,
+        queryId: compareResult?.queryId || '',
+        baselineAsOf: compareResult?.baseline?.asOf || '',
+        compareToAsOf: compareResult?.compareTo?.asOf || '',
       },
       isExcelSpreadsheet: false,
     };
     const fileName = `${projectName}-historical-compare-${safeQueryName}-${this.getFormattedDate()}.docx`;
+    // inputSummary/inputDetails record the same lean inputs used to generate the report.
+    const inputsOnlyContentControl = contentControl;
     const requestPayload = {
       tfsCollectionUri: orgUrl,
       PAT: token,
@@ -1930,13 +1939,13 @@ class DocGenDataStore {
           docType: 'Historical Query Compare',
           contextName: queryName,
           selectedTemplate: null,
-          contentControls: [contentControl],
+          contentControls: [inputsOnlyContentControl],
         }),
         inputDetails: buildInputDetails({
           docType: 'Historical Query Compare',
           contextName: queryName,
           selectedTemplate: null,
-          contentControls: [contentControl],
+          contentControls: [inputsOnlyContentControl],
         }),
         enableDirectDownload: false,
       },
