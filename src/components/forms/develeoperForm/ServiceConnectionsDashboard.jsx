@@ -18,6 +18,7 @@ import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
 import AccessTimeRoundedIcon from '@mui/icons-material/AccessTimeRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { getServiceConnectionsHealth } from '../../../store/data/docManagerApi';
+import { copyToClipboard as copyTextToClipboard } from '../../../utils/clipboard';
 import packageJson from '../../../../package.json';
 import { buildServiceVersionsText } from './serviceVersions';
 
@@ -381,32 +382,6 @@ const summarizeDashboardHealth = (services = []) => {
     ...counts,
     avgLatency,
   };
-};
-
-const copyTextToClipboard = async (text) => {
-  const value = String(text ?? '');
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      return true;
-    }
-  } catch {
-    /* empty */
-  }
-  try {
-    const textarea = document.createElement('textarea');
-    textarea.value = value;
-    textarea.setAttribute('readonly', '');
-    textarea.style.position = 'absolute';
-    textarea.style.left = '-9999px';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-    return true;
-  } catch {
-    return false;
-  }
 };
 
 const ServiceConnectionsDashboard = () => {

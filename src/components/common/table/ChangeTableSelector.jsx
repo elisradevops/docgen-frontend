@@ -1,4 +1,13 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import GitObjectRangeSelector from '../selectors/GitObjectRangeSelector';
 import CommitDateSelector from '../selectors/CommitDateSelector';
 import PipelineSelector from '../selectors/PipelineSelector';
@@ -6,14 +15,12 @@ import ReleaseSelector from '../selectors/ReleaseSelector';
 import { observer } from 'mobx-react';
 import {
   Box,
-  Checkbox,
-  Collapse,
-  FormControlLabel,
-  Typography,
   Grid,
   Stack,
-  Button,
   Tooltip,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
@@ -21,9 +28,10 @@ import LinkOffIcon from '@mui/icons-material/LinkOff';
 import CallMergeIcon from '@mui/icons-material/CallMerge';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import ListAltIcon from '@mui/icons-material/ListAlt';
+import TerminalIcon from '@mui/icons-material/Terminal';
 import SmartAutocomplete from '../SmartAutocomplete';
 import PullRequestSelector from '../selectors/PullRequestSelector';
-import QueryTree from '../QueryTree';
 import { toast } from 'react-toastify';
 import UploadAttachmentFileButton from '../UploadAttachmentFileButton';
 import LinkedWiSelectionDialog from '../../dialogs/LinkedWiSelectionDialog';
@@ -31,6 +39,10 @@ import SettingsDisplay from '../SettingsDisplay';
 import SectionCard from '../../layout/SectionCard';
 import useTabStatePersistence from '../../../hooks/useTabStatePersistence';
 import RestoreBackdrop from '../RestoreBackdrop';
+import ToggleCard from '../ToggleCard';
+import WorkItemFilterSection from '../svdSections/WorkItemFilterSection';
+import QueriesSection from '../svdSections/QueriesSection';
+import AutoSvdPanel from './AutoSvdPanel';
 
 const baseChangeTableDataType = [
   { key: 0, text: 'GIT Object Range', type: 'range' },
@@ -46,70 +58,26 @@ const defaultSelectedQueriesForChangeTableSelector = {
 };
 
 const defaultLinkedWiOptions = { isEnabled: false, linkedWiTypes: 'both', linkedWiRelationship: 'both' };
-const toggleCardSx = {
-  borderRadius: 2,
-  border: '1px solid',
-  borderColor: 'divider',
-  bgcolor: 'background.paper',
-  p: 1.5,
-  height: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 0.75,
-};
 
-const ToggleCard = ({ icon, title, description, checked, onChange, info = null }) => {
-  const Icon = icon;
-  return (
-    <Box sx={toggleCardSx}>
-      <Stack
-        direction='row'
-        alignItems='center'
-        justifyContent='space-between'
-      >
-        <Stack
-          direction='row'
-          spacing={1}
-          alignItems='center'
-        >
-          <Icon fontSize='small' />
-          <Typography
-            variant='subtitle2'
-            fontWeight={600}
-          >
-            {title}
-          </Typography>
-          {info}
-        </Stack>
-        <Checkbox
-          size='small'
-          checked={checked}
-          onChange={(_event, nextChecked) => onChange(nextChecked)}
-        />
-      </Stack>
-      <Typography
-        variant='caption'
-        color='text.secondary'
-      >
-        {description}
-      </Typography>
-    </Box>
-  );
-};
 /**
  * ChangeTableSelector (SVD)
  * Manages base data type, query selections, and filters with session/favorite restore.
  */
 const ChangeTableSelector = observer(
-  ({
-    store,
-    selectedTeamProject,
-    contentControlTitle,
-    editingMode,
-    addToDocumentRequestObject,
-    contentControlIndex,
-    sharedQueries,
-  }) => {
+  forwardRef(function ChangeTableSelector(
+    {
+      store,
+      selectedTeamProject,
+      contentControlTitle,
+      editingMode,
+      addToDocumentRequestObject,
+      contentControlIndex,
+      sharedQueries,
+      onModeChange,
+      onValidityChange,
+    },
+    ref
+  ) {
     const [selectedType, setSelectedType] = useState(null);
     const [queryTrees, setQueryTrees] = useState({
       systemOverviewQueryTree: [],
@@ -129,6 +97,20 @@ const ChangeTableSelector = observer(
     const [linkedWiOptions, setLinkedWiOptions] = useState(defaultLinkedWiOptions);
     // Local restoring coordinates subselector hydration; hook provides base restoring for parent flow
     const [isRestoring, setIsRestoring] = useState(false);
+    // 'manual' (today's Generate-a-document flow, untouched) | 'auto' (produces a
+    // pipeline setup snippet — see AutoSvdPanel.jsx). Work item filters, queries,
+    // wiki file, and linked work items are shared between both modes (rendered
+    // once, below); only the Base Data / Range side of the page changes.
+    const [mode, setMode] = useState('manual');
+    const autoSvdPanelRef = useRef(null);
+
+    useEffect(() => {
+      onModeChange && onModeChange(mode);
+    }, [mode, onModeChange]);
+
+    useImperativeHandle(ref, () => ({
+      generateAutoSnippet: () => autoSvdPanelRef.current?.generateSnippet(),
+    }));
 
     const workItemTypeOptions = useMemo(
       () =>
@@ -478,25 +460,6 @@ const ChangeTableSelector = observer(
 
     const linkedWiSummary = generateIncludedLinkedWorkItemSelection();
 
-    const workItemFilterSummary = includeWorkItemFilter
-      ? [
-          selectedWorkItemTypes.length
-            ? selectedWorkItemTypes.length === workItemTypeOptions.length
-              ? 'Types: All'
-              : `Types (${selectedWorkItemTypes.length}): ${selectedWorkItemTypes
-                  .map((type) => type.text || type.name)
-                  .join(', ')}`
-            : 'Types: All',
-          selectedWorkItemStates.length
-            ? selectedWorkItemStates.length === workItemStateOptions.length
-              ? 'States: All'
-              : `States (${selectedWorkItemStates.length}): ${selectedWorkItemStates
-                  .map((state) => state.text || state.name)
-                  .join(', ')}`
-            : 'States: All',
-        ]
-      : [];
-
     const baseSummary = selectedType?.text
       ? `Base type: ${selectedType.text}`
       : 'Pick a base data type to configure the range.';
@@ -504,6 +467,34 @@ const ChangeTableSelector = observer(
     return (
       <>
         <Stack spacing={1.5}>
+          <ToggleButtonGroup
+            color='primary'
+            size='small'
+            exclusive
+            value={mode}
+            onChange={(_event, next) => {
+              if (!next) return;
+              setMode(next);
+            }}
+            aria-label='SVD mode'
+            sx={{ alignSelf: 'flex-start' }}
+          >
+            <ToggleButton value='manual'>
+              <ListAltIcon
+                fontSize='small'
+                sx={{ mr: 0.75 }}
+              />
+              Manual SVD
+            </ToggleButton>
+            <ToggleButton value='auto'>
+              <TerminalIcon
+                fontSize='small'
+                sx={{ mr: 0.75 }}
+              />
+              Auto SVD
+            </ToggleButton>
+          </ToggleButtonGroup>
+
           <Grid
             container
             spacing={1.5}
@@ -513,6 +504,26 @@ const ChangeTableSelector = observer(
               size={{ xs: 12, lg: 8 }}
               sx={{ minWidth: 0 }}
             >
+              {mode === 'auto' ? (
+                <AutoSvdPanel
+                  ref={autoSvdPanelRef}
+                  store={store}
+                  selectedTeamProject={selectedTeamProject}
+                  workItemFilterOptions={workItemFilterOptionsPayload}
+                  queriesRequest={queriesRequest}
+                  attachmentWikiUrl={store.attachmentWikiUrl}
+                  linkedWiOptions={linkedWiOptions}
+                  includeCommittedBy={includeCommittedBy}
+                  onIncludeCommittedByChange={setIncludeCommittedBy}
+                  includeUnlinkedCommits={includeUnlinkedCommits}
+                  onIncludeUnlinkedCommitsChange={setIncludeUnlinkedCommits}
+                  includePullRequestWorkItems={includePullRequestWorkItems}
+                  onIncludePullRequestWorkItemsChange={setIncludePullRequestWorkItems}
+                  replaceTaskWithParent={replaceTaskWithParent}
+                  onReplaceTaskWithParentChange={setReplaceTaskWithParent}
+                  onValidityChange={onValidityChange}
+                />
+              ) : (
               <SectionCard
                 title='Base Data'
                 description='Pick the primary source that drives this change log.'
@@ -729,6 +740,7 @@ const ChangeTableSelector = observer(
                   </Grid>
                 </Stack>
               </SectionCard>
+              )}
             </Grid>
 
             <Grid
@@ -739,198 +751,34 @@ const ChangeTableSelector = observer(
                 spacing={1.5}
                 sx={{ minHeight: '100%' }}
               >
-                <SectionCard
-                  title='Work item filters'
-                  compact
-                >
-                  <Stack spacing={1.25}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={includeWorkItemFilter}
-                          onChange={(_event, checked) => {
-                            setIncludeWorkItemFilter(checked);
-                            if (!checked) {
-                              setSelectedWorkItemTypes([]);
-                              setSelectedWorkItemStates([]);
-                            }
-                          }}
-                        />
-                      }
-                      label='Filter changes by work item type and state'
-                    />
-                    <Collapse
-                      in={includeWorkItemFilter}
-                      timeout='auto'
-                      unmountOnExit
-                    >
-                      <Stack spacing={1.25}>
-                        <Stack
-                          direction='row'
-                          spacing={1}
-                          flexWrap='wrap'
-                        >
-                          <Button
-                            size='small'
-                            onClick={() => {
-                              setSelectedWorkItemTypes([...workItemTypeOptions]);
-                            }}
-                            disabled={workItemTypeOptions.length === 0}
-                          >
-                            Select all types
-                          </Button>
-                          <Button
-                            size='small'
-                            onClick={() => {
-                              setSelectedWorkItemTypes([]);
-                              setSelectedWorkItemStates([]);
-                            }}
-                            disabled={
-                              selectedWorkItemTypes.length === 0 && selectedWorkItemStates.length === 0
-                            }
-                          >
-                            Clear selection
-                          </Button>
-                        </Stack>
-                        <SmartAutocomplete
-                          multiple
-                          showCheckbox
-                          autoHighlight
-                          openOnFocus
-                          options={workItemTypeOptions}
-                          value={selectedWorkItemTypes}
-                          loading={store.loadingState.workItemTypesLoadingState}
-                          label='Work item type'
-                          placeholder='Select a work item type'
-                          workItemVisualMode
-                          disableCloseOnSelect
-                          onChange={(_event, newValue) => {
-                            setSelectedWorkItemTypes(Array.isArray(newValue) ? newValue : []);
-                          }}
-                          noOptionsText='No work item types available'
-                        />
-                        <Stack
-                          direction='row'
-                          spacing={1}
-                          flexWrap='wrap'
-                        >
-                          <Button
-                            size='small'
-                            onClick={() => {
-                              setSelectedWorkItemStates([...workItemStateOptions]);
-                            }}
-                            disabled={workItemStateOptions.length === 0}
-                          >
-                            Select all states
-                          </Button>
-                          <Button
-                            size='small'
-                            onClick={() => setSelectedWorkItemStates([])}
-                            disabled={selectedWorkItemStates.length === 0}
-                          >
-                            Clear states
-                          </Button>
-                        </Stack>
-                        <SmartAutocomplete
-                          multiple
-                          showCheckbox
-                          autoHighlight
-                          openOnFocus
-                          options={workItemStateOptions}
-                          value={selectedWorkItemStates}
-                          label='Work item state'
-                          placeholder='Select a work item state'
-                          disabled={selectedWorkItemTypes.length === 0}
-                          workItemVisualMode
-                          disableCloseOnSelect
-                          onChange={(_event, newValue) =>
-                            setSelectedWorkItemStates(Array.isArray(newValue) ? newValue : [])
-                          }
-                          noOptionsText={
-                            selectedWorkItemTypes.length > 0
-                              ? 'No states available for the selected types'
-                              : 'Select at least one work item type first'
-                          }
-                        />
-                      </Stack>
-                    </Collapse>
-                    <SettingsDisplay
-                      title='Configured values'
-                      settings={workItemFilterSummary}
-                      emptyMessage='Work item filters disabled.'
-                      boxProps={{ p: 0, bgcolor: 'transparent' }}
-                    />
-                  </Stack>
-                </SectionCard>
-                <SectionCard
-                  title='Queries'
-                  compact
+                <WorkItemFilterSection
+                  includeWorkItemFilter={includeWorkItemFilter}
+                  onIncludeChange={setIncludeWorkItemFilter}
+                  selectedWorkItemTypes={selectedWorkItemTypes}
+                  onTypesChange={setSelectedWorkItemTypes}
+                  selectedWorkItemStates={selectedWorkItemStates}
+                  onStatesChange={setSelectedWorkItemStates}
+                  workItemTypeOptions={workItemTypeOptions}
+                  workItemStateOptions={workItemStateOptions}
+                  loading={store.loadingState.workItemTypesLoadingState}
+                />
+                <QueriesSection
+                  queryTrees={queryTrees}
+                  queriesRequest={queriesRequest}
+                  includeSystemOverview={includeSystemOverview}
+                  onIncludeSystemOverviewChange={(checked) => {
+                    setIncludeSystemOverview(checked);
+                    if (!checked) setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: null }));
+                  }}
+                  includeKnownBugs={includeKnownBugs}
+                  onIncludeKnownBugsChange={(checked) => {
+                    setIncludeKnownBugs(checked);
+                    if (!checked) setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: null }));
+                  }}
+                  onSelectedSystemOverviewQuery={onSelectedSystemOverviewQuery}
+                  onSelectedKnownBugsQuery={onSelectedKnownBugsQuery}
                   loading={store.fetchLoadingState().sharedQueriesLoadingState}
-                  loadingText='Loading queries...'
-                >
-                  <Stack spacing={1}>
-                    <FormControlLabel
-                      disabled={
-                        store.fetchLoadingState().sharedQueriesLoadingState ||
-                        !queryTrees.systemOverviewQueryTree ||
-                        queryTrees.systemOverviewQueryTree?.length === 0
-                      }
-                      control={
-                        <Checkbox
-                          checked={includeSystemOverview}
-                          onChange={(_event, checked) => {
-                            setIncludeSystemOverview(checked);
-                            if (!checked) setQueriesRequest((prev) => ({ ...prev, sysOverviewQuery: null }));
-                          }}
-                        />
-                      }
-                      label='Include system overview'
-                    />
-                    <Collapse
-                      in={includeSystemOverview}
-                      timeout='auto'
-                      unmountOnExit
-                    >
-                      <QueryTree
-                        data={queryTrees.systemOverviewQueryTree}
-                        prevSelectedQuery={queriesRequest?.sysOverviewQuery}
-                        onSelectedQuery={onSelectedSystemOverviewQuery}
-                        queryType='system-overview'
-                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                      />
-                    </Collapse>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          disabled={
-                            store.fetchLoadingState().sharedQueriesLoadingState ||
-                            !queryTrees.knownBugsQueryTree ||
-                            queryTrees.knownBugsQueryTree?.length === 0
-                          }
-                          checked={includeKnownBugs}
-                          onChange={(_event, checked) => {
-                            setIncludeKnownBugs(checked);
-                            if (!checked) setQueriesRequest((prev) => ({ ...prev, knownBugsQuery: null }));
-                          }}
-                        />
-                      }
-                      label='Include known possible bugs'
-                    />
-                    <Collapse
-                      in={includeKnownBugs}
-                      timeout='auto'
-                      unmountOnExit
-                    >
-                      <QueryTree
-                        data={queryTrees.knownBugsQueryTree}
-                        prevSelectedQuery={queriesRequest?.knownBugsQuery}
-                        onSelectedQuery={onSelectedKnownBugsQuery}
-                        queryType='known-bugs'
-                        isLoading={store.fetchLoadingState().sharedQueriesLoadingState}
-                      />
-                    </Collapse>
-                  </Stack>
-                </SectionCard>
+                />
 
                 <SectionCard
                   title='Wiki File'
@@ -979,7 +827,7 @@ const ChangeTableSelector = observer(
         />
       </>
     );
-  }
+  })
 );
 
 export default ChangeTableSelector;

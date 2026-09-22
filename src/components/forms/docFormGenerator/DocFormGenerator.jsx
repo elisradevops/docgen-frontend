@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
 import Grid from '@mui/material/Grid';
 import SendIcon from '@mui/icons-material/Send';
+import TerminalIcon from '@mui/icons-material/Terminal';
 import TestContentSelector from '../../common/table/TestContentSelector';
 import QueryContentSelector from '../../common/selectors/QueryContentSelector';
 import TraceTableSelector from '../../common/selectors/TraceTableSelector';
@@ -25,11 +26,38 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
   const [selectedDocForm, setSelectedDocForm] = useState(null);
   const [docForm, setDocForm] = useState(null);
   const [templatesLoading, setTemplatesLoading] = useState(false);
+  // Auto SVD mode (ChangeTableSelector's own mode toggle) needs its "Generate
+  // Snippet" action to replace this page's single Send Request button rather
+  // than float as a second action bar — see AutoSvdPanel.jsx/ChangeTableSelector.jsx.
+  const [changeTableAutoMode, setChangeTableAutoMode] = useState(false);
+  // Auto SVD's own "Additional settings" validation (email/Artifactory),
+  // reported up so the footer's "Generate Snippet" can be disabled the same
+  // way Manual SVD's "Send Request" already is — see AutoSvdPanel.jsx.
+  const [autoSvdErrors, setAutoSvdErrors] = useState([]);
+  const changeTableRef = useRef(null);
+  // Stable identity so ChangeTableSelector's [mode, onModeChange] effect only
+  // re-fires on real mode changes, not on every DocFormGenerator re-render.
+  // ChangeTableSelector reports its raw mode string ('manual'|'auto'); this
+  // is where it's translated into the boolean the footer swap needs.
+  const handleChangeTableModeChange = useCallback((mode) => setChangeTableAutoMode(mode === 'auto'), []);
+  const handleAutoSvdValidityChange = useCallback((errors) => setAutoSvdErrors(errors || []), []);
+
+  // ChangeTableSelector is keyed on `${selectedTeamProject}-${contentControlIndex}`
+  // (see generateFormControls' 'change-table' case below), so it remounts —
+  // and self-corrects its own mode back to 'manual' — on a team project
+  // change. Reset defensively here too so this footer never shows a stale
+  // "Generate Snippet" state for the one render before that self-correction.
+  useEffect(() => {
+    setChangeTableAutoMode(false);
+    setAutoSvdErrors([]);
+  }, [selectedTeamProject]);
 
   useEffect(() => {
     if (store?.isAdoMode && store?.adoBootStatus !== 'ready') return;
     if (docType !== '') {
       logger.debug(`Fetching doc forms templates for docType: ${docType}`);
+      setChangeTableAutoMode(false);
+      setAutoSvdErrors([]);
       store.setDocType(docType);
       // Clear selected template when switching doc types so the correct default is chosen
       store.setSelectedTemplate(null);
@@ -269,6 +297,13 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         return (
           <ChangeTableSelector
             key={`${selectedTeamProject}-${contentControlIndex}`} // forces re-render
+            // Auto SVD mode's footer swap only makes sense when this is the
+            // page's only content control (the real SVD flow) — a
+            // developer-built document with several controls alongside a
+            // change-table one keeps the normal Send Request behavior.
+            ref={docForm?.contentControls?.length === 1 ? changeTableRef : undefined}
+            onModeChange={docForm?.contentControls?.length === 1 ? handleChangeTableModeChange : undefined}
+            onValidityChange={docForm?.contentControls?.length === 1 ? handleAutoSvdValidityChange : undefined}
             selectedTeamProject={selectedTeamProject}
             store={store}
             type={formControl.type}
@@ -501,20 +536,35 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                   </Grid>
                 </Box>
 
-                <FooterBar
-                  message={
-                    sendDisabled
-                      ? validationMessage || 'Please complete required selections'
-                      : selectedTemplate
-                        ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
-                        : 'Ready to generate'
-                  }
-                  disabled={sendDisabled}
-                  loading={loading}
-                  onClick={handleSendRequest}
-                  disabledTooltip={validationMessage || 'Please complete required selections'}
-                  endIcon={<SendIcon />}
-                />
+                {changeTableAutoMode && docForm?.contentControls?.length === 1 ? (
+                  <FooterBar
+                    message={
+                      autoSvdErrors.length > 0
+                        ? autoSvdErrors[0]
+                        : 'Ready to build a pipeline setup snippet — no document will be generated.'
+                    }
+                    disabled={autoSvdErrors.length > 0}
+                    disabledTooltip={autoSvdErrors.join(' ')}
+                    onClick={() => changeTableRef.current?.generateAutoSnippet()}
+                    endIcon={<TerminalIcon />}
+                    buttonLabel='Generate Snippet'
+                  />
+                ) : (
+                  <FooterBar
+                    message={
+                      sendDisabled
+                        ? validationMessage || 'Please complete required selections'
+                        : selectedTemplate
+                          ? `Ready to generate using template: ${selectedTemplate?.text?.split('/')?.pop()}`
+                          : 'Ready to generate'
+                    }
+                    disabled={sendDisabled}
+                    loading={loading}
+                    onClick={handleSendRequest}
+                    disabledTooltip={validationMessage || 'Please complete required selections'}
+                    endIcon={<SendIcon />}
+                  />
+                )}
               </Box>
             ) : (
               <Paper

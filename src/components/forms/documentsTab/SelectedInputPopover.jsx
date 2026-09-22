@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Button, Popover, Tag } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
+import { copyToClipboard } from '../../../utils/clipboard';
 import {
   beautifyText,
   buildControlSections,
@@ -13,32 +14,6 @@ import {
   parseInputSummary,
   tryParseJsonString,
 } from './selectedInputUtils';
-
-const copyToClipboard = async (text) => {
-  const value = String(text ?? '');
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      return true;
-    }
-  } catch {
-    /* empty */
-  }
-  try {
-    const textarea = document.createElement('textarea');
-    textarea.value = value;
-    textarea.setAttribute('readonly', '');
-    textarea.style.position = 'absolute';
-    textarea.style.left = '-9999px';
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 const looksLikeIso = (s) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(String(s || '').trim());
 

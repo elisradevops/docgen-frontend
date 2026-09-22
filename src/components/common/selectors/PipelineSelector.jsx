@@ -3,14 +3,12 @@ import SmartAutocomplete from '../SmartAutocomplete';
 import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
 import { Button, Grid } from '@mui/material';
+import { compareNamesNatural, compareNamesNaturalDesc, filterHistoryAfter } from './historyRangeUtils';
 
 const defaultSelectedItem = {
   key: '',
   text: '',
 };
-const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-const compareNamesNatural = (a, b) => nameCollator.compare(String(a?.name ?? ''), String(b?.name ?? ''));
-const compareNamesNaturalDesc = (a, b) => compareNamesNatural(b, a);
 
 const PipelineSelector = observer(
   ({
@@ -192,13 +190,8 @@ const PipelineSelector = observer(
 
         setSelectedPipelineRunStart(newValue);
 
-        // Filter runs for end point selection (only runs after selected start point)
-        const filteredHistory = [...currentRunHistoryList].filter((run) => run.id > newValue.key);
-
-        // Create a new array for sorting to avoid MobX errors
-        const sortedHistory = [...filteredHistory].sort(compareNamesNatural);
-
-        setEndPointRunHistory(sortedHistory);
+        // Only runs after the selected start point are valid end points.
+        setEndPointRunHistory(filterHistoryAfter(currentRunHistoryList, newValue.key));
       },
       [pipelineRunHistory]
     );
