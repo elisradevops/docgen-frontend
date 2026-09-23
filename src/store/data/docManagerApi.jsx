@@ -58,7 +58,7 @@ export const getBucketFileList = async (
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      logger.error(`Error Response ${JSON.stringify(err.response.data)}`);
+      logger.error('Error Response', err.response.data);
       throw new Error(err.response.data.message);
     } else if (err.code === 'ECONNABORTED') {
       logger.error(`Request timeout while getting bucket file list`);
@@ -182,7 +182,7 @@ export const sendDocumentToGenerator = async (docJson) => {
       );
     } else {
       // Something else happened during the request setup
-      logger.error(`Error while sending document to generator: ${JSON.stringify(err.message)}`);
+      logger.error(`Error while sending document to generator: ${err.message}`);
       throw new Error(err.message);
     }
   }
@@ -205,7 +205,7 @@ export const getFavoriteList = async (userId, docType, teamProjectId) => {
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      logger.error(`Error response while getting favorite list: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while getting favorite list', err.response.data);
       throw new Error(err.response.data.error);
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while getting favorite list');
@@ -244,7 +244,7 @@ export const createFavorite = async (userId, name, docType, dataToSave, teamProj
     return res.data;
   } catch (err) {
     if (err.response) {
-      logger.error(`Error response while creating favorite: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while creating favorite', err.response.data);
       throw new Error(err.response.data.error || err.response.data.message);
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while creating favorite');
@@ -276,7 +276,7 @@ export const deleteFavoriteFromDb = async (id) => {
     return res.data;
   } catch (err) {
     if (err.response) {
-      logger.error(`Error response while deleting favorite: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while deleting favorite', err.response.data);
       throw new Error(err.response.data.error);
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while deleting favorite');
@@ -330,7 +330,7 @@ export const deleteFile = async (file, projectName, bucketName) => {
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      logger.error(`Error response while deleting template file: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while deleting template file', err.response.data);
       const errorMessage = err.response.data.error;
       throw new Error(errorMessage);
     } else {

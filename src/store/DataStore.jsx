@@ -1644,14 +1644,14 @@ class DocGenDataStore {
 
   //for setting the selected link type filters
   updateSelectedLinksFilter = (selectedLinkType) => {
-    logger.debug(`selected linked Type ${JSON.stringify(selectedLinkType)}`);
+    logger.debug('selected linked Type', selectedLinkType);
     let linkIndex = this.linkTypesFilter.findIndex((linkFilter) => linkFilter.key === selectedLinkType.key);
     if (linkIndex >= 0) {
       this.linkTypesFilter[linkIndex] = selectedLinkType;
     } else {
       this.linkTypesFilter.push(selectedLinkType);
     }
-    logger.debug(`selected Link Types Filter ${JSON.stringify(this.linkTypesFilter)}`);
+    logger.debug('selected Link Types Filter', this.linkTypesFilter);
   };
   //for setting selected template
   setSelectedTemplate(templateObject) {
