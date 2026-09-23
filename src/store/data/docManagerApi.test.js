@@ -78,6 +78,19 @@ describe('docManagerApi sendDocumentToGenerator', () => {
 
     await expect(sendDocumentToGenerator({})).rejects.toThrow('Release history failed');
   });
+
+  test('sends the generated documentId as the x-docgen-run-id header', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({});
+
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ documentId: 'doc-id-1' }),
+      expect.objectContaining({ headers: expect.objectContaining({ 'x-docgen-run-id': 'doc-id-1' }) })
+    );
+  });
 });
 
 describe('docManagerApi resolveSharePointUrl', () => {

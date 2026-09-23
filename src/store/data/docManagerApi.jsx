@@ -161,7 +161,10 @@ export const sendDocumentToGenerator = async (docJson) => {
     let res = await enqueueRequest(
       () =>
         axios.post(`${C.jsonDocument_url}/jsonDocument/create`, docJson, {
-          headers: baseHeaders,
+          // Sent as a header (not just in the body) so api-gate's request middleware can
+          // thread it through AsyncLocalStorage as the run's correlation id before the
+          // handler ever parses the body — see docgen-api-gate's runContext.ts.
+          headers: { ...baseHeaders, 'x-docgen-run-id': docJson.documentId },
         }),
       { key: 'docs', priority: 'high' }
     );

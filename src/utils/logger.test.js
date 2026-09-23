@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { createLogger, transports } from './logger.jsx';
 
 // Captures whatever the ConsoleTransport-equivalent would receive, without touching the
@@ -19,7 +19,7 @@ describe('frontend logger — hostile inputs never throw', () => {
     ['NaN', NaN],
     ['a circular object', (() => { const c = { a: 1 }; c.self = c; return c; })()],
     ['an object with a throwing getter', { get boom() { throw new Error('nope'); } }],
-    ['a BigInt', BigInt(9007199254740993)],
+    ['a BigInt', 9007199254740993n],
     ['a Symbol', Symbol('x')],
     ['an Error with no message', new Error()],
     ['a 10MB string', 'x'.repeat(10 * 1024 * 1024)],

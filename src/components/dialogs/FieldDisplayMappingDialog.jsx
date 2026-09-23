@@ -298,14 +298,6 @@ const FieldDisplayMappingDialog = ({
   const modTest = useMemo(() => countMods(workingMapping[selectedQuery] || {}, workingVisibility[selectedQuery] || {}, 'Test Case'), [workingMapping, workingVisibility, selectedQuery]);
   const modCountByType = { Requirement: modReq, 'Test Case': modTest };
   // Total across all queries for the trigger button
-  const totalCount = useMemo(() => {
-    let n = 0;
-    for (const qKey of ['req-test', 'test-req']) {
-      n += countMods(workingMapping[qKey] || {}, workingVisibility[qKey] || {}, 'Requirement');
-      n += countMods(workingMapping[qKey] || {}, workingVisibility[qKey] || {}, 'Test Case');
-    }
-    return n;
-  }, [workingMapping, workingVisibility]);
   const triggerTotalCount = useMemo(() => {
     let n = 0;
     for (const qKey of ['req-test', 'test-req']) {
