@@ -5,13 +5,11 @@ import { observer } from 'mobx-react';
 import { toast } from 'react-toastify';
 import { Grid, Button, FormLabel, RadioGroup, Radio, FormControlLabel, Typography, Stack, Tooltip, IconButton, Box } from '@mui/material';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
+import { compareNamesNatural, compareNamesNaturalDesc, filterHistoryAfter } from './historyRangeUtils';
 const defaultSelectedItem = {
   key: '',
   text: '',
 };
-const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-const compareNamesNatural = (a, b) => nameCollator.compare(String(a?.name ?? ''), String(b?.name ?? ''));
-const compareNamesNaturalDesc = (a, b) => compareNamesNatural(b, a);
 const ReleaseSelector = observer(
   ({
     store,
@@ -57,9 +55,7 @@ const ReleaseSelector = observer(
 
         setSelectedReleaseHistoryStart(value);
 
-        const filteredHistory = currentReleaseDefinitionHistory.filter((run) => run.id > value.key);
-        const sortedHistory = [...filteredHistory].sort(compareNamesNatural);
-        setEndPointRunHistory(sortedHistory);
+        setEndPointRunHistory(filterHistoryAfter(currentReleaseDefinitionHistory, value.key));
       },
       [releaseDefinitionHistory]
     );

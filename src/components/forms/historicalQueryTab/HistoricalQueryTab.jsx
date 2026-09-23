@@ -122,6 +122,11 @@ const HistoricalQueryTab = observer(({ store }) => {
   const [asOfInput, setAsOfInput] = useState(() => getDefaultDateInput());
   const [baselineInput, setBaselineInput] = useState(() => getDefaultDateInput());
   const [compareToInput, setCompareToInput] = useState(() => getDefaultDateInput());
+  // Tracks whether the user has explicitly picked a "Compare To" value. Until they do, it stays
+  // pinned to the mount-time default and goes stale - re-running compare without touching the
+  // field would silently keep comparing against that original moment, hiding any edit made
+  // since. Left false, `runCompare` refreshes it to the actual current time on every run instead.
+  const [compareToTouched, setCompareToTouched] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [invalidQueryHint, setInvalidQueryHint] = useState('');
   const historicalControlIndex = 0;
@@ -174,7 +179,12 @@ const HistoricalQueryTab = observer(({ store }) => {
       setMode(nextMode);
       if (typeof savedData.asOfInput === 'string') setAsOfInput(savedData.asOfInput);
       if (typeof savedData.baselineInput === 'string') setBaselineInput(savedData.baselineInput);
-      if (typeof savedData.compareToInput === 'string') setCompareToInput(savedData.compareToInput);
+      if (typeof savedData.compareToInput === 'string') {
+        setCompareToInput(savedData.compareToInput);
+        // A restored value is an explicit past choice, not the mount-time "now" placeholder -
+        // don't let runCompare silently override it.
+        setCompareToTouched(true);
+      }
 
       const restoredQuery = savedData.selectedQuery;
       if (restoredQuery?.key || restoredQuery?.text) {
@@ -212,6 +222,7 @@ const HistoricalQueryTab = observer(({ store }) => {
     setAsOfInput(getDefaultDateInput());
     setBaselineInput(getDefaultDateInput());
     setCompareToInput(getDefaultDateInput());
+    setCompareToTouched(false);
   }, []);
 
   const { isRestoring, restoreReady } = useTabStatePersistence({
@@ -312,15 +323,28 @@ const HistoricalQueryTab = observer(({ store }) => {
   };
 
   const runCompare = async () => {
-    if (!compareValidation.isValid) {
-      toast.error(compareValidation.firstError || 'Please provide valid compare input values.');
+    // If the user never explicitly picked a "Compare To" value, refresh it to the actual
+    // current time before sending, rather than reusing whatever "now" happened to be when the
+    // tab/field was last (re)initialized - otherwise a work item edited after that moment would
+    // silently be missing from the comparison until the query was reselected.
+    const effectiveCompareToInput = compareToTouched ? compareToInput : getDefaultDateInput();
+    const validation = validateHistoricalCompareInputs({
+      selectedQueryId: selectedQuery?.id,
+      baselineInput,
+      compareToInput: effectiveCompareToInput,
+    });
+    if (effectiveCompareToInput !== compareToInput) {
+      setCompareToInput(effectiveCompareToInput);
+    }
+    if (!validation.isValid) {
+      toast.error(validation.firstError || 'Please provide valid compare input values.');
       return;
     }
     try {
       const result = await store.fetchHistoricalCompareResults(
         selectedQuery?.id,
-        compareValidation.baselineIso,
-        compareValidation.compareToIso,
+        validation.baselineIso,
+        validation.compareToIso,
       );
       setInvalidQueryHint('');
       toast.success('Historical compare completed.');
@@ -619,7 +643,10 @@ const HistoricalQueryTab = observer(({ store }) => {
                       format='dd/MM/yyyy hh:mm a'
                       label='Compare To'
                       value={toPickerDateValue(compareToInput)}
-                      onChange={(value) => setCompareToInput(fromPickerDateValue(value))}
+                      onChange={(value) => {
+                        setCompareToInput(fromPickerDateValue(value));
+                        setCompareToTouched(true);
+                      }}
                       slots={{ inputAdornment: PickerNowAdornment }}
                       slotProps={{
                         textField: {
@@ -627,7 +654,12 @@ const HistoricalQueryTab = observer(({ store }) => {
                           error: !!compareValidation.errors.compareTo,
                           helperText: compareValidation.errors.compareTo,
                         },
-                        inputAdornment: { onNowClick: () => setCompareToInput(getDefaultDateInput()) },
+                        inputAdornment: {
+                          onNowClick: () => {
+                            setCompareToInput(getDefaultDateInput());
+                            setCompareToTouched(true);
+                          },
+                        },
                       }}
                     />
                   </Stack>
