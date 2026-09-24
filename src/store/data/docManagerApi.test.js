@@ -91,6 +91,29 @@ describe('docManagerApi sendDocumentToGenerator', () => {
       expect.objectContaining({ headers: expect.objectContaining({ 'x-docgen-run-id': 'doc-id-1' }) })
     );
   });
+
+  test('sends x-docgen-capture-mode: verbose and strips captureDiagnostics from the body when set', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({ captureDiagnostics: true });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.not.objectContaining({ captureDiagnostics: expect.anything() }),
+      expect.objectContaining({ headers: expect.objectContaining({ 'x-docgen-capture-mode': 'verbose' }) })
+    );
+  });
+
+  test('does not send x-docgen-capture-mode when captureDiagnostics is false/absent', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({});
+
+    const [, , config] = axios.post.mock.calls[0];
+    expect(config.headers).not.toHaveProperty('x-docgen-capture-mode');
+  });
 });
 
 describe('docManagerApi resolveSharePointUrl', () => {

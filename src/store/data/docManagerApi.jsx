@@ -158,13 +158,23 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
 export const sendDocumentToGenerator = async (docJson) => {
   try {
     docJson.documentId = uuidV4();
+    // Phase 6b — captureDiagnostics never belongs in DocumentRequest's body shape: like
+    // documentId/x-docgen-run-id, it only matters as a header, read by api-gate's
+    // attachRunContext before the body is even parsed. Extracted and deleted here rather than
+    // left on docJson, so the body posted below stays exactly DocumentRequest-shaped.
+    const captureDiagnostics = docJson.captureDiagnostics;
+    delete docJson.captureDiagnostics;
+    const headers = { ...baseHeaders, 'x-docgen-run-id': docJson.documentId };
+    if (captureDiagnostics) {
+      headers['x-docgen-capture-mode'] = 'verbose';
+    }
     let res = await enqueueRequest(
       () =>
         axios.post(`${C.jsonDocument_url}/jsonDocument/create`, docJson, {
           // Sent as a header (not just in the body) so api-gate's request middleware can
           // thread it through AsyncLocalStorage as the run's correlation id before the
           // handler ever parses the body — see docgen-api-gate's runContext.ts.
-          headers: { ...baseHeaders, 'x-docgen-run-id': docJson.documentId },
+          headers,
         }),
       { key: 'docs', priority: 'high' }
     );

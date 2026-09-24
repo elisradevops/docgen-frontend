@@ -1,5 +1,6 @@
 import React from 'react';
-import { Button, Paper, Tooltip, Typography } from '@mui/material';
+import { Button, Paper, ToggleButton, Tooltip, Typography } from '@mui/material';
+import TroubleshootIcon from '@mui/icons-material/Troubleshoot';
 
 const FooterBar = ({
   message,
@@ -9,6 +10,11 @@ const FooterBar = ({
   disabledTooltip = '',
   endIcon = null,
   buttonLabel = 'Send Request',
+  // Optional compact toggle rendered inline, left of the main button — omit
+  // onToggleDiagnostics (e.g. the Auto SVD "Generate Snippet" footer, which
+  // never generates a document) to leave FooterBar exactly as before.
+  diagnosticsEnabled = false,
+  onToggleDiagnostics,
 }) => {
   return (
     <Paper
@@ -42,6 +48,28 @@ const FooterBar = ({
       >
         {message}
       </Typography>
+      {onToggleDiagnostics ? (
+        <Tooltip
+          title={
+            diagnosticsEnabled
+              ? 'Diagnostics capture is ON for this run — debug/info logs will be persisted for troubleshooting.'
+              : 'Capture detailed diagnostics for this run (debug/info logs, for troubleshooting a failed or unexpected generation).'
+          }
+          arrow
+        >
+          <ToggleButton
+            value='capture-diagnostics'
+            selected={diagnosticsEnabled}
+            onChange={() => onToggleDiagnostics(!diagnosticsEnabled)}
+            color='warning'
+            size='small'
+            sx={{ alignSelf: { xs: 'center', sm: 'auto' }, borderRadius: '50%', p: 1 }}
+            aria-label='Toggle diagnostics capture for this run'
+          >
+            <TroubleshootIcon fontSize='small' />
+          </ToggleButton>
+        </Tooltip>
+      ) : null}
       <Tooltip title={disabled ? disabledTooltip : ''} arrow>
         <span>
           <Button

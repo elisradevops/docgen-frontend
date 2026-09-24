@@ -658,6 +658,7 @@ class DocGenDataStore {
       documentTemplates: observable,
       documentTypes: observable,
       showDebugDocs: observable,
+      captureDiagnostics: observable,
       teamProject: observable,
       selectedTemplate: observable,
       contentControls: observable,
@@ -736,6 +737,7 @@ class DocGenDataStore {
       fetchPipelineList: action,
       setPipelineList: action,
       setFormattingSettings: action,
+      setCaptureDiagnostics: action,
       fetchPipelineRunHistory: action,
       fetchReleaseDefinitionList: action,
       setReleaseDefinitionList: action,
@@ -921,6 +923,9 @@ class DocGenDataStore {
 
   // Toggle for showing debug document types (hidden by default)
   showDebugDocs = false;
+  // Phase 6b — opt-in per generation, not sticky like formattingSettings: reset to false in
+  // sendRequestToDocGen's finally so it doesn't silently stay on for the next run.
+  captureDiagnostics = false;
   // Metadata per document type (tabIndex, isDebug)
   docTypeMeta = {};
   documentsPromise = null;
@@ -936,6 +941,10 @@ class DocGenDataStore {
 
   setFormattingSettings(formattingSettings) {
     this.formattingSettings = formattingSettings;
+  }
+
+  setCaptureDiagnostics(captureDiagnostics) {
+    this.captureDiagnostics = captureDiagnostics;
   }
 
   setAdoMode(value) {
@@ -2450,7 +2459,16 @@ class DocGenDataStore {
     await this.ensureFreshAdoAccessToken();
     await createIfBucketDoesNotExist(this.ProjectBucketName);
     let docReq = this.requestJson;
-    return sendDocumentToGenerator(docReq);
+    // Phase 6b — a run-level opt-in, not part of DocumentRequest's shape (sendDocumentToGenerator
+    // extracts it into the x-docgen-capture-mode header instead, mirroring how documentId
+    // already becomes x-docgen-run-id). Reset in finally so it never silently stays on for
+    // the next generation — unlike formattingSettings, this isn't meant to be sticky.
+    docReq.captureDiagnostics = this.captureDiagnostics;
+    try {
+      return await sendDocumentToGenerator(docReq);
+    } finally {
+      this.setCaptureDiagnostics(false);
+    }
   }
 
   async fetchFavoritesList(docTypeOverride = '', teamProjectOverride = '') {
