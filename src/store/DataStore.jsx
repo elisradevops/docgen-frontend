@@ -2876,6 +2876,7 @@ class DocGenDataStore {
       // For flows like Test-Reporter (Excel), there may be no selected template.
       // Avoid accessing .url on null and let the API handle an empty template when appropriate.
       templateFile: this.selectedTemplate?.url || '',
+      docType: this.docType,
       uploadProperties: {
         bucketName: this.ProjectBucketName,
         fileName: tempFileName,

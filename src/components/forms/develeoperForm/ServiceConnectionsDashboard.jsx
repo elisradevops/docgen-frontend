@@ -21,6 +21,7 @@ import { getServiceConnectionsHealth } from '../../../store/data/docManagerApi';
 import { copyToClipboard as copyTextToClipboard } from '../../../utils/clipboard';
 import packageJson from '../../../../package.json';
 import { buildServiceVersionsText } from './serviceVersions';
+import { DEFAULT_HEALTH_SUMMARY, getSeverityLevel, summarizeDashboardHealth } from './healthSummary';
 
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
 const AUTO_REFRESH_SECONDS = Math.ceil(AUTO_REFRESH_MS / 1000);
@@ -31,39 +32,6 @@ const PRIMARY_SERVICE_BACKGROUND =
   'linear-gradient(135deg, rgba(2,132,199,0.08) 0%, rgba(20,184,166,0.08) 100%)';
 const DEPENDENCY_GRID_TEMPLATE =
   'minmax(90px,1fr) minmax(86px,0.9fr) minmax(58px,0.6fr) minmax(0,1.9fr)';
-const DEFAULT_HEALTH_SUMMARY = Object.freeze({ monitored: 0, healthy: 0, degraded: 0, down: 0, avgLatency: null });
-
-/**
- * Converts service status and connection state into a sortable severity number.
- * Higher numbers indicate a more severe state.
- */
-const getSeverityLevel = (status, connectionStatus) => {
-  const normalizedStatus = String(status || '').toLowerCase();
-  const normalizedConnection = String(connectionStatus || '').toLowerCase();
-
-  if (
-    normalizedStatus === 'down' ||
-    normalizedStatus === 'error' ||
-    normalizedConnection === 'disconnected'
-  ) {
-    return 2;
-  }
-
-  if (
-    normalizedStatus === 'degraded' ||
-    normalizedConnection === 'degraded' ||
-    normalizedStatus === 'connecting' ||
-    normalizedConnection === 'connecting'
-  ) {
-    return 1;
-  }
-
-  if (normalizedStatus === 'up' || normalizedConnection === 'connected') {
-    return 0;
-  }
-
-  return 1;
-};
 
 /**
  * Returns UI metadata for status chips.
@@ -308,20 +276,6 @@ const normalizeErrorDetails = (target = {}) => {
 };
 
 /**
- * Flattens all monitored entities into one list (services + nested dependencies).
- */
-const collectMonitoredTargets = (services = []) => {
-  const flattened = [];
-  services.forEach((service) => {
-    flattened.push(service);
-    if (Array.isArray(service?.dependencies)) {
-      service.dependencies.forEach((dependency) => flattened.push(dependency));
-    }
-  });
-  return flattened;
-};
-
-/**
  * Aggregates dependency state counters for dependency header chips.
  */
 const summarizeDependencies = (dependencies = []) =>
@@ -344,45 +298,6 @@ const isDuplicateGlobalError = (serviceError, globalError, globalErrorHint) =>
   String(serviceError?.message || '').trim() === String(globalError || '').trim() &&
   (!globalErrorHint ||
     String(serviceError?.hint || '').trim() === String(globalErrorHint || '').trim());
-
-/**
- * Builds the metric strip values from the currently rendered health entities.
- */
-const summarizeDashboardHealth = (services = []) => {
-  const monitoredTargets = collectMonitoredTargets(services);
-  if (monitoredTargets.length === 0) {
-    return DEFAULT_HEALTH_SUMMARY;
-  }
-
-  const counts = {
-    monitored: monitoredTargets.length,
-    healthy: 0,
-    degraded: 0,
-    down: 0,
-  };
-
-  const latencyValues = [];
-  monitoredTargets.forEach((target) => {
-    const severity = getSeverityLevel(target?.status, target?.connectionStatus);
-    if (severity === 0) counts.healthy += 1;
-    else if (severity === 1) counts.degraded += 1;
-    else counts.down += 1;
-
-    if (typeof target?.responseTimeMs === 'number') {
-      latencyValues.push(Math.max(0, Number(target.responseTimeMs) || 0));
-    }
-  });
-
-  const avgLatency =
-    latencyValues.length > 0
-      ? Math.round(latencyValues.reduce((sum, value) => sum + value, 0) / latencyValues.length)
-      : null;
-
-  return {
-    ...counts,
-    avgLatency,
-  };
-};
 
 const ServiceConnectionsDashboard = () => {
   const [loading, setLoading] = useState(false);

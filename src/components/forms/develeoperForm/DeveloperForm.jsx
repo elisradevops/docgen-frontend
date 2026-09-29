@@ -27,10 +27,12 @@ import ChangeTableSelector from '../../common/table/ChangeTableSelector';
 import fileDownload from 'js-file-download';
 import STRTableSelector from '../../common/table/STRTableSelector';
 import ServiceConnectionsDashboard from './ServiceConnectionsDashboard';
+import MonitoringDashboard from './MonitoringDashboard';
 
 const DeveloperForm = observer(({ store }) => {
   const SUBTAB_CONNECTIONS = 'connections';
   const SUBTAB_BUILDER = 'builder';
+  const SUBTAB_MONITORING = 'monitoring';
 
   const [contentControlTitle, setContentControlTitle] = useState(null);
   const [contentControlType, setContentControlType] = useState('');
@@ -61,10 +63,15 @@ const DeveloperForm = observer(({ store }) => {
         >
           <Tab label='Builder' value={SUBTAB_BUILDER} />
           <Tab label='Connections' value={SUBTAB_CONNECTIONS} />
+          <Tab label='Monitoring' value={SUBTAB_MONITORING} />
         </Tabs>
       </Paper>
 
       {selectedSubTab === SUBTAB_CONNECTIONS ? <ServiceConnectionsDashboard /> : null}
+
+      {selectedSubTab === SUBTAB_MONITORING ? (
+        <MonitoringDashboard onViewConnections={() => setSelectedSubTab(SUBTAB_CONNECTIONS)} />
+      ) : null}
 
       {selectedSubTab === SUBTAB_BUILDER ? (
         <>

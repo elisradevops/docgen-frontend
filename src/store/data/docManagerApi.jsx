@@ -604,3 +604,183 @@ export const deleteSharePointConfig = async (userId) => {
     throw new Error(err.response?.data?.message || err.message);
   }
 };
+
+/**
+ * Monitoring tab (Phase 7a) — reads are requireMongo-guarded only (no SharePoint session
+ * needed), matching getServiceConnectionsHealth's own unauthenticated idiom. Only the resolve
+ * mutation below needs an acting identity, hence the withSharePointSessionAuth wrapper there.
+ */
+export const getDiagnosticsOverview = async () => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/overview`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting diagnostics overview: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsIssues = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/issues`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error listing diagnostics issues: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsIssue = async (issueId) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/issues/${issueId}`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting diagnostics issue: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+// requireSession + requireCsrf on the backend (models/Issue.ts's only mutation) — this is the
+// one Monitoring call that needs a real acting user, so it goes through the same
+// withSharePointSessionAuth wrapper the SharePoint calls above use. wrapSharePointError keeps
+// err.status so the component can distinguish a 401 (not signed in — show "sign in to
+// resolve") from any other failure, per the Phase 7a plan.
+export const resolveDiagnosticsIssue = async (issueId) => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/diagnostics/issues/${issueId}/resolve`,
+      {},
+      withSharePointSessionAuth({ headers: baseHeaders, timeout: DEFAULT_TIMEOUT })
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error resolving diagnostics issue: ${err.message}`);
+    throw wrapSharePointError(err);
+  }
+};
+
+/**
+ * Logs explorer (Phase 7b) — same unauthenticated/requireMongo-only idiom as the Phase 7a
+ * diagnostics reads above. `params` is passed straight to axios's own array-serialization
+ * (repeated keys, matching what the backend's parseArrayParam expects).
+ */
+export const getDiagnosticsEvents = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/events`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error listing diagnostics events: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsEventFacets = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/events/facets`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error loading diagnostics event facets: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsEventHistogram = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/events/histogram`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error loading diagnostics event histogram: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Run detail / compare (Phase 7c) — same unauthenticated/requireMongo-only idiom as the rest
+ * of the diagnostics reads above.
+ */
+export const getDiagnosticsRun = async (runId) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/runs/${runId}`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error loading diagnostics run: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsCompare = async (a, b) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/compare`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params: { a, b },
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error comparing diagnostics runs: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+// Lists recent succeeded runs for a given project+docType — used by RunCompare's baseline
+// selector. `excludeRunId` omits the current run (Run B) from the candidate list.
+export const getDiagnosticsRuns = async ({ project, docType, status = 'succeeded', limit = 20, excludeRunId } = {}) => {
+  try {
+    const params = { project, docType, status, limit };
+    if (excludeRunId) params.runId = excludeRunId;
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/runs`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data.runs || [];
+  } catch (err) {
+    logger.error(`Error listing diagnostics runs: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsRunBaseline = async (runId) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/runs/${runId}/baseline`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error finding baseline run: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+// The report endpoints stream the DOCX directly with Content-Disposition: attachment — a plain
+// URL navigated to (or an <a href>) triggers a native browser download with no fetch/blob
+// handling needed, no MinIO involvement, and nothing added to the Documents tab.
+export const getDiagnosticsRunReportUrl = (runId) => `${C.jsonDocument_url}/diagnostics/runs/${runId}/report`;
+export const getDiagnosticsCompareReportUrl = (a, b) =>
+  `${C.jsonDocument_url}/diagnostics/compare/report?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`;
