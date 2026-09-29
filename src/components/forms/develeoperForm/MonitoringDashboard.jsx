@@ -223,7 +223,7 @@ const MonitoringDashboard = ({ onViewConnections }) => {
                         <Box key={issue._id} sx={{ p: 2 }}>
                           <Typography variant='body1' sx={{ fontWeight: 600 }}>
                             {issue.regressedAt ? '⟲ ' : ''}
-                            {formatSignature(issue.signature)}
+                            {issue.message || formatSignature(issue.signature)}
                           </Typography>
                           <Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
                             {metaTokens.join(' · ')} · Last seen {formatRelativeTime(issue.lastSeenAt)}
@@ -275,7 +275,7 @@ const MonitoringDashboard = ({ onViewConnections }) => {
                 <Stack spacing={0.5} divider={<Divider />} sx={{ mt: 1 }}>
                   {resolvedIssues.map((issue) => (
                     <Box key={issue._id} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75 }}>
-                      <Typography variant='body2'>{formatSignature(issue.signature)}</Typography>
+                      <Typography variant='body2'>{issue.message || formatSignature(issue.signature)}</Typography>
                       <Typography variant='body2' color='text.secondary'>
                         {formatRelativeTime(issue.resolvedAt)}
                       </Typography>

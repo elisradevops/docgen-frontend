@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, Tooltip, Typography } from '@mui/material';
-import { Table, Select as AntSelect, Input, Checkbox, Space } from 'antd';
+import { Table, Button as AntButton, Select as AntSelect, Input, Checkbox, Space } from 'antd';
 import LoadingState from '../../common/LoadingState';
 import {
   getDiagnosticsEvents,
@@ -213,13 +213,13 @@ const LogsExplorer = ({ onOpenRun }) => {
       render: (id) =>
         id ? (
           <span>
-            <Button type='link' size='small' style={{ padding: 0 }} onClick={() => setRunId(id)} title='Filter this table to this run'>
+            <AntButton type='link' size='small' style={{ padding: 0 }} onClick={() => setRunId(id)} title='Filter this table to this run'>
               {String(id).slice(0, 8)}
-            </Button>
+            </AntButton>
             {typeof onOpenRun === 'function' ? (
-              <Button type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail'>
+              <AntButton type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail'>
                 ↗
-              </Button>
+              </AntButton>
             ) : null}
           </span>
         ) : null,
@@ -238,26 +238,26 @@ const LogsExplorer = ({ onOpenRun }) => {
             <div style={{ whiteSpace: isExpanded ? 'normal' : 'nowrap', overflow: isExpanded ? 'visible' : 'hidden', textOverflow: 'ellipsis' }}>
               {isExpanded || !isLong ? message : `${message.slice(0, MESSAGE_TRUNCATE_LENGTH)}…`}
               {isLong ? (
-                <Button
+                <AntButton
                   type='link'
                   size='small'
                   style={{ padding: '0 0 0 8px' }}
                   onClick={() => setExpandedRowId(isExpanded ? null : record._id)}
                 >
                   {isExpanded ? 'Collapse' : 'Expand'}
-                </Button>
+                </AntButton>
               ) : null}
             </div>
             {hasStack ? (
               <div>
-                <Button
+                <AntButton
                   type='link'
                   size='small'
                   style={{ padding: 0, fontSize: 11 }}
                   onClick={() => setExpandedStackId(isStackExpanded ? null : record._id)}
                 >
                   {isStackExpanded ? 'Stack ▴' : 'Stack ▾'}
-                </Button>
+                </AntButton>
                 {isStackExpanded ? (
                   <pre
                     style={{
@@ -344,9 +344,9 @@ const LogsExplorer = ({ onOpenRun }) => {
           onChange={setWindowHours}
           options={WINDOW_OPTIONS}
         />
-        <Button type={live ? 'primary' : 'default'} danger={live} onClick={() => setLive((v) => !v)}>
+        <AntButton type={live ? 'primary' : 'default'} danger={live} onClick={() => setLive((v) => !v)}>
           {live ? '● Live' : 'Live'}
-        </Button>
+        </AntButton>
       </Stack>
 
       {error ? <Alert severity='error'>{error}</Alert> : null}
@@ -373,7 +373,7 @@ const LogsExplorer = ({ onOpenRun }) => {
           </Typography>
         ) : (
           <>
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: 88, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', alignItems: 'stretch', gap: '2px', height: 88, borderBottom: '1px solid', borderColor: 'divider' }}>
               {histogramBars.map((bar) => (
                 <Tooltip
                   key={bar.bucketStart}
@@ -389,7 +389,7 @@ const LogsExplorer = ({ onOpenRun }) => {
                   }
                 >
                   <Box
-                    sx={{ flex: 1, minWidth: 2, display: 'flex', flexDirection: 'column-reverse', cursor: 'pointer' }}
+                    sx={{ flex: 1, minWidth: 2, height: '100%', display: 'flex', flexDirection: 'column-reverse', cursor: 'pointer' }}
                     onClick={() => {
                       const start = new Date(bar.bucketStart);
                       setWindowHours(Math.max(1, Math.ceil((Date.now() - start.getTime()) / (60 * 60 * 1000))));
@@ -447,9 +447,9 @@ const LogsExplorer = ({ onOpenRun }) => {
           />
           {nextCursor ? (
             <Box sx={{ textAlign: 'center', p: 1.5 }}>
-              <Button onClick={loadOlder} loading={loadingMore}>
+              <AntButton onClick={loadOlder} loading={loadingMore}>
                 Load older events
-              </Button>
+              </AntButton>
             </Box>
           ) : null}
         </Paper>
