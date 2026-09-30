@@ -38,6 +38,16 @@ export const mergeLiveRows = (existingEvents, polledEvents, { capPerPoll = 200, 
   return [...capped, ...existingEvents].slice(0, maxTotal);
 };
 
+/**
+ * Live-tail burst signal: how many more events matched the poll's (incremental, since-last-poll)
+ * window than the page actually returned. 0 means nothing was dropped — either matchedCount
+ * wasn't requested/returned, or the page held everything that matched.
+ */
+export const computeLiveOverflow = (matchedCount, receivedCount) => {
+  if (typeof matchedCount !== 'number') return 0;
+  return Math.max(0, matchedCount - receivedCount);
+};
+
 /** "Load older" pagination: appends at the end, deduped, never reordering existing rows. */
 export const appendOlderEvents = (existingEvents, olderEvents) => {
   const existingIds = new Set(existingEvents.map(rowId));

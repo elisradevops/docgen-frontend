@@ -1143,9 +1143,17 @@ class DocGenDataStore {
           folderName = formNameSections[0];
           fileName = formNameSections[1];
         }
-        // Fetch the content for each form and add it to the documentTemplates
-        let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
-        this.documentTemplates.push(jsonFormTemplate);
+        // Fetch the content for each form and add it to the documentTemplates. One form's
+        // content fetch failing (now that getJSONContentFromFile rethrows instead of silently
+        // resolving undefined) must not abort every other form in this batch — caught locally,
+        // matching the same-file precedent above (fetchAllDocuments's resolveMeta).
+        try {
+          let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
+          this.documentTemplates.push(jsonFormTemplate);
+          // eslint-disable-next-line no-unused-vars
+        } catch (e) {
+          /* empty */
+        }
       };
 
       // Process each form in the fetched data

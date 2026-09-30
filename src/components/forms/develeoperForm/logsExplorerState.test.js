@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildEventQueryParams,
   mergeLiveRows,
+  computeLiveOverflow,
   appendOlderEvents,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -57,6 +58,24 @@ describe('mergeLiveRows', () => {
     const result = mergeLiveRows(existing, polled, { capPerPoll: 200, maxTotal: 1000 });
     expect(result).toHaveLength(1000);
     expect(result[0]._id).toBe('new-1'); // newest rows survive the cap, oldest fall off the end
+  });
+});
+
+describe('computeLiveOverflow', () => {
+  test('is 0 when matchedCount equals what was received (nothing dropped)', () => {
+    expect(computeLiveOverflow(12, 12)).toBe(0);
+  });
+
+  test('is the positive difference when matchedCount exceeds what was received', () => {
+    expect(computeLiveOverflow(342, 50)).toBe(292);
+  });
+
+  test('is 0 when matchedCount was not requested/returned (undefined)', () => {
+    expect(computeLiveOverflow(undefined, 50)).toBe(0);
+  });
+
+  test('clamps to 0 rather than going negative if receivedCount somehow exceeds matchedCount', () => {
+    expect(computeLiveOverflow(5, 10)).toBe(0);
   });
 });
 

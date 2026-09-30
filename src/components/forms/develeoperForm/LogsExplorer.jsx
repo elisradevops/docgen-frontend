@@ -10,6 +10,7 @@ import {
 import {
   buildEventQueryParams,
   mergeLiveRows,
+  computeLiveOverflow,
   appendOlderEvents,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -244,6 +245,11 @@ const LogsExplorer = ({ onOpenRun }) => {
   const [error, setError] = useState('');
   const [live, setLive] = useState(false);
   const liveTimerRef = useRef(null);
+  // Incremental "since" boundary for live polling — advances forward each tick so a poll only
+  // ever asks "what's new since last time", not "everything in the whole sliding window" (which
+  // would make matchedCount always huge and unrelated to any actual burst).
+  const liveBoundaryRef = useRef(null);
+  const [liveOverflow, setLiveOverflow] = useState(0);
 
   const [selectedBucketIdx, setSelectedBucketIdx] = useState(null);
   // bucketFilter drives a server-side re-fetch for the clicked bucket's exact time range.
@@ -300,22 +306,39 @@ const LogsExplorer = ({ onOpenRun }) => {
     loadFirstPage();
   }, [loadFirstPage]);
 
-  // Live tail: polls for the newest page (no cursor) and prepends genuinely-new rows, capped
-  // per poll so a synthetic burst can't flood the table in one tick — see mergeLiveRows.
+  // Live tail: each tick asks only "what's new since the last tick" (an incremental boundary,
+  // not the whole sliding window — see liveBoundaryRef's own comment), prepending genuinely-new
+  // rows, capped per poll so a synthetic burst can't flood the table in one tick — see
+  // mergeLiveRows. matchedCount (requested via includeCount) vs. how many actually came back is
+  // what drives the "+N more events, narrow your query" signal — see computeLiveOverflow.
   useEffect(() => {
     if (!live) return undefined;
+    // Seed the boundary from the newest currently-displayed row (or now, if the table is empty)
+    // — a no-op state update purely to read the latest `events` without adding it as an effect
+    // dependency, which would otherwise restart this interval on every merged-in row.
+    setEvents((prev) => {
+      liveBoundaryRef.current = prev[0]?.ts ? new Date(prev[0].ts) : new Date();
+      return prev;
+    });
     liveTimerRef.current = window.setInterval(async () => {
       try {
         const params = buildEventQueryParams(queryState);
         if (queryState.runId) params.runId = queryState.runId;
+        params.since = liveBoundaryRef.current.toISOString();
+        delete params.until; // live tail only ever looks forward, never has an upper bound
+        params.includeCount = true;
         const res = await getDiagnosticsEvents(params);
+        const newestTs = res.events?.[0]?.ts;
+        if (newestTs) liveBoundaryRef.current = new Date(newestTs);
         setEvents((prev) => mergeLiveRows(prev, res.events || []));
+        setLiveOverflow(computeLiveOverflow(res.matchedCount, res.events?.length ?? 0));
       } catch {
         // A single missed poll isn't worth surfacing as an error banner — the next tick retries.
       }
     }, LIVE_POLL_MS);
     return () => {
       if (liveTimerRef.current) window.clearInterval(liveTimerRef.current);
+      setLiveOverflow(0);
     };
   }, [live, queryState]);
 
@@ -532,6 +555,20 @@ const LogsExplorer = ({ onOpenRun }) => {
         <AntButton type={live ? 'primary' : 'default'} danger={live} onClick={() => setLive((v) => !v)}>
           {live ? '● Live' : 'Live'}
         </AntButton>
+        {live && liveOverflow > 0 ? (
+          <Box
+            component='span'
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.5,
+              px: 1, py: 0.25, borderRadius: '4px',
+              fontSize: 11, fontWeight: 500,
+              bgcolor: 'rgba(237,108,2,0.1)', color: 'warning.main',
+              border: '1px solid rgba(237,108,2,0.3)',
+            }}
+          >
+            +{liveOverflow} more events, narrow your query
+          </Box>
+        ) : null}
         <LogsFilterSettingsDialog
           availableServices={facets.service.map((f) => f.value)}
           onSave={(saved) => {

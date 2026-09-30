@@ -35,6 +35,13 @@ const DocumentsTab = observer(({ store, selectedTeamProject }) => {
       if (details) {
         setInputDetailsByDoc((prev) => ({ ...prev, [docName]: details }));
       }
+      // getJSONContentFromObject now rethrows instead of silently resolving undefined — this is
+      // a fire-and-forget call from a popover's onOpenChange, with no caller to catch a
+      // rejection, so an expired/missing input-details object must degrade to "nothing shown"
+      // here rather than surface as an unhandled promise rejection.
+      // eslint-disable-next-line no-unused-vars
+    } catch (e) {
+      /* empty */
     } finally {
       setLoadingInputDoc(null);
     }

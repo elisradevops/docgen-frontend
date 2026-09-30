@@ -83,7 +83,8 @@ export const getJSONContentFromFile = async (bucketName, folderName, fileName) =
     let res = await makeRequest(url, undefined, undefined, baseHeaders);
     return res.contentFromFile;
   } catch (e) {
-    logger.error(`Cannot get Json content for ${bucketName}/${folderName}/${fileName}: ${e.message}`);
+    logger.error(`Cannot get Json content for ${bucketName}/${folderName}/${fileName}: ${e.message}`, e);
+    throw e;
   }
 };
 
@@ -95,7 +96,8 @@ export const getJSONContentFromObject = async (bucketName, objectName) => {
     let res = await makeRequest(url, undefined, undefined, baseHeaders);
     return res.contentFromObject;
   } catch (e) {
-    logger.error(`Cannot get Json content for ${bucketName}/${objectName}: ${e.message}`);
+    logger.error(`Cannot get Json content for ${bucketName}/${objectName}: ${e.message}`, e);
+    throw e;
   }
 };
 
@@ -139,9 +141,7 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
     let result = await enqueueRequest(() => axios(url, config), { key: queueKey, priority });
     json = JSON.parse(JSON.stringify(result.data));
   } catch (e) {
-    logger.error(`API Request Error for ${url}: ${e.message}`);
-    logger.error('Error stack:');
-    logger.error(e.stack);
+    logger.error(`API Request Error for ${url}: ${e.message}`, e);
     try {
       setLastApiError({
         url,
@@ -151,6 +151,9 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
     } catch {
       /* empty */
     }
+    // Rethrow rather than returning undefined — a swallowed failure here was indistinguishable
+    // from a genuinely empty successful response to every caller.
+    throw e;
   }
   return json;
 };
@@ -175,6 +178,10 @@ export const sendDocumentToGenerator = async (docJson) => {
           // thread it through AsyncLocalStorage as the run's correlation id before the
           // handler ever parses the body — see docgen-api-gate's runContext.ts.
           headers,
+          // No timeout here previously meant a hung generation hung the UI forever. Document
+          // generation is genuinely slow, so this uses the same long-duration precedent as the
+          // sync call below, not DEFAULT_TIMEOUT (10s, meant for quick metadata calls).
+          timeout: 300000,
         }),
       { key: 'docs', priority: 'high' }
     );

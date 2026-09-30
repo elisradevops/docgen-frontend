@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { observer } from 'mobx-react';
+import { toast } from 'react-toastify';
 
 import { contentTypeOptions } from '../../../store/data/dropDownOptions';
+import logger from '../../../utils/logger';
 
 import {
   Box,
@@ -38,9 +40,23 @@ const DeveloperForm = observer(({ store }) => {
   const [contentControlType, setContentControlType] = useState('');
   const [contentControlSkin, setContentControlSkin] = useState('');
   const [selectedSubTab, setSelectedSubTab] = useState(SUBTAB_BUILDER);
+  const [sending, setSending] = useState(false);
 
   const addToDocumentRequestObject = (contentControlObject) => {
     store.addContentControlToDocument(contentControlObject);
+  };
+
+  const handleSendToDocGen = async () => {
+    setSending(true);
+    try {
+      await store.sendRequestToDocGen();
+      toast.success('The request has been generated successfully!');
+    } catch (error) {
+      logger.error(`Error occurred while sending request to document generator: ${error.message}`, error);
+      toast.error(`Failed to generate document: ${error.message}`, { autoClose: false });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -251,13 +267,8 @@ const DeveloperForm = observer(({ store }) => {
                 ) : null}
 
                 <Box>
-                  <Button
-                    variant='contained'
-                    onClick={() => {
-                      store.sendRequestToDocGen();
-                    }}
-                  >
-                    Send To Document Generator
+                  <Button variant='contained' onClick={handleSendToDocGen} disabled={sending}>
+                    {sending ? 'Sending…' : 'Send To Document Generator'}
                   </Button>
                 </Box>
               </Stack>

@@ -150,7 +150,7 @@ const BANDS = ['outcomes', 'volumes', 'environment', 'inputs'];
 // into ["contentControls", "[tests-description-content-control]", "data", "testSuiteArray"]
 function fieldSegments(field) {
   const segs = [];
-  const re = /\[([^\]]+)\]|([^.\[]+)/g;
+  const re = /\[([^\]]+)\]|([^.[]+)/g;
   let m;
   while ((m = re.exec(field)) !== null) {
     segs.push(m[1] !== undefined ? `[${m[1]}]` : m[2]);

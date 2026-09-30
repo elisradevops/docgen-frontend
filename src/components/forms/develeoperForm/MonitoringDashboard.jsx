@@ -31,6 +31,7 @@ import {
 import LogsExplorer from './LogsExplorer';
 import RunDetail from './RunDetail';
 import RunCompare from './RunCompare';
+import IssueDetail from './IssueDetail';
 
 // Reuses ServiceConnectionsDashboard's own background so Monitoring reads as a sibling card,
 // not a different application bolted onto the same shell — see that component's own constant.
@@ -42,6 +43,7 @@ const VIEW_ATTENTION = 'attention';
 const VIEW_LOGS = 'logs';
 const VIEW_RUN = 'run';
 const VIEW_COMPARE = 'compare';
+const VIEW_ISSUE = 'issue';
 
 const MonitoringDashboard = ({ onViewConnections }) => {
   const [view, setView] = useState(VIEW_ATTENTION);
@@ -56,6 +58,7 @@ const MonitoringDashboard = ({ onViewConnections }) => {
   const [resolveError, setResolveError] = useState('');
   const [openRunId, setOpenRunId] = useState(null);
   const [compareIds, setCompareIds] = useState(null);
+  const [openIssueId, setOpenIssueId] = useState(null);
   const [comparingIssueId, setComparingIssueId] = useState(null);
 
   const load = useCallback(async () => {
@@ -115,6 +118,11 @@ const MonitoringDashboard = ({ onViewConnections }) => {
     setView(VIEW_COMPARE);
   };
 
+  const openIssue = (issueId) => {
+    setOpenIssueId(issueId);
+    setView(VIEW_ISSUE);
+  };
+
   const handleCompareIssueToBaseline = async (issue) => {
     const latestRunId = issue.occurrenceRunIds?.[issue.occurrenceRunIds.length - 1];
     if (!latestRunId) return;
@@ -152,7 +160,7 @@ const MonitoringDashboard = ({ onViewConnections }) => {
               Errors and failures across every DocGen service.
             </Typography>
           </Box>
-          {view !== VIEW_RUN && view !== VIEW_COMPARE ? (
+          {view !== VIEW_RUN && view !== VIEW_COMPARE && view !== VIEW_ISSUE ? (
             <Stack direction='row' spacing={1} alignItems='center'>
               <ToggleButtonGroup
                 size='small'
@@ -173,7 +181,7 @@ const MonitoringDashboard = ({ onViewConnections }) => {
           ) : null}
         </Box>
 
-        {view !== VIEW_RUN && view !== VIEW_COMPARE ? (
+        {view !== VIEW_RUN && view !== VIEW_COMPARE && view !== VIEW_ISSUE ? (
           <Box>
             <Typography variant='subtitle1' sx={{ fontWeight: 600 }}>
               {healthSentence} {runsSentence}
@@ -193,6 +201,8 @@ const MonitoringDashboard = ({ onViewConnections }) => {
 
         {view === VIEW_RUN ? (
           <RunDetail runId={openRunId} onBack={backToMonitoring} onOpenCompare={openCompare} />
+        ) : view === VIEW_ISSUE ? (
+          <IssueDetail issueId={openIssueId} onBack={backToMonitoring} onOpenRun={openRun} />
         ) : view === VIEW_COMPARE ? (
           <RunCompare a={compareIds?.a} b={compareIds?.b} onBack={backToMonitoring} />
         ) : view === VIEW_LOGS ? (
@@ -221,10 +231,16 @@ const MonitoringDashboard = ({ onViewConnections }) => {
                       const canCompare = issueHasBaselineContext(issue);
                       return (
                         <Box key={issue._id} sx={{ p: 2 }}>
-                          <Typography variant='body1' sx={{ fontWeight: 600 }}>
+                          <Link
+                            component='button'
+                            variant='body1'
+                            underline='hover'
+                            onClick={() => openIssue(issue._id)}
+                            sx={{ fontWeight: 600, textAlign: 'left', color: 'text.primary' }}
+                          >
                             {issue.regressedAt ? '⟲ ' : ''}
                             {issue.message || formatSignature(issue.signature)}
-                          </Typography>
+                          </Link>
                           <Typography variant='body2' color='text.secondary' sx={{ mt: 0.5 }}>
                             {metaTokens.join(' · ')} · Last seen {formatRelativeTime(issue.lastSeenAt)}
                           </Typography>
