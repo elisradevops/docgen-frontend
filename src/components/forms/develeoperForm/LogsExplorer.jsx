@@ -15,6 +15,11 @@ import {
   formatBucketRangeLabel,
   filterFacetValues,
 } from './logsExplorerState';
+import {
+  loadLogsFilterSettings,
+  isEventExcluded,
+} from './logsFilterSettings';
+import LogsFilterSettingsDialog from './LogsFilterSettingsDialog';
 
 // Real semantic colors, not invented — same tokens the rest of the app already renders for
 // Chip color='error'/'warning' (error.main / MUI's uncustomized warning.main default).
@@ -71,8 +76,12 @@ function FacetFilterDropdown({ dimension, facetValues, selected, onChange, onCle
 }
 
 const LogsExplorer = ({ onOpenRun }) => {
-  const [windowHours, setWindowHours] = useState(24);
-  const [filters, setFilters] = useState({ level: [], service: [], project: [], docType: [] });
+  const [filterSettings, setFilterSettings] = useState(loadLogsFilterSettings);
+  const [windowHours, setWindowHours] = useState(() => loadLogsFilterSettings().defaultWindowHours);
+  const [filters, setFilters] = useState(() => {
+    const s = loadLogsFilterSettings();
+    return { level: s.defaultLevels ?? [], service: s.defaultServices ?? [], project: [], docType: [] };
+  });
   const [q, setQ] = useState('');
   const [runId, setRunId] = useState('');
   const [sortBy, setSortBy] = useState('ts');
@@ -157,6 +166,12 @@ const LogsExplorer = ({ onOpenRun }) => {
       setLoadingMore(false);
     }
   };
+
+  // Client-side exclude: hide rows matching any saved exclude phrase.
+  const filteredEvents = useMemo(
+    () => events.filter((e) => !isEventExcluded(e, filterSettings.excludePhrases)),
+    [events, filterSettings.excludePhrases]
+  );
 
   const facetColumn = (dimension, title, width) => ({
     title,
@@ -347,6 +362,18 @@ const LogsExplorer = ({ onOpenRun }) => {
         <AntButton type={live ? 'primary' : 'default'} danger={live} onClick={() => setLive((v) => !v)}>
           {live ? '● Live' : 'Live'}
         </AntButton>
+        <LogsFilterSettingsDialog
+          availableServices={facets.service.map((f) => f.value)}
+          onSave={(saved) => {
+            setFilterSettings(saved);
+            setWindowHours(saved.defaultWindowHours);
+            setFilters((prev) => ({
+              ...prev,
+              level: saved.defaultLevels ?? [],
+              service: saved.defaultServices ?? [],
+            }));
+          }}
+        />
       </Stack>
 
       {error ? <Alert severity='error'>{error}</Alert> : null}
@@ -429,16 +456,17 @@ const LogsExplorer = ({ onOpenRun }) => {
         >
           <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ px: 1, pt: 1 }}>
             <Typography variant='caption' color='text.secondary'>
-              {events.length} event{events.length === 1 ? '' : 's'} loaded
+              {filteredEvents.length} event{filteredEvents.length === 1 ? '' : 's'} loaded
+              {filteredEvents.length !== events.length ? ` (${events.length - filteredEvents.length} hidden by filter)` : ''}
             </Typography>
-            {events.length > 0 ? (
+            {filteredEvents.length > 0 ? (
               <Button size='small' onClick={exportCsv}>
                 Export CSV
               </Button>
             ) : null}
           </Stack>
           <Table
-            dataSource={events}
+            dataSource={filteredEvents}
             columns={columns}
             rowKey={(record) => record._id}
             pagination={false}
