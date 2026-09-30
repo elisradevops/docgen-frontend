@@ -23,7 +23,7 @@ import LogsFilterSettingsDialog from './LogsFilterSettingsDialog';
 
 // Real semantic colors, not invented — same tokens the rest of the app already renders for
 // Chip color='error'/'warning' (error.main / MUI's uncustomized warning.main default).
-const LEVEL_COLOR = { error: '#D1434B', warn: '#ED6C02', info: '#94a3b8', debug: '#64748b' };
+const LEVEL_COLOR = { error: '#D1434B', warn: '#ED6C02', info: '#2563eb', debug: '#94a3b8' };
 const WINDOW_OPTIONS = [
   { label: 'Last hour', value: 1 },
   { label: 'Last 24 hours', value: 24 },
@@ -34,6 +34,151 @@ const LIVE_POLL_MS = 5000;
 const MESSAGE_TRUNCATE_LENGTH = 140;
 
 const FACET_DIMENSIONS = ['level', 'service', 'project', 'docType'];
+
+// Histogram — light-mode precision layout.
+// Hover: dims all other bars so the active bucket reads clearly.
+// Click: selects a bucket (toggles); selected bar is highlighted, others dimmed.
+// selectedIdx is lifted to the parent so it can drive the table filter.
+function HistogramSVG({ bars, bucketMs, selectedIdx, onBarClick }) {
+  const containerRef = useRef(null);
+  const [width, setWidth] = useState(0);
+  const [hoveredBar, setHoveredBar] = useState(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setWidth(el.clientWidth);
+    const obs = new ResizeObserver((entries) => {
+      setWidth(Math.floor(entries[0].contentRect.width));
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const CHART_H = 108;
+  const BORDER_R = 6;   // app shape.borderRadiusSm token
+  const BAR_GAP = 2;
+  const BAR_TOP_R = 2;  // rounded top corners only — achieved via clipPath
+
+  const n = bars.length || 1;
+  const slotW = width / n;
+  const barW = Math.max(1, slotW - BAR_GAP);
+
+  return (
+    <Box ref={containerRef} sx={{ width: '100%', borderRadius: `${BORDER_R}px`, overflow: 'hidden', border: '1px solid rgba(27,69,143,0.12)', bgcolor: 'rgba(248,250,252,0.6)' }}>
+      <svg width={width} height={CHART_H} style={{ display: 'block' }}>
+        {width > 0 && (
+          <>
+            <defs>
+              {/* Per-bar clip paths: extends 4px below floor so only top corners are rounded. */}
+              {bars.map((_, bi) => {
+                const x = bi * slotW + BAR_GAP / 2;
+                return (
+                  <clipPath key={bi} id={`histo-clip-${bi}`}>
+                    <rect x={x} y={0} width={barW} height={CHART_H + 4} rx={BAR_TOP_R} ry={BAR_TOP_R} />
+                  </clipPath>
+                );
+              })}
+            </defs>
+
+            {/* 50% midline + solid baseline only — fewer lines, cleaner read at this height */}
+            <line x1={0} y1={CHART_H * 0.5} x2={width} y2={CHART_H * 0.5} stroke='rgba(27,69,143,0.2)' strokeWidth={1} strokeDasharray='2,5' />
+            <line x1={0} y1={CHART_H}       x2={width} y2={CHART_H}       stroke='rgba(27,69,143,0.32)' strokeWidth={1} />
+
+            {bars.map((bar, bi) => {
+              const x = bi * slotW + BAR_GAP / 2;
+              const visibleSegs = bar.segments.filter((s) => s.count > 0);
+              const isEmpty = visibleSegs.length === 0;
+              let yOffset = CHART_H;
+
+              // Dim bar when another bar is selected or hovered.
+              const hasSelection = selectedIdx !== null;
+              const hasHover = hoveredBar !== null;
+              const isActive = bi === selectedIdx || bi === hoveredBar;
+              const dimOpacity = isActive || (!hasSelection && !hasHover) ? 1 : 0.3;
+
+              const barGroup = (
+                <g
+                  clipPath={`url(#histo-clip-${bi})`}
+                  style={{ cursor: isEmpty ? 'default' : 'pointer', opacity: dimOpacity, transition: 'opacity 0.12s' }}
+                  onClick={() => !isEmpty && onBarClick(bi, bar)}
+                  onMouseEnter={() => !isEmpty && setHoveredBar(bi)}
+                  onMouseLeave={() => setHoveredBar(null)}
+                >
+                  {/* Transparent hit area — full slot height for reliable hover */}
+                  <rect x={x} y={0} width={barW} height={CHART_H} fill='transparent' />
+
+                  {visibleSegs.map((seg, si) => {
+                    const h = Math.max(1, (seg.heightPct / 100) * CHART_H);
+                    yOffset -= h;
+                    const segY = yOffset;
+                    return (
+                      <g key={seg.level}>
+                        <rect x={x} y={segY} width={barW} height={h} fill={LEVEL_COLOR[seg.level]} />
+                        {/* 1px white separator between stacked segments — separates similar hues */}
+                        {si < visibleSegs.length - 1 && (
+                          <line x1={x} y1={segY} x2={x + barW} y2={segY} stroke='white' strokeWidth={1} />
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {/* Hover highlight */}
+                  {hoveredBar === bi && selectedIdx !== bi && (
+                    <rect
+                      x={x} y={0} width={barW} height={CHART_H}
+                      fill='rgba(27,69,143,0.05)'
+                      stroke='rgba(27,69,143,0.22)'
+                      strokeWidth={1}
+                      rx={2} ry={2}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+
+                  {/* Selection highlight — solid blue outline */}
+                  {selectedIdx === bi && (
+                    <rect
+                      x={x} y={0} width={barW} height={CHART_H}
+                      fill='rgba(27,69,143,0.08)'
+                      stroke='rgba(27,69,143,0.55)'
+                      strokeWidth={1.5}
+                      rx={2} ry={2}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+                </g>
+              );
+
+              if (isEmpty) return <g key={bar.bucketStart}>{barGroup}</g>;
+
+              return (
+                <Tooltip
+                  key={bar.bucketStart}
+                  title={
+                    <>
+                      <div style={{ marginBottom: 3, opacity: 0.7, fontSize: 11 }}>
+                        {formatBucketRangeLabel(bar.bucketStart, bucketMs)}
+                      </div>
+                      {visibleSegs.map((s) => (
+                        <div key={s.level} style={{ fontSize: 12 }}>
+                          <span style={{ color: LEVEL_COLOR[s.level], fontWeight: 600 }}>{s.count}</span>
+                          {' '}{s.level}
+                        </div>
+                      ))}
+                    </>
+                  }
+                  placement='top'
+                >
+                  {barGroup}
+                </Tooltip>
+              );
+            })}
+          </>
+        )}
+      </svg>
+    </Box>
+  );
+}
 
 function FacetFilterDropdown({ dimension, facetValues, selected, onChange, onClear }) {
   const [search, setSearch] = useState('');
@@ -100,6 +245,11 @@ const LogsExplorer = ({ onOpenRun }) => {
   const [live, setLive] = useState(false);
   const liveTimerRef = useRef(null);
 
+  const [selectedBucketIdx, setSelectedBucketIdx] = useState(null);
+  // bucketFilter drives a server-side re-fetch for the clicked bucket's exact time range.
+  // Kept separate from queryState so the histogram (full window) is never affected.
+  const [bucketFilter, setBucketFilter] = useState(null); // { since, until, label } | null
+
   const queryState = useMemo(
     () => ({ ...filters, q, runId: runId.trim() || undefined, windowHours, sortBy, sortDir }),
     [filters, q, runId, windowHours, sortBy, sortDir]
@@ -120,8 +270,27 @@ const LogsExplorer = ({ onOpenRun }) => {
       setNextCursor(eventsRes.nextCursor);
       setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
       setHistogram(histogramRes.buckets || []);
+      setSelectedBucketIdx(null);
+      setBucketFilter(null);
     } catch (err) {
       setError(err.message || 'Failed to load logs.');
+    } finally {
+      setLoading(false);
+    }
+  }, [queryState]);
+
+  // Fetches events for a specific bucket time range without touching the histogram.
+  const loadBucketEvents = useCallback(async (since, until) => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = buildEventQueryParams({ ...queryState, since, until });
+      if (queryState.runId) params.runId = queryState.runId;
+      const eventsRes = await getDiagnosticsEvents(params);
+      setEvents(eventsRes.events || []);
+      setNextCursor(eventsRes.nextCursor);
+    } catch (err) {
+      setError(err.message || 'Failed to load bucket events.');
     } finally {
       setLoading(false);
     }
@@ -167,7 +336,10 @@ const LogsExplorer = ({ onOpenRun }) => {
     }
   };
 
-  // Client-side exclude: hide rows matching any saved exclude phrase.
+  const histogramBars = useMemo(() => buildHistogramBars(histogram), [histogram]);
+  const bucketMs = histogram.length >= 2 ? new Date(histogram[1].bucketStart) - new Date(histogram[0].bucketStart) : 0;
+
+  // Client-side exclude only — bucket time filtering is now server-side (loadBucketEvents).
   const filteredEvents = useMemo(
     () => events.filter((e) => !isEventExcluded(e, filterSettings.excludePhrases)),
     [events, filterSettings.excludePhrases]
@@ -309,8 +481,6 @@ const LogsExplorer = ({ onOpenRun }) => {
     }
   };
 
-  const histogramBars = useMemo(() => buildHistogramBars(histogram), [histogram]);
-  const bucketMs = histogram.length >= 2 ? new Date(histogram[1].bucketStart) - new Date(histogram[0].bucketStart) : 0;
   const grandTotal = histogramBars.reduce((sum, b) => sum + b.total, 0);
 
   const exportCsv = () => {
@@ -385,9 +555,9 @@ const LogsExplorer = ({ onOpenRun }) => {
           </Typography>
           <Stack direction='row' spacing={1.5}>
             {Object.entries(LEVEL_COLOR).map(([level, color]) => (
-              <Stack key={level} direction='row' spacing={0.5} alignItems='center'>
-                <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: color }} />
-                <Typography variant='caption' color='text.secondary'>
+              <Stack key={level} direction='row' spacing={0.75} alignItems='center'>
+                <Box sx={{ width: 14, height: 4, borderRadius: '2px', bgcolor: color, flexShrink: 0 }} />
+                <Typography variant='caption' color='text.primary'>
                   {level}
                 </Typography>
               </Stack>
@@ -400,35 +570,25 @@ const LogsExplorer = ({ onOpenRun }) => {
           </Typography>
         ) : (
           <>
-            <Box sx={{ display: 'flex', alignItems: 'stretch', gap: '2px', height: 88, borderBottom: '1px solid', borderColor: 'divider' }}>
-              {histogramBars.map((bar) => (
-                <Tooltip
-                  key={bar.bucketStart}
-                  title={
-                    <>
-                      <div>{formatBucketRangeLabel(bar.bucketStart, bucketMs)}</div>
-                      {bar.segments.filter((s) => s.count > 0).map((s) => (
-                        <div key={s.level}>
-                          {s.count} {s.level}
-                        </div>
-                      ))}
-                    </>
-                  }
-                >
-                  <Box
-                    sx={{ flex: 1, minWidth: 2, height: '100%', display: 'flex', flexDirection: 'column-reverse', cursor: 'pointer' }}
-                    onClick={() => {
-                      const start = new Date(bar.bucketStart);
-                      setWindowHours(Math.max(1, Math.ceil((Date.now() - start.getTime()) / (60 * 60 * 1000))));
-                    }}
-                  >
-                    {bar.segments.map((s) => (
-                      <Box key={s.level} sx={{ height: `${s.heightPct}%`, bgcolor: LEVEL_COLOR[s.level] }} />
-                    ))}
-                  </Box>
-                </Tooltip>
-              ))}
-            </Box>
+            <HistogramSVG
+              bars={histogramBars}
+              bucketMs={bucketMs}
+              selectedIdx={selectedBucketIdx}
+              onBarClick={(bi, bar) => {
+                if (selectedBucketIdx === bi) {
+                  // Toggle off — restore full-window events.
+                  setSelectedBucketIdx(null);
+                  setBucketFilter(null);
+                  loadFirstPage();
+                } else {
+                  const since = bar.bucketStart;
+                  const until = new Date(new Date(since).getTime() + bucketMs).toISOString();
+                  setSelectedBucketIdx(bi);
+                  setBucketFilter({ since, until, label: formatBucketRangeLabel(since, bucketMs) });
+                  loadBucketEvents(since, until);
+                }
+              }}
+            />
             <Stack direction='row' justifyContent='space-between' sx={{ mt: 0.5 }}>
               <Typography variant='caption' color='text.secondary'>
                 {histogramBars[0] ? new Date(histogramBars[0].bucketStart).toLocaleString() : ''}
@@ -454,11 +614,29 @@ const LogsExplorer = ({ onOpenRun }) => {
             '& .ant-table-content': { borderRadius: 0 },
           }}
         >
-          <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ px: 1, pt: 1 }}>
-            <Typography variant='caption' color='text.secondary'>
-              {filteredEvents.length} event{filteredEvents.length === 1 ? '' : 's'} loaded
-              {filteredEvents.length !== events.length ? ` (${events.length - filteredEvents.length} hidden by filter)` : ''}
-            </Typography>
+          <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ p: 2 }}>
+            <Stack direction='row' spacing={1} alignItems='center'>
+              <Typography variant='caption' color='text.secondary'>
+                {filteredEvents.length} event{filteredEvents.length === 1 ? '' : 's'} loaded
+                {filteredEvents.length !== events.length ? ` (${events.length - filteredEvents.length} hidden by filter)` : ''}
+              </Typography>
+              {bucketFilter && (
+                <Box
+                  component='span'
+                  onClick={() => { setSelectedBucketIdx(null); setBucketFilter(null); loadFirstPage(); }}
+                  sx={{
+                    display: 'inline-flex', alignItems: 'center', gap: 0.5,
+                    px: 1, py: 0.25, borderRadius: '4px', cursor: 'pointer',
+                    fontSize: 11, fontWeight: 500,
+                    bgcolor: 'rgba(27,69,143,0.08)', color: 'primary.main',
+                    border: '1px solid rgba(27,69,143,0.2)',
+                    '&:hover': { bgcolor: 'rgba(27,69,143,0.14)' },
+                  }}
+                >
+                  {bucketFilter.label}&nbsp;×
+                </Box>
+              )}
+            </Stack>
             {filteredEvents.length > 0 ? (
               <Button size='small' onClick={exportCsv}>
                 Export CSV

@@ -12,7 +12,12 @@ export const buildEventQueryParams = (state) => {
   if (state.project?.length) params.project = state.project;
   if (state.docType?.length) params.docType = state.docType;
   if (state.q?.trim()) params.q = state.q.trim();
-  if (state.windowHours) params.since = new Date(Date.now() - state.windowHours * 60 * 60 * 1000).toISOString();
+  if (state.since) {
+    params.since = state.since;
+  } else if (state.windowHours) {
+    params.since = new Date(Date.now() - state.windowHours * 60 * 60 * 1000).toISOString();
+  }
+  if (state.until) params.until = state.until;
   if (state.sortBy) params.sortBy = state.sortBy;
   if (state.sortDir) params.sortDir = state.sortDir;
   return params;

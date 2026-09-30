@@ -503,10 +503,10 @@ const ServiceConnectionsDashboard = () => {
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(6, minmax(0, 1fr))' },
-            gap: 1.2,
+            gap: 1,
           }}
         >
-          <Paper variant='outlined' sx={{ p: 1.2 }}>
+          <Paper variant='outlined' sx={{ p: 1 }}>
             <Typography variant='caption' color='text.secondary'>
               Monitored
             </Typography>
@@ -514,7 +514,7 @@ const ServiceConnectionsDashboard = () => {
               {summary.monitored}
             </Typography>
           </Paper>
-          <Paper variant='outlined' sx={{ p: 1.2 }}>
+          <Paper variant='outlined' sx={{ p: 1 }}>
             <Typography variant='caption' color='text.secondary'>
               Healthy
             </Typography>
@@ -522,7 +522,7 @@ const ServiceConnectionsDashboard = () => {
               {summary.healthy}
             </Typography>
           </Paper>
-          <Paper variant='outlined' sx={{ p: 1.2 }}>
+          <Paper variant='outlined' sx={{ p: 1 }}>
             <Typography variant='caption' color='text.secondary'>
               Degraded
             </Typography>
@@ -530,7 +530,7 @@ const ServiceConnectionsDashboard = () => {
               {summary.degraded}
             </Typography>
           </Paper>
-          <Paper variant='outlined' sx={{ p: 1.2 }}>
+          <Paper variant='outlined' sx={{ p: 1 }}>
             <Typography variant='caption' color='text.secondary'>
               Down
             </Typography>
@@ -538,7 +538,7 @@ const ServiceConnectionsDashboard = () => {
               {summary.down}
             </Typography>
           </Paper>
-          <Paper variant='outlined' sx={{ p: 1.2 }}>
+          <Paper variant='outlined' sx={{ p: 1 }}>
             <Typography variant='caption' color='text.secondary'>
               Avg Response
             </Typography>
@@ -546,7 +546,7 @@ const ServiceConnectionsDashboard = () => {
               {summary.avgLatency === null ? '-' : `${summary.avgLatency} ms`}
             </Typography>
           </Paper>
-          <Paper variant='outlined' sx={{ p: 1.2 }}>
+          <Paper variant='outlined' sx={{ p: 1 }}>
             <Typography variant='caption' color='text.secondary'>
               Next Check
             </Typography>
@@ -665,7 +665,7 @@ const ServiceConnectionsDashboard = () => {
                     borderRadius: 2,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 1.2,
+                    gap: 1,
                     minHeight: 210,
                     gridColumn: isApiGate ? { xs: 'auto', md: '1 / -1' } : 'auto',
                     background: isApiGate ? PRIMARY_SERVICE_BACKGROUND : undefined,
@@ -735,7 +735,7 @@ const ServiceConnectionsDashboard = () => {
                     <Box
                       sx={{
                         mt: 0.5,
-                        p: 1.1,
+                        p: 1,
                         borderRadius: 1.5,
                         backgroundColor: 'rgba(15, 23, 42, 0.03)',
                         border: '1px solid rgba(15, 23, 42, 0.06)',
@@ -871,7 +871,7 @@ const ServiceConnectionsDashboard = () => {
                     <Box
                       sx={{
                         mt: 0.5,
-                        p: 1.2,
+                        p: 1,
                         borderRadius: 1.5,
                         backgroundColor: 'rgba(15, 23, 42, 0.03)',
                       }}

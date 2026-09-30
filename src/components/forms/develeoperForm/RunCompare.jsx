@@ -487,7 +487,7 @@ const RunCompare = ({ a: initialA, b: initialB, onBack }) => {
                         const needsDiff = isPlainObj(row.a) || isPlainObj(row.b);
                         if (needsDiff) {
                           return (
-                            <Box key={i} sx={{ borderBottom: i < rows.length - 1 ? '1px solid' : 'none', borderColor: 'divider', px: 1.5, py: 1.25 }}>
+                            <Box key={i} sx={{ borderBottom: i < rows.length - 1 ? '1px solid' : 'none', borderColor: 'divider', px: 1.5, py: 1 }}>
                               <FieldPath field={row.field} />
                               <Box sx={{ mt: 0.75 }}><DiffCell a={row.a} b={row.b} /></Box>
                             </Box>
@@ -495,13 +495,13 @@ const RunCompare = ({ a: initialA, b: initialB, onBack }) => {
                         }
                         return (
                           <Box key={i} sx={{ display: 'grid', gridTemplateColumns: '45% 1fr 1fr', borderBottom: i < rows.length - 1 ? '1px solid' : 'none', borderColor: 'divider', '&:hover': { background: 'rgba(0,0,0,0.012)' } }}>
-                            <Box sx={{ px: 1.5, py: 1.25, display: 'flex', alignItems: 'flex-start' }}>
+                            <Box sx={{ px: 1.5, py: 1, display: 'flex', alignItems: 'flex-start' }}>
                               <FieldPath field={row.field} />
                             </Box>
-                            <Box sx={{ px: 1.5, py: 1.25, borderLeft: '1px solid', borderColor: 'divider', background: 'rgba(209,67,75,0.04)', display: 'flex', alignItems: 'flex-start' }}>
+                            <Box sx={{ px: 1.5, py: 1, borderLeft: '1px solid', borderColor: 'divider', background: 'rgba(209,67,75,0.04)', display: 'flex', alignItems: 'flex-start' }}>
                               <ValueDisplay value={row.a} removed={true} />
                             </Box>
-                            <Box sx={{ px: 1.5, py: 1.25, borderLeft: '1px solid', borderColor: 'divider', background: 'rgba(34,134,58,0.04)', display: 'flex', alignItems: 'flex-start' }}>
+                            <Box sx={{ px: 1.5, py: 1, borderLeft: '1px solid', borderColor: 'divider', background: 'rgba(34,134,58,0.04)', display: 'flex', alignItems: 'flex-start' }}>
                               <ValueDisplay value={row.b} removed={false} />
                             </Box>
                           </Box>
@@ -522,7 +522,7 @@ const RunCompare = ({ a: initialA, b: initialB, onBack }) => {
               <Paper variant='outlined' sx={{ mt: 1 }}>
                 <Stack divider={<Divider />}>
                   {unchangedRows.map((row, i) => (
-                    <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', p: 1, fontSize: '0.82rem' }}>
+                    <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', px: 1.5, py: 1, fontSize: '0.82rem' }}>
                       <span>{row.field}</span>
                       <span style={{ fontFamily: 'monospace' }}>{formatDiffValue(row.a)}</span>
                     </Box>
