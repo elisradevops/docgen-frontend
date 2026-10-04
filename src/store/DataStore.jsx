@@ -1015,6 +1015,9 @@ class DocGenDataStore {
   // Toggle visibility of debug document types and recompute the visible list
   setShowDebugDocs(value) {
     this.showDebugDocs = !!value;
+    // The diagnostics-capture button only exists while debug mode is on; turning debug off must
+    // not leave capture armed with no visible control to undo it.
+    if (!this.showDebugDocs) this.setCaptureDiagnostics(false);
     try {
       trySessionStorageSet(makeKey('ui', 'prefs', 'showDebugDocs'), JSON.stringify(this.showDebugDocs));
     } catch {
