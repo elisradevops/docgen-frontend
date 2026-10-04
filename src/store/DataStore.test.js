@@ -131,6 +131,59 @@ describe('DataStore ensureFreshAdoAccessToken', () => {
   });
 });
 
+describe('DataStore sendRequestToDocGen (Phase 6b captureDiagnostics)', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.stubGlobal('window', {
+      APP_CONFIG: { JSON_DOCUMENT_URL: 'http://api-gate' },
+      location: { search: '' },
+      dispatchEvent: vi.fn(),
+      sessionStorage: { length: 0, key: vi.fn(), removeItem: vi.fn() },
+    });
+  });
+
+  test('includes captureDiagnostics in the request and resets it to false after sending', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    sendDocumentToGenerator.mockResolvedValue({ ok: true });
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    const store = (await import('./DataStore')).default;
+    store.ensureFreshAdoAccessToken = vi.fn().mockResolvedValue(undefined);
+    store.setCaptureDiagnostics(true);
+
+    await store.sendRequestToDocGen();
+
+    expect(sendDocumentToGenerator).toHaveBeenCalledTimes(1);
+    expect(sendDocumentToGenerator.mock.calls[0][0]).toMatchObject({ captureDiagnostics: true });
+    expect(store.captureDiagnostics).toBe(false);
+  });
+
+  test('resets captureDiagnostics to false even when the request fails', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    sendDocumentToGenerator.mockRejectedValue(new Error('server down'));
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    const store = (await import('./DataStore')).default;
+    store.ensureFreshAdoAccessToken = vi.fn().mockResolvedValue(undefined);
+    store.setCaptureDiagnostics(true);
+
+    await expect(store.sendRequestToDocGen()).rejects.toThrow('server down');
+
+    expect(store.captureDiagnostics).toBe(false);
+  });
+
+  test('defaults captureDiagnostics to false when never toggled on', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    sendDocumentToGenerator.mockResolvedValue({ ok: true });
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    const store = (await import('./DataStore')).default;
+    store.ensureFreshAdoAccessToken = vi.fn().mockResolvedValue(undefined);
+
+    await store.sendRequestToDocGen();
+
+    expect(sendDocumentToGenerator.mock.calls[0][0]).toMatchObject({ captureDiagnostics: false });
+  });
+});
+
 describe('DataStore generateHistoricalCompareReport', () => {
   beforeEach(() => {
     vi.resetModules();

@@ -58,7 +58,7 @@ export const getBucketFileList = async (
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      logger.error(`Error Response ${JSON.stringify(err.response.data)}`);
+      logger.error('Error Response', err.response.data);
       throw new Error(err.response.data.message);
     } else if (err.code === 'ECONNABORTED') {
       logger.error(`Request timeout while getting bucket file list`);
@@ -83,7 +83,8 @@ export const getJSONContentFromFile = async (bucketName, folderName, fileName) =
     let res = await makeRequest(url, undefined, undefined, baseHeaders);
     return res.contentFromFile;
   } catch (e) {
-    logger.error(`Cannot get Json content for ${bucketName}/${folderName}/${fileName}: ${e.message}`);
+    logger.error(`Cannot get Json content for ${bucketName}/${folderName}/${fileName}: ${e.message}`, e);
+    throw e;
   }
 };
 
@@ -95,7 +96,8 @@ export const getJSONContentFromObject = async (bucketName, objectName) => {
     let res = await makeRequest(url, undefined, undefined, baseHeaders);
     return res.contentFromObject;
   } catch (e) {
-    logger.error(`Cannot get Json content for ${bucketName}/${objectName}: ${e.message}`);
+    logger.error(`Cannot get Json content for ${bucketName}/${objectName}: ${e.message}`, e);
+    throw e;
   }
 };
 
@@ -139,9 +141,7 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
     let result = await enqueueRequest(() => axios(url, config), { key: queueKey, priority });
     json = JSON.parse(JSON.stringify(result.data));
   } catch (e) {
-    logger.error(`API Request Error for ${url}: ${e.message}`);
-    logger.error('Error stack:');
-    logger.error(e.stack);
+    logger.error(`API Request Error for ${url}: ${e.message}`, e);
     try {
       setLastApiError({
         url,
@@ -151,6 +151,9 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
     } catch {
       /* empty */
     }
+    // Rethrow rather than returning undefined — a swallowed failure here was indistinguishable
+    // from a genuinely empty successful response to every caller.
+    throw e;
   }
   return json;
 };
@@ -158,10 +161,27 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
 export const sendDocumentToGenerator = async (docJson) => {
   try {
     docJson.documentId = uuidV4();
+    // Phase 6b — captureDiagnostics never belongs in DocumentRequest's body shape: like
+    // documentId/x-docgen-run-id, it only matters as a header, read by api-gate's
+    // attachRunContext before the body is even parsed. Extracted and deleted here rather than
+    // left on docJson, so the body posted below stays exactly DocumentRequest-shaped.
+    const captureDiagnostics = docJson.captureDiagnostics;
+    delete docJson.captureDiagnostics;
+    const headers = { ...baseHeaders, 'x-docgen-run-id': docJson.documentId };
+    if (captureDiagnostics) {
+      headers['x-docgen-capture-mode'] = 'verbose';
+    }
     let res = await enqueueRequest(
       () =>
         axios.post(`${C.jsonDocument_url}/jsonDocument/create`, docJson, {
-          headers: baseHeaders,
+          // Sent as a header (not just in the body) so api-gate's request middleware can
+          // thread it through AsyncLocalStorage as the run's correlation id before the
+          // handler ever parses the body — see docgen-api-gate's runContext.ts.
+          headers,
+          // No timeout here previously meant a hung generation hung the UI forever. Document
+          // generation is genuinely slow, so this uses the same long-duration precedent as the
+          // sync call below, not DEFAULT_TIMEOUT (10s, meant for quick metadata calls).
+          timeout: 300000,
         }),
       { key: 'docs', priority: 'high' }
     );
@@ -182,7 +202,7 @@ export const sendDocumentToGenerator = async (docJson) => {
       );
     } else {
       // Something else happened during the request setup
-      logger.error(`Error while sending document to generator: ${JSON.stringify(err.message)}`);
+      logger.error(`Error while sending document to generator: ${err.message}`);
       throw new Error(err.message);
     }
   }
@@ -205,7 +225,7 @@ export const getFavoriteList = async (userId, docType, teamProjectId) => {
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      logger.error(`Error response while getting favorite list: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while getting favorite list', err.response.data);
       throw new Error(err.response.data.error);
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while getting favorite list');
@@ -244,7 +264,7 @@ export const createFavorite = async (userId, name, docType, dataToSave, teamProj
     return res.data;
   } catch (err) {
     if (err.response) {
-      logger.error(`Error response while creating favorite: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while creating favorite', err.response.data);
       throw new Error(err.response.data.error || err.response.data.message);
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while creating favorite');
@@ -276,7 +296,7 @@ export const deleteFavoriteFromDb = async (id) => {
     return res.data;
   } catch (err) {
     if (err.response) {
-      logger.error(`Error response while deleting favorite: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while deleting favorite', err.response.data);
       throw new Error(err.response.data.error);
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while deleting favorite');
@@ -330,7 +350,7 @@ export const deleteFile = async (file, projectName, bucketName) => {
   } catch (err) {
     if (err.response) {
       // If the error has a response, it comes from the server
-      logger.error(`Error response while deleting template file: ${JSON.stringify(err.response.data)}`);
+      logger.error('Error response while deleting template file', err.response.data);
       const errorMessage = err.response.data.error;
       throw new Error(errorMessage);
     } else {
@@ -591,3 +611,183 @@ export const deleteSharePointConfig = async (userId) => {
     throw new Error(err.response?.data?.message || err.message);
   }
 };
+
+/**
+ * Monitoring tab (Phase 7a) — reads are requireMongo-guarded only (no SharePoint session
+ * needed), matching getServiceConnectionsHealth's own unauthenticated idiom. Only the resolve
+ * mutation below needs an acting identity, hence the withSharePointSessionAuth wrapper there.
+ */
+export const getDiagnosticsOverview = async () => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/overview`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting diagnostics overview: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsIssues = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/issues`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error listing diagnostics issues: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsIssue = async (issueId) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/issues/${issueId}`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error getting diagnostics issue: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+// requireSession + requireCsrf on the backend (models/Issue.ts's only mutation) — this is the
+// one Monitoring call that needs a real acting user, so it goes through the same
+// withSharePointSessionAuth wrapper the SharePoint calls above use. wrapSharePointError keeps
+// err.status so the component can distinguish a 401 (not signed in — show "sign in to
+// resolve") from any other failure, per the Phase 7a plan.
+export const resolveDiagnosticsIssue = async (issueId) => {
+  try {
+    const res = await axios.post(
+      `${C.jsonDocument_url}/diagnostics/issues/${issueId}/resolve`,
+      {},
+      withSharePointSessionAuth({ headers: baseHeaders, timeout: DEFAULT_TIMEOUT })
+    );
+    return res.data;
+  } catch (err) {
+    logger.error(`Error resolving diagnostics issue: ${err.message}`);
+    throw wrapSharePointError(err);
+  }
+};
+
+/**
+ * Logs explorer (Phase 7b) — same unauthenticated/requireMongo-only idiom as the Phase 7a
+ * diagnostics reads above. `params` is passed straight to axios's own array-serialization
+ * (repeated keys, matching what the backend's parseArrayParam expects).
+ */
+export const getDiagnosticsEvents = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/events`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error listing diagnostics events: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsEventFacets = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/events/facets`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error loading diagnostics event facets: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsEventHistogram = async (params = {}) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/events/histogram`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error loading diagnostics event histogram: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+/**
+ * Run detail / compare (Phase 7c) — same unauthenticated/requireMongo-only idiom as the rest
+ * of the diagnostics reads above.
+ */
+export const getDiagnosticsRun = async (runId) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/runs/${runId}`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error loading diagnostics run: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsCompare = async (a, b) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/compare`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params: { a, b },
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error comparing diagnostics runs: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+// Lists recent succeeded runs for a given project+docType — used by RunCompare's baseline
+// selector. `excludeRunId` omits the current run (Run B) from the candidate list.
+export const getDiagnosticsRuns = async ({ project, docType, status = 'succeeded', limit = 20, excludeRunId } = {}) => {
+  try {
+    const params = { project, docType, status, limit };
+    if (excludeRunId) params.runId = excludeRunId;
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/runs`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+      params,
+    });
+    return res.data.runs || [];
+  } catch (err) {
+    logger.error(`Error listing diagnostics runs: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+export const getDiagnosticsRunBaseline = async (runId) => {
+  try {
+    const res = await axios.get(`${C.jsonDocument_url}/diagnostics/runs/${runId}/baseline`, {
+      headers: baseHeaders,
+      timeout: DEFAULT_TIMEOUT,
+    });
+    return res.data;
+  } catch (err) {
+    logger.error(`Error finding baseline run: ${err.message}`);
+    throw new Error(err.response?.data?.message || err.message);
+  }
+};
+
+// The report endpoints stream the DOCX directly with Content-Disposition: attachment — a plain
+// URL navigated to (or an <a href>) triggers a native browser download with no fetch/blob
+// handling needed, no MinIO involvement, and nothing added to the Documents tab.
+export const getDiagnosticsRunReportUrl = (runId) => `${C.jsonDocument_url}/diagnostics/runs/${runId}/report`;
+export const getDiagnosticsCompareReportUrl = (a, b) =>
+  `${C.jsonDocument_url}/diagnostics/compare/report?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`;

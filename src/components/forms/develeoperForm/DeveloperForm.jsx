@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { observer } from 'mobx-react';
+import { toast } from 'react-toastify';
 
 import { contentTypeOptions } from '../../../store/data/dropDownOptions';
+import logger from '../../../utils/logger';
 
 import {
   Box,
@@ -27,18 +29,34 @@ import ChangeTableSelector from '../../common/table/ChangeTableSelector';
 import fileDownload from 'js-file-download';
 import STRTableSelector from '../../common/table/STRTableSelector';
 import ServiceConnectionsDashboard from './ServiceConnectionsDashboard';
+import MonitoringDashboard from './MonitoringDashboard';
 
 const DeveloperForm = observer(({ store }) => {
   const SUBTAB_CONNECTIONS = 'connections';
   const SUBTAB_BUILDER = 'builder';
+  const SUBTAB_MONITORING = 'monitoring';
 
   const [contentControlTitle, setContentControlTitle] = useState(null);
   const [contentControlType, setContentControlType] = useState('');
   const [contentControlSkin, setContentControlSkin] = useState('');
   const [selectedSubTab, setSelectedSubTab] = useState(SUBTAB_BUILDER);
+  const [sending, setSending] = useState(false);
 
   const addToDocumentRequestObject = (contentControlObject) => {
     store.addContentControlToDocument(contentControlObject);
+  };
+
+  const handleSendToDocGen = async () => {
+    setSending(true);
+    try {
+      await store.sendRequestToDocGen();
+      toast.success('The request has been generated successfully!');
+    } catch (error) {
+      logger.error(`Error occurred while sending request to document generator: ${error.message}`, error);
+      toast.error(`Failed to generate document: ${error.message}`, { autoClose: false });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -61,10 +79,15 @@ const DeveloperForm = observer(({ store }) => {
         >
           <Tab label='Builder' value={SUBTAB_BUILDER} />
           <Tab label='Connections' value={SUBTAB_CONNECTIONS} />
+          <Tab label='Monitoring' value={SUBTAB_MONITORING} />
         </Tabs>
       </Paper>
 
       {selectedSubTab === SUBTAB_CONNECTIONS ? <ServiceConnectionsDashboard /> : null}
+
+      {selectedSubTab === SUBTAB_MONITORING ? (
+        <MonitoringDashboard onViewConnections={() => setSelectedSubTab(SUBTAB_CONNECTIONS)} />
+      ) : null}
 
       {selectedSubTab === SUBTAB_BUILDER ? (
         <>
@@ -244,13 +267,8 @@ const DeveloperForm = observer(({ store }) => {
                 ) : null}
 
                 <Box>
-                  <Button
-                    variant='contained'
-                    onClick={() => {
-                      store.sendRequestToDocGen();
-                    }}
-                  >
-                    Send To Document Generator
+                  <Button variant='contained' onClick={handleSendToDocGen} disabled={sending}>
+                    {sending ? 'Sending…' : 'Send To Document Generator'}
                   </Button>
                 </Box>
               </Stack>

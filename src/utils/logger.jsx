@@ -214,16 +214,24 @@ class Logger {
     const lvl = normalizeLevel(level);
     if (!isLevelEnabled(this.level, lvl)) return;
 
-    const { message, meta, splat } = extractMessageAndMeta(args);
-
-    const infoBase = {
-      level: lvl,
-      message,
-      meta: mergeMeta(this.defaultMeta, meta),
-      [SPLAT]: splat,
-    };
-
-    const info = this._format ? this._format(infoBase) : infoBase;
+    // A logging call must not be able to fail the operation it's describing. Message
+    // extraction and any custom format run arbitrary code (property access on caller-supplied
+    // objects, including throwing getters) outside the per-transport try/catch below — guard
+    // the whole pipeline, not just the part that happens to be wrapped already, and fall back
+    // to a degraded record rather than let the exception escape into the caller.
+    let info;
+    try {
+      const { message, meta, splat } = extractMessageAndMeta(args);
+      const infoBase = {
+        level: lvl,
+        message,
+        meta: mergeMeta(this.defaultMeta, meta),
+        [SPLAT]: splat,
+      };
+      info = this._format ? this._format(infoBase) : infoBase;
+    } catch (formatError) {
+      info = { level: lvl, message: '<log-format-failure>', formatError: String(formatError?.message || formatError) };
+    }
 
     for (const t of this.transports) {
       try {
@@ -294,10 +302,14 @@ function extractMessageAndMeta(args) {
     const e = coerceError(first);
     message = e.message;
     mergeTargets.push({ error: e });
-  } else if (typeof first === 'object') {
-    // If an object is provided as message, move it into meta and set a generic message
+  } else if (first !== null && typeof first === 'object') {
+    // If an object is provided as message, move it into meta and set a generic message.
+    // `typeof null === 'object'` — without the null check, logger.error(null) fell into this
+    // branch and evaluated first.message, throwing a TypeError from inside the logger itself.
     mergeTargets.push(first);
     message = first.message || '(object)';
+  } else if (first === null) {
+    message = '(null)';
   }
 
   // Remaining args are splat; collect them and merge any plain objects into meta

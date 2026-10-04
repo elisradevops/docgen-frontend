@@ -563,6 +563,8 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     onClick={handleSendRequest}
                     disabledTooltip={validationMessage || 'Please complete required selections'}
                     endIcon={<SendIcon />}
+                    diagnosticsEnabled={store.captureDiagnostics}
+                    onToggleDiagnostics={(next) => store.setCaptureDiagnostics(next)}
                   />
                 )}
               </Box>

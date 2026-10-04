@@ -89,7 +89,6 @@ export function createAdaptiveListboxComponent({
     const enable = bigEnough && (!!virtualize || itemCount >= threshold || enableOnTyping);
     if (debugVirtualization) {
       // Helpful trace when toggling virtualization during filtering
-      // eslint-disable-next-line no-console
       console.debug('[SmartAutocomplete] virtualization', {
         itemCount,
         bigEnough,

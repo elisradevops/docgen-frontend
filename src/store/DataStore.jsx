@@ -658,6 +658,7 @@ class DocGenDataStore {
       documentTemplates: observable,
       documentTypes: observable,
       showDebugDocs: observable,
+      captureDiagnostics: observable,
       teamProject: observable,
       selectedTemplate: observable,
       contentControls: observable,
@@ -736,6 +737,7 @@ class DocGenDataStore {
       fetchPipelineList: action,
       setPipelineList: action,
       setFormattingSettings: action,
+      setCaptureDiagnostics: action,
       fetchPipelineRunHistory: action,
       fetchReleaseDefinitionList: action,
       setReleaseDefinitionList: action,
@@ -921,6 +923,9 @@ class DocGenDataStore {
 
   // Toggle for showing debug document types (hidden by default)
   showDebugDocs = false;
+  // Phase 6b — opt-in per generation, not sticky like formattingSettings: reset to false in
+  // sendRequestToDocGen's finally so it doesn't silently stay on for the next run.
+  captureDiagnostics = false;
   // Metadata per document type (tabIndex, isDebug)
   docTypeMeta = {};
   documentsPromise = null;
@@ -936,6 +941,10 @@ class DocGenDataStore {
 
   setFormattingSettings(formattingSettings) {
     this.formattingSettings = formattingSettings;
+  }
+
+  setCaptureDiagnostics(captureDiagnostics) {
+    this.captureDiagnostics = captureDiagnostics;
   }
 
   setAdoMode(value) {
@@ -1134,9 +1143,17 @@ class DocGenDataStore {
           folderName = formNameSections[0];
           fileName = formNameSections[1];
         }
-        // Fetch the content for each form and add it to the documentTemplates
-        let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
-        this.documentTemplates.push(jsonFormTemplate);
+        // Fetch the content for each form and add it to the documentTemplates. One form's
+        // content fetch failing (now that getJSONContentFromFile rethrows instead of silently
+        // resolving undefined) must not abort every other form in this batch — caught locally,
+        // matching the same-file precedent above (fetchAllDocuments's resolveMeta).
+        try {
+          let jsonFormTemplate = await getJSONContentFromFile('document-forms', folderName, fileName);
+          this.documentTemplates.push(jsonFormTemplate);
+          // eslint-disable-next-line no-unused-vars
+        } catch (e) {
+          /* empty */
+        }
       };
 
       // Process each form in the fetched data
@@ -1644,14 +1661,14 @@ class DocGenDataStore {
 
   //for setting the selected link type filters
   updateSelectedLinksFilter = (selectedLinkType) => {
-    logger.debug(`selected linked Type ${JSON.stringify(selectedLinkType)}`);
+    logger.debug('selected linked Type', selectedLinkType);
     let linkIndex = this.linkTypesFilter.findIndex((linkFilter) => linkFilter.key === selectedLinkType.key);
     if (linkIndex >= 0) {
       this.linkTypesFilter[linkIndex] = selectedLinkType;
     } else {
       this.linkTypesFilter.push(selectedLinkType);
     }
-    logger.debug(`selected Link Types Filter ${JSON.stringify(this.linkTypesFilter)}`);
+    logger.debug('selected Link Types Filter', this.linkTypesFilter);
   };
   //for setting selected template
   setSelectedTemplate(templateObject) {
@@ -2450,7 +2467,16 @@ class DocGenDataStore {
     await this.ensureFreshAdoAccessToken();
     await createIfBucketDoesNotExist(this.ProjectBucketName);
     let docReq = this.requestJson;
-    return sendDocumentToGenerator(docReq);
+    // Phase 6b — a run-level opt-in, not part of DocumentRequest's shape (sendDocumentToGenerator
+    // extracts it into the x-docgen-capture-mode header instead, mirroring how documentId
+    // already becomes x-docgen-run-id). Reset in finally so it never silently stays on for
+    // the next generation — unlike formattingSettings, this isn't meant to be sticky.
+    docReq.captureDiagnostics = this.captureDiagnostics;
+    try {
+      return await sendDocumentToGenerator(docReq);
+    } finally {
+      this.setCaptureDiagnostics(false);
+    }
   }
 
   async fetchFavoritesList(docTypeOverride = '', teamProjectOverride = '') {
@@ -2858,6 +2884,7 @@ class DocGenDataStore {
       // For flows like Test-Reporter (Excel), there may be no selected template.
       // Avoid accessing .url on null and let the API handle an empty template when appropriate.
       templateFile: this.selectedTemplate?.url || '',
+      docType: this.docType,
       uploadProperties: {
         bucketName: this.ProjectBucketName,
         fileName: tempFileName,

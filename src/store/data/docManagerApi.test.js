@@ -3,9 +3,11 @@ import axios from 'axios';
 
 vi.mock('axios', () => {
   // `axios` is called both as a function (makeRequest's `axios(url, config)`)
-  // and via `.post` (sendDocumentToGenerator etc.) — the mock needs to support both.
+  // and via `.post`/`.get` (sendDocumentToGenerator, getDiagnosticsIssue, etc.) — the mock
+  // needs to support all three call shapes.
   const mockAxios = vi.fn();
   mockAxios.post = vi.fn();
+  mockAxios.get = vi.fn();
   return { default: mockAxios };
 });
 
@@ -77,6 +79,126 @@ describe('docManagerApi sendDocumentToGenerator', () => {
     const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
 
     await expect(sendDocumentToGenerator({})).rejects.toThrow('Release history failed');
+  });
+
+  test('sends the generated documentId as the x-docgen-run-id header', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({});
+
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ documentId: 'doc-id-1' }),
+      expect.objectContaining({ headers: expect.objectContaining({ 'x-docgen-run-id': 'doc-id-1' }) })
+    );
+  });
+
+  test('sends x-docgen-capture-mode: verbose and strips captureDiagnostics from the body when set', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({ captureDiagnostics: true });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.not.objectContaining({ captureDiagnostics: expect.anything() }),
+      expect.objectContaining({ headers: expect.objectContaining({ 'x-docgen-capture-mode': 'verbose' }) })
+    );
+  });
+
+  test('does not send x-docgen-capture-mode when captureDiagnostics is false/absent', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({});
+
+    const [, , config] = axios.post.mock.calls[0];
+    expect(config.headers).not.toHaveProperty('x-docgen-capture-mode');
+  });
+
+  test('sets a long timeout so a hung generation cannot hang the UI forever', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({});
+
+    const [, , config] = axios.post.mock.calls[0];
+    expect(config.timeout).toBe(300000);
+  });
+});
+
+describe('docManagerApi getDiagnosticsIssue', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.stubGlobal('window', {
+      APP_CONFIG: {
+        JSON_DOCUMENT_URL: 'http://api-gate',
+      },
+    });
+  });
+
+  test('returns the raw {issue, trend, occurrences} payload on success', async () => {
+    const payload = { issue: { _id: 'i1', status: 'unresolved' }, trend: [{ hoursAgo: 0, count: 2 }], occurrences: [] };
+    axios.get.mockResolvedValueOnce({ data: payload });
+
+    const { getDiagnosticsIssue } = await import('./docManagerApi.jsx');
+
+    await expect(getDiagnosticsIssue('i1')).resolves.toEqual(payload);
+    expect(axios.get).toHaveBeenCalledWith('http://api-gate/diagnostics/issues/i1', expect.any(Object));
+  });
+
+  test('throws the backend message on failure (e.g. 404 issue_not_found)', async () => {
+    axios.get.mockRejectedValueOnce({ response: { data: { message: 'Issue not found' } } });
+
+    const { getDiagnosticsIssue } = await import('./docManagerApi.jsx');
+
+    await expect(getDiagnosticsIssue('missing')).rejects.toThrow('Issue not found');
+  });
+});
+
+describe('docManagerApi makeRequest-backed helpers rethrow instead of swallowing', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.stubGlobal('window', {
+      APP_CONFIG: {
+        JSON_DOCUMENT_URL: 'http://api-gate',
+      },
+    });
+  });
+
+  test('getJSONContentFromFile rethrows instead of returning undefined on failure', async () => {
+    axios.mockRejectedValueOnce(new Error('boom'));
+
+    const { getJSONContentFromFile } = await import('./docManagerApi.jsx');
+
+    await expect(getJSONContentFromFile('bucket', 'folder', 'file.json')).rejects.toThrow('boom');
+  });
+
+  test('getJSONContentFromObject rethrows instead of returning undefined on failure', async () => {
+    axios.mockRejectedValueOnce(new Error('boom'));
+
+    const { getJSONContentFromObject } = await import('./docManagerApi.jsx');
+
+    await expect(getJSONContentFromObject('bucket', 'object')).rejects.toThrow('boom');
+  });
+
+  test('getBucketFileList rethrows on failure (unchanged, now actually reachable since makeRequest rethrows)', async () => {
+    axios.mockRejectedValueOnce(new Error('boom'));
+
+    const { getBucketFileList } = await import('./docManagerApi.jsx');
+
+    await expect(getBucketFileList('bucket')).rejects.toThrow('boom');
+  });
+
+  test('createIfBucketDoesNotExist rethrows on failure (unchanged, now actually reachable since makeRequest rethrows)', async () => {
+    axios.mockRejectedValueOnce(new Error('boom'));
+
+    const { createIfBucketDoesNotExist } = await import('./docManagerApi.jsx');
+
+    await expect(createIfBucketDoesNotExist('bucket')).rejects.toThrow('boom');
   });
 });
 
