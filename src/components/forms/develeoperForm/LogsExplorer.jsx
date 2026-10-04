@@ -11,6 +11,9 @@ import {
   buildEventQueryParams,
   mergeLiveRows,
   computeLiveOverflow,
+  formatRequestLine,
+  buildDetailsText,
+  buildLogsCsv,
   appendOlderEvents,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -441,7 +444,8 @@ const LogsExplorer = ({ onOpenRun }) => {
       render: (message, record) => {
         const isExpanded = expandedRowId === record._id;
         const isLong = (message || '').length > MESSAGE_TRUNCATE_LENGTH;
-        const hasStack = !!record.err?.stack;
+        const requestLine = formatRequestLine(record.context);
+        const hasStack = !!record.err?.stack || !!requestLine;
         const isStackExpanded = expandedStackId === record._id;
         return (
           <div>
@@ -458,6 +462,9 @@ const LogsExplorer = ({ onOpenRun }) => {
                 </AntButton>
               ) : null}
             </div>
+            {requestLine ? (
+              <div style={{ fontSize: 11, color: '#94a3b8', wordBreak: 'break-all' }}>{requestLine}</div>
+            ) : null}
             {hasStack ? (
               <div>
                 <AntButton
@@ -466,7 +473,7 @@ const LogsExplorer = ({ onOpenRun }) => {
                   style={{ padding: 0, fontSize: 11 }}
                   onClick={() => setExpandedStackId(isStackExpanded ? null : record._id)}
                 >
-                  {isStackExpanded ? 'Stack ▴' : 'Stack ▾'}
+                  {`${requestLine ? 'Details' : 'Stack'} ${isStackExpanded ? '▴' : '▾'}`}
                 </AntButton>
                 {isStackExpanded ? (
                   <pre
@@ -483,7 +490,7 @@ const LogsExplorer = ({ onOpenRun }) => {
                       overflowY: 'auto',
                     }}
                   >
-                    {record.err.stack}
+                    {buildDetailsText(record)}
                   </pre>
                 ) : null}
               </div>
@@ -507,26 +514,7 @@ const LogsExplorer = ({ onOpenRun }) => {
   const grandTotal = histogramBars.reduce((sum, b) => sum + b.total, 0);
 
   const exportCsv = () => {
-    const escape = (val) => {
-      const s = val == null ? '' : String(val);
-      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const header = 'Time,Level,Service,Project,Type,Run,Message,Stack';
-    const rows = events.map((e) =>
-      [
-        e.ts ? new Date(e.ts).toISOString() : '',
-        e.level || '',
-        e.service || '',
-        e.project || '',
-        e.docType || '',
-        e.runId || '',
-        e.message || '',
-        e.err?.stack || '',
-      ]
-        .map(escape)
-        .join(',')
-    );
-    const csv = [header, ...rows].join('\n');
+    const csv = buildLogsCsv(events);
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;

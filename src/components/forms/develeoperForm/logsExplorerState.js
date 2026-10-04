@@ -89,3 +89,55 @@ export const filterFacetValues = (facetValues, searchText) => {
   if (!needle) return facetValues;
   return facetValues.filter((f) => f.value.toLowerCase().includes(needle));
 };
+
+/** "GET https://host/path -> 404" one-liner for a failed-request context; '' when there is none. */
+export const formatRequestLine = (context) => {
+  if (!context?.url && !context?.method) return '';
+  const target = [context.method, context.url].filter(Boolean).join(' ');
+  return context.status ? `${target} -> ${context.status}` : target;
+};
+
+/** Multi-line detail block (request line, attempt, body, server response); '' when no context. */
+export const formatRequestDetail = (context) => {
+  const line = formatRequestLine(context);
+  if (!line) return '';
+  const parts = [line];
+  if (context.attempt) parts.push(`Attempt: ${context.attempt}`);
+  if (context.requestBody) parts.push(`Body: ${context.requestBody}`);
+  if (context.responseExcerpt) parts.push(`Response: ${context.responseExcerpt}`);
+  return parts.join('\n');
+};
+
+/** Text of the per-row "Details" expander: request detail then stack; '' when neither exists. */
+export const buildDetailsText = (record) =>
+  [formatRequestDetail(record?.context), record?.err?.stack].filter(Boolean).join('\n\n');
+
+// Spreadsheet apps evaluate cells starting with these as formulas (CSV injection). Prefixing a
+// quote neutralises them; a legitimate value that starts with '-' or '+' also gains the prefix.
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+
+const escapeCsvCell = (val) => {
+  let s = val == null ? '' : String(val);
+  if (FORMULA_LEAD.test(s)) s = `'${s}`;
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+export const buildLogsCsv = (events) => {
+  const header = 'Time,Level,Service,Project,Type,Run,Message,Request,Stack';
+  const rows = events.map((e) =>
+    [
+      e.ts ? new Date(e.ts).toISOString() : '',
+      e.level || '',
+      e.service || '',
+      e.project || '',
+      e.docType || '',
+      e.runId || '',
+      e.message || '',
+      formatRequestDetail(e.context),
+      e.err?.stack || '',
+    ]
+      .map(escapeCsvCell)
+      .join(',')
+  );
+  return [header, ...rows].join('\n');
+};
