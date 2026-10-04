@@ -45,7 +45,7 @@ const VIEW_RUN = 'run';
 const VIEW_COMPARE = 'compare';
 const VIEW_ISSUE = 'issue';
 
-const MonitoringDashboard = ({ onViewConnections }) => {
+const MonitoringDashboard = ({ onViewConnections, userId }) => {
   const [view, setView] = useState(VIEW_ATTENTION);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -99,7 +99,7 @@ const MonitoringDashboard = ({ onViewConnections }) => {
     setResolveError('');
     setResolvingId(issue._id);
     try {
-      await resolveDiagnosticsIssue(issue._id);
+      await resolveDiagnosticsIssue(issue._id, userId);
       await load();
     } catch (err) {
       setResolveError(err.message || 'Failed to resolve issue.');

@@ -96,11 +96,11 @@ const IssueDetail = ({ issueId, onBack, onOpenRun }) => {
       ) : issue ? (
         <>
           <Paper variant='outlined' sx={{ p: 2 }}>
-            <Stack direction='row' spacing={1} alignItems='center' flexWrap='wrap'>
+            <Stack useFlexGap direction='row' spacing={1} alignItems='center' flexWrap='wrap'>
               <Typography variant='h6'>{issue.message || formatSignature(issue.signature)}</Typography>
               <Chip size='small' color={STATUS_COLOR[issue.status] || 'default'} label={issue.status} />
             </Stack>
-            <Stack direction='row' spacing={2} flexWrap='wrap' sx={{ mt: 1 }}>
+            <Stack useFlexGap direction='row' spacing={2} flexWrap='wrap' sx={{ mt: 1 }}>
               <Typography variant='body2' color='text.secondary'>
                 {issueMetaTokens(issue).join(' · ')}
               </Typography>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog } from './runDetailState';
 
 describe('formatRunDuration', () => {
   test('formats a completed run as seconds with one decimal', () => {
@@ -106,5 +106,19 @@ describe('formatDiffValue', () => {
     const result = formatDiffValue(big);
     expect(result.length).toBeLessThanOrEqual(803); // 800 + '\n…'
     expect(result.endsWith('\n…')).toBe(true);
+  });
+});
+
+describe('mergeRunLog', () => {
+  test('merges lists chronologically and dedupes by _id', () => {
+    const a = { _id: 'a', ts: '2026-10-04T10:00:03Z' };
+    const b = { _id: 'b', ts: '2026-10-04T10:00:01Z' };
+    const c = { _id: 'c', ts: '2026-10-04T10:00:02Z' };
+    expect(mergeRunLog([a, c], [b, c]).map((e) => e._id)).toEqual(['b', 'c', 'a']);
+  });
+  test('breaks timestamp ties by _id and tolerates missing lists', () => {
+    const x = { _id: 'x', ts: '2026-10-04T10:00:00Z' };
+    const y = { _id: 'y', ts: '2026-10-04T10:00:00Z' };
+    expect(mergeRunLog([y], undefined, [x]).map((e) => e._id)).toEqual(['x', 'y']);
   });
 });

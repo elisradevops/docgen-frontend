@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Box, Button, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import { Table, Button as AntButton, Select as AntSelect, Input, Checkbox, Space } from 'antd';
 import LoadingState from '../../common/LoadingState';
+import useDebouncedValue from '../../../hooks/useDebouncedValue';
+import { levelColors as LEVEL_COLOR } from '../../../theme/tokens';
 import {
   getDiagnosticsEvents,
   getDiagnosticsEventFacets,
@@ -15,6 +17,9 @@ import {
   buildDetailsText,
   buildLogsCsv,
   appendOlderEvents,
+  hasReachedRowCap,
+  canLiveTail,
+  LOG_ROW_CAP,
   buildHistogramBars,
   formatBucketRangeLabel,
   filterFacetValues,
@@ -25,9 +30,6 @@ import {
 } from './logsFilterSettings';
 import LogsFilterSettingsDialog from './LogsFilterSettingsDialog';
 
-// Real semantic colors, not invented — same tokens the rest of the app already renders for
-// Chip color='error'/'warning' (error.main / MUI's uncustomized warning.main default).
-const LEVEL_COLOR = { error: '#D1434B', warn: '#ED6C02', info: '#2563eb', debug: '#94a3b8' };
 const WINDOW_OPTIONS = [
   { label: 'Last hour', value: 1 },
   { label: 'Last 24 hours', value: 24 },
@@ -259,12 +261,22 @@ const LogsExplorer = ({ onOpenRun }) => {
   // Kept separate from queryState so the histogram (full window) is never affected.
   const [bucketFilter, setBucketFilter] = useState(null); // { since, until, label } | null
 
+  // Typing in the search / Run ID boxes shouldn't fire the events + facets + histogram queries on
+  // every keystroke — the query follows the text once it has settled.
+  const debouncedQ = useDebouncedValue(q, 300);
+  const debouncedRunId = useDebouncedValue(runId, 300);
   const queryState = useMemo(
-    () => ({ ...filters, q, runId: runId.trim() || undefined, windowHours, sortBy, sortDir }),
-    [filters, q, runId, windowHours, sortBy, sortDir]
+    () => ({ ...filters, q: debouncedQ, runId: debouncedRunId.trim() || undefined, windowHours, sortBy, sortDir }),
+    [filters, debouncedQ, debouncedRunId, windowHours, sortBy, sortDir]
   );
+  // Bumped by every load that replaces the table's rows; a response whose number is no longer
+  // current (a newer filter change started another load meanwhile) is discarded rather than
+  // overwriting newer state.
+  const requestSeqRef = useRef(0);
+  const [windowCapped, setWindowCapped] = useState(false);
 
   const loadFirstPage = useCallback(async () => {
+    const seq = ++requestSeqRef.current;
     setLoading(true);
     setError('');
     try {
@@ -275,33 +287,37 @@ const LogsExplorer = ({ onOpenRun }) => {
         getDiagnosticsEventFacets(params),
         getDiagnosticsEventHistogram(params),
       ]);
+      if (seq !== requestSeqRef.current) return;
       setEvents(eventsRes.events || []);
       setNextCursor(eventsRes.nextCursor);
+      setWindowCapped(!!eventsRes.windowCapped);
       setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
       setHistogram(histogramRes.buckets || []);
       setSelectedBucketIdx(null);
       setBucketFilter(null);
     } catch (err) {
-      setError(err.message || 'Failed to load logs.');
+      if (seq === requestSeqRef.current) setError(err.message || 'Failed to load logs.');
     } finally {
-      setLoading(false);
+      if (seq === requestSeqRef.current) setLoading(false);
     }
   }, [queryState]);
 
   // Fetches events for a specific bucket time range without touching the histogram.
   const loadBucketEvents = useCallback(async (since, until) => {
+    const seq = ++requestSeqRef.current;
     setLoading(true);
     setError('');
     try {
       const params = buildEventQueryParams({ ...queryState, since, until });
       if (queryState.runId) params.runId = queryState.runId;
       const eventsRes = await getDiagnosticsEvents(params);
+      if (seq !== requestSeqRef.current) return;
       setEvents(eventsRes.events || []);
       setNextCursor(eventsRes.nextCursor);
     } catch (err) {
-      setError(err.message || 'Failed to load bucket events.');
+      if (seq === requestSeqRef.current) setError(err.message || 'Failed to load bucket events.');
     } finally {
-      setLoading(false);
+      if (seq === requestSeqRef.current) setLoading(false);
     }
   }, [queryState]);
 
@@ -315,7 +331,11 @@ const LogsExplorer = ({ onOpenRun }) => {
   // mergeLiveRows. matchedCount (requested via includeCount) vs. how many actually came back is
   // what drives the "+N more events, narrow your query" signal — see computeLiveOverflow.
   useEffect(() => {
-    if (!live) return undefined;
+    if (!live || !canLiveTail(sortBy, sortDir)) return undefined;
+    // Set by the cleanup: a tick still awaiting its response when the filters change (or Live is
+    // switched off) must not merge its now-stale rows into the table.
+    let cancelled = false;
+    let tickInFlight = false;
     // Seed the boundary from the newest currently-displayed row (or now, if the table is empty)
     // — a no-op state update purely to read the latest `events` without adding it as an effect
     // dependency, which would otherwise restart this interval on every merged-in row.
@@ -324,6 +344,10 @@ const LogsExplorer = ({ onOpenRun }) => {
       return prev;
     });
     liveTimerRef.current = window.setInterval(async () => {
+      // A hidden tab keeps its interval; skipping the tick avoids polling for nobody. A tick
+      // still in flight (slow server) isn't stacked with another one.
+      if (document.hidden || tickInFlight) return;
+      tickInFlight = true;
       try {
         const params = buildEventQueryParams(queryState);
         if (queryState.runId) params.runId = queryState.runId;
@@ -331,19 +355,23 @@ const LogsExplorer = ({ onOpenRun }) => {
         delete params.until; // live tail only ever looks forward, never has an upper bound
         params.includeCount = true;
         const res = await getDiagnosticsEvents(params);
+        if (cancelled) return;
         const newestTs = res.events?.[0]?.ts;
         if (newestTs) liveBoundaryRef.current = new Date(newestTs);
         setEvents((prev) => mergeLiveRows(prev, res.events || []));
         setLiveOverflow(computeLiveOverflow(res.matchedCount, res.events?.length ?? 0));
       } catch {
         // A single missed poll isn't worth surfacing as an error banner — the next tick retries.
+      } finally {
+        tickInFlight = false;
       }
     }, LIVE_POLL_MS);
     return () => {
+      cancelled = true;
       if (liveTimerRef.current) window.clearInterval(liveTimerRef.current);
       setLiveOverflow(0);
     };
-  }, [live, queryState]);
+  }, [live, queryState, sortBy, sortDir]);
 
   const loadOlder = async () => {
     if (!nextCursor) return;
@@ -353,7 +381,7 @@ const LogsExplorer = ({ onOpenRun }) => {
       if (queryState.runId) params.runId = queryState.runId;
       params.cursor = nextCursor;
       const res = await getDiagnosticsEvents(params);
-      setEvents((prev) => appendOlderEvents(prev, res.events || []));
+      setEvents((prev) => appendOlderEvents(prev, res.events || [], { maxTotal: LOG_ROW_CAP }));
       setNextCursor(res.nextCursor);
     } catch (err) {
       setError(err.message || 'Failed to load older events.');
@@ -430,7 +458,7 @@ const LogsExplorer = ({ onOpenRun }) => {
               {String(id).slice(0, 8)}
             </AntButton>
             {typeof onOpenRun === 'function' ? (
-              <AntButton type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail'>
+              <AntButton type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail' aria-label='Open run detail'>
                 ↗
               </AntButton>
             ) : null}
@@ -525,7 +553,7 @@ const LogsExplorer = ({ onOpenRun }) => {
 
   return (
     <Stack spacing={2}>
-      <Stack direction='row' spacing={1.5} flexWrap='wrap' alignItems='center'>
+      <Stack useFlexGap direction='row' spacing={1.5} flexWrap='wrap' alignItems='center'>
         <Input.Search
           placeholder='Search message text…'
           allowClear
@@ -533,16 +561,25 @@ const LogsExplorer = ({ onOpenRun }) => {
           defaultValue={q}
           onSearch={(val) => setQ(val)}
         />
-        <Input placeholder='Run ID' allowClear style={{ width: 160 }} value={runId} onChange={(e) => setRunId(e.target.value)} />
+        <Input placeholder='Run ID' aria-label='Filter by run ID' allowClear style={{ width: 160 }} value={runId} onChange={(e) => setRunId(e.target.value)} />
         <AntSelect
           value={windowHours}
           style={{ width: 160 }}
           onChange={setWindowHours}
           options={WINDOW_OPTIONS}
         />
-        <AntButton type={live ? 'primary' : 'default'} danger={live} onClick={() => setLive((v) => !v)}>
-          {live ? '● Live' : 'Live'}
-        </AntButton>
+        <Tooltip title={canLiveTail(sortBy, sortDir) ? '' : 'Live tail needs the newest-first time sort'}>
+          <span>
+            <AntButton
+              type={live ? 'primary' : 'default'}
+              danger={live}
+              disabled={!canLiveTail(sortBy, sortDir)}
+              onClick={() => setLive((v) => !v)}
+            >
+              {live ? '● Live' : 'Live'}
+            </AntButton>
+          </span>
+        </Tooltip>
         {live && liveOverflow > 0 ? (
           <Box
             component='span'
@@ -572,6 +609,9 @@ const LogsExplorer = ({ onOpenRun }) => {
       </Stack>
 
       {error ? <Alert severity='error'>{error}</Alert> : null}
+      {windowCapped ? (
+        <Alert severity='info'>Sorting by service or level is limited to the last 7 days — sort by time to see older events.</Alert>
+      ) : null}
 
       <Paper variant='outlined' sx={{ p: 2 }}>
         <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 1 }}>
@@ -676,7 +716,11 @@ const LogsExplorer = ({ onOpenRun }) => {
             onChange={handleTableChange}
             size='small'
           />
-          {nextCursor ? (
+          {nextCursor && hasReachedRowCap(events.length) ? (
+            <Typography variant='caption' color='text.secondary' sx={{ display: 'block', textAlign: 'center', p: 1.5 }}>
+              Showing the newest {LOG_ROW_CAP.toLocaleString()} events — narrow the time range or filters to see more.
+            </Typography>
+          ) : nextCursor ? (
             <Box sx={{ textAlign: 'center', p: 1.5 }}>
               <AntButton onClick={loadOlder} loading={loadingMore}>
                 Load older events

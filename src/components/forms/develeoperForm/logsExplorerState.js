@@ -48,11 +48,22 @@ export const computeLiveOverflow = (matchedCount, receivedCount) => {
   return Math.max(0, matchedCount - receivedCount);
 };
 
-/** "Load older" pagination: appends at the end, deduped, never reordering existing rows. */
-export const appendOlderEvents = (existingEvents, olderEvents) => {
+/** Most rows the table will hold; past it the user is asked to narrow the query instead. */
+export const LOG_ROW_CAP = 2000;
+
+export const hasReachedRowCap = (rowCount, maxTotal = LOG_ROW_CAP) => rowCount >= maxTotal;
+
+/**
+ * "Load older" pagination: appends at the end, deduped, never reordering existing rows, and
+ * never growing past maxTotal (the oldest overflow is dropped) so the table stays bounded.
+ */
+export const appendOlderEvents = (existingEvents, olderEvents, { maxTotal = LOG_ROW_CAP } = {}) => {
   const existingIds = new Set(existingEvents.map(rowId));
-  return [...existingEvents, ...olderEvents.filter((e) => !existingIds.has(rowId(e)))];
+  return [...existingEvents, ...olderEvents.filter((e) => !existingIds.has(rowId(e)))].slice(0, maxTotal);
 };
+
+/** Live tail prepends new rows, so it only makes sense for the newest-first time sort. */
+export const canLiveTail = (sortBy, sortDir) => sortBy === 'ts' && sortDir === 'desc';
 
 /**
  * Converts histogram buckets (from GET /diagnostics/events/histogram) into plain render data —

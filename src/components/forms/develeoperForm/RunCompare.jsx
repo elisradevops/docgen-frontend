@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { getDiagnosticsCompare, getDiagnosticsCompareReportUrl, getDiagnosticsRun, getDiagnosticsRuns } from '../../../store/data/docManagerApi';
 import { sortDiffRows, bandLabel, formatDiffValue } from './runDetailState';
+import { diffColors } from '../../../theme/tokens';
 
 // LCS-based line diff for two JSON values. Caps at MAX_LINES per side before the quadratic
 // table becomes heavy — objects that large are edge cases (e.g. a contentControls array with
@@ -61,9 +62,9 @@ function diffJsonLines(a, b) {
 }
 
 const DIFF_LINE_STYLE = {
-  same:    { color: '#64748b', bg: 'transparent',           prefix: '  ' },
-  removed: { color: '#D1434B', bg: 'rgba(209,67,75,0.08)', prefix: '- ' },
-  added:   { color: '#22863a', bg: 'rgba(34,134,58,0.08)', prefix: '+ ' },
+  same:    { color: diffColors.neutral, bg: 'transparent',           prefix: '  ' },
+  removed: { color: diffColors.removed, bg: diffColors.removedBg, prefix: '- ' },
+  added:   { color: diffColors.added, bg: diffColors.addedBg, prefix: '+ ' },
 };
 
 // Shows a colored unified diff when both sides are objects/arrays; falls back to the simple
@@ -106,8 +107,8 @@ function DiffCell({ a, b }) {
         {open ? '▴ Collapse' : '▾ Show diff'}
         {!open && summary ? (
           <Box component='span' sx={{ fontFamily: 'monospace', fontSize: 11 }}>
-            {removed ? <Box component='span' sx={{ color: '#D1434B' }}>−{removed} </Box> : null}
-            {added   ? <Box component='span' sx={{ color: '#22863a' }}>+{added}</Box>   : null}
+            {removed ? <Box component='span' sx={{ color: diffColors.removed }}>−{removed} </Box> : null}
+            {added   ? <Box component='span' sx={{ color: diffColors.added }}>+{added}</Box>   : null}
           </Box>
         ) : null}
       </Box>
@@ -176,12 +177,12 @@ function FieldPath({ field }) {
 // Renders a diff cell value with context-aware formatting:
 // booleans as pills, primitive arrays as chip lists, strings/numbers as monospace.
 function ValueDisplay({ value, removed }) {
-  const col = removed ? '#9B0000' : '#006620';
-  const chipBg = removed ? 'rgba(209,67,75,0.09)' : 'rgba(34,134,58,0.09)';
-  const chipBorder = removed ? 'rgba(209,67,75,0.28)' : 'rgba(34,134,58,0.28)';
+  const col = removed ? diffColors.removedText : diffColors.addedText;
+  const chipBg = removed ? diffColors.removedChipBg : diffColors.addedChipBg;
+  const chipBorder = removed ? diffColors.removedChipBorder : diffColors.addedChipBorder;
 
   if (value === undefined || value === null || value === '') {
-    return <Box component='span' sx={{ color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>—</Box>;
+    return <Box component='span' sx={{ color: diffColors.muted, fontSize: 12, fontStyle: 'italic' }}>—</Box>;
   }
   if (typeof value === 'boolean') {
     return (
@@ -192,7 +193,7 @@ function ValueDisplay({ value, removed }) {
   }
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      return <Box component='span' sx={{ fontFamily: 'monospace', fontSize: 12, color: '#94a3b8' }}>[ ]</Box>;
+      return <Box component='span' sx={{ fontFamily: 'monospace', fontSize: 12, color: diffColors.muted }}>[ ]</Box>;
     }
     const allPrimitive = value.every((v) => v === null || typeof v !== 'object');
     if (allPrimitive) {
@@ -271,7 +272,7 @@ function CurrentRunCard({ run, loading }) {
           {runDisplayName(run)}
         </Typography>
       </Box>
-      <Stack direction='row' spacing={2} flexWrap='wrap'>
+      <Stack useFlexGap direction='row' spacing={2} flexWrap='wrap'>
         <Typography variant='caption' color='text.secondary'>
           {run.project || '—'}
         </Typography>
@@ -479,8 +480,8 @@ const RunCompare = ({ a: initialA, b: initialB, onBack }) => {
                     <>
                       <Box sx={{ display: 'grid', gridTemplateColumns: '45% 1fr 1fr', background: 'rgba(0,0,0,0.025)', borderBottom: '1px solid', borderColor: 'divider' }}>
                         <Typography variant='caption' color='text.secondary' sx={{ px: 1.5, py: 0.75, display: 'block', fontWeight: 600 }}>Field</Typography>
-                        <Typography variant='caption' sx={{ px: 1.5, py: 0.75, display: 'block', fontWeight: 600, color: '#9B0000', borderLeft: '1px solid', borderColor: 'divider' }}>Before</Typography>
-                        <Typography variant='caption' sx={{ px: 1.5, py: 0.75, display: 'block', fontWeight: 600, color: '#006620', borderLeft: '1px solid', borderColor: 'divider' }}>After</Typography>
+                        <Typography variant='caption' sx={{ px: 1.5, py: 0.75, display: 'block', fontWeight: 600, color: diffColors.removedText, borderLeft: '1px solid', borderColor: 'divider' }}>Before</Typography>
+                        <Typography variant='caption' sx={{ px: 1.5, py: 0.75, display: 'block', fontWeight: 600, color: diffColors.addedText, borderLeft: '1px solid', borderColor: 'divider' }}>After</Typography>
                       </Box>
                       {rows.map((row, i) => {
                         const isPlainObj = (v) => v !== null && v !== undefined && typeof v === 'object' && !Array.isArray(v);
@@ -498,10 +499,10 @@ const RunCompare = ({ a: initialA, b: initialB, onBack }) => {
                             <Box sx={{ px: 1.5, py: 1, display: 'flex', alignItems: 'flex-start' }}>
                               <FieldPath field={row.field} />
                             </Box>
-                            <Box sx={{ px: 1.5, py: 1, borderLeft: '1px solid', borderColor: 'divider', background: 'rgba(209,67,75,0.04)', display: 'flex', alignItems: 'flex-start' }}>
+                            <Box sx={{ px: 1.5, py: 1, borderLeft: '1px solid', borderColor: 'divider', background: diffColors.removedFaint, display: 'flex', alignItems: 'flex-start' }}>
                               <ValueDisplay value={row.a} removed={true} />
                             </Box>
-                            <Box sx={{ px: 1.5, py: 1, borderLeft: '1px solid', borderColor: 'divider', background: 'rgba(34,134,58,0.04)', display: 'flex', alignItems: 'flex-start' }}>
+                            <Box sx={{ px: 1.5, py: 1, borderLeft: '1px solid', borderColor: 'divider', background: diffColors.addedFaint, display: 'flex', alignItems: 'flex-start' }}>
                               <ValueDisplay value={row.b} removed={false} />
                             </Box>
                           </Box>
