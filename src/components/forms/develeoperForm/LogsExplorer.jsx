@@ -19,6 +19,8 @@ import {
   appendOlderEvents,
   hasReachedRowCap,
   canLiveTail,
+  isRequestId,
+  formatRunCellLabel,
   LOG_ROW_CAP,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -454,10 +456,16 @@ const LogsExplorer = ({ onOpenRun }) => {
       render: (id) =>
         id ? (
           <span>
-            <AntButton type='link' size='small' style={{ padding: 0 }} onClick={() => setRunId(id)} title='Filter this table to this run'>
-              {String(id).slice(0, 8)}
+            <AntButton
+              type='link'
+              size='small'
+              style={{ padding: 0 }}
+              onClick={() => setRunId(id)}
+              title={isRequestId(id) ? 'A request id, not a document run — filter to this request' : 'Filter this table to this run'}
+            >
+              {formatRunCellLabel(id)}
             </AntButton>
-            {typeof onOpenRun === 'function' ? (
+            {typeof onOpenRun === 'function' && !isRequestId(id) ? (
               <AntButton type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail' aria-label='Open run detail'>
                 ↗
               </AntButton>

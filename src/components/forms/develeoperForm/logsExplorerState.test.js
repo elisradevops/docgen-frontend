@@ -10,6 +10,8 @@ import {
   appendOlderEvents,
   hasReachedRowCap,
   canLiveTail,
+  isRequestId,
+  formatRunCellLabel,
   LOG_ROW_CAP,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -221,3 +223,17 @@ describe('row cap and live-tail gating', () => {
     expect(canLiveTail('service', 'desc')).toBe(false);
   });
 });
+
+describe('request ids vs run ids', () => {
+  test('only req- prefixed ids are requests', () => {
+    expect(isRequestId('req-3f2504e0-4f89-11d3-9a0c-0305e82c3301')).toBe(true);
+    expect(isRequestId('3f2504e0-4f89-11d3-9a0c-0305e82c3301')).toBe(false);
+    expect(isRequestId('request-1')).toBe(false);
+    expect(isRequestId(undefined)).toBe(false);
+  });
+  test('cell label distinguishes them', () => {
+    expect(formatRunCellLabel('req-3f2504e0-4f89')).toBe('req · 3f2504');
+    expect(formatRunCellLabel('3f2504e0-4f89-11d3')).toBe('3f2504e0');
+  });
+});
+

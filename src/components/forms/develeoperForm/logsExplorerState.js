@@ -152,3 +152,14 @@ export const buildLogsCsv = (events) => {
   );
   return [header, ...rows].join('\n');
 };
+
+/**
+ * api-gate mints `req-<uuid>` for requests that are not document generation (pickers, polling),
+ * so they carry a correlation id without pretending to be a run. They have no run detail page.
+ */
+export const isRequestId = (id) => typeof id === 'string' && id.startsWith('req-');
+
+/** Short label for the Run column: 8 chars of a run id, or "req ·" plus 6 chars of a request id. */
+export const formatRunCellLabel = (id) =>
+  isRequestId(id) ? `req · ${id.slice(4, 10)}` : String(id).slice(0, 8);
+
