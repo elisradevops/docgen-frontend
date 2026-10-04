@@ -171,6 +171,17 @@ describe('DataStore sendRequestToDocGen (Phase 6b captureDiagnostics)', () => {
     expect(store.captureDiagnostics).toBe(false);
   });
 
+  test('turning "Show debug doc types" off disarms diagnostics capture; turning it on does not arm it', async () => {
+    const store = (await import('./DataStore')).default;
+    store.setShowDebugDocs(true);
+    expect(store.captureDiagnostics).toBe(false);
+    store.setCaptureDiagnostics(true);
+    store.setShowDebugDocs(true);
+    expect(store.captureDiagnostics).toBe(true);
+    store.setShowDebugDocs(false);
+    expect(store.captureDiagnostics).toBe(false);
+  });
+
   test('defaults captureDiagnostics to false when never toggled on', async () => {
     const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
     sendDocumentToGenerator.mockResolvedValue({ ok: true });

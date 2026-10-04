@@ -563,8 +563,11 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     onClick={handleSendRequest}
                     disabledTooltip={validationMessage || 'Please complete required selections'}
                     endIcon={<SendIcon />}
+                    // Diagnostics capture is a troubleshooting tool: only offered in debug mode
+                    // ("Show debug doc types" on the Developer page). FooterBar renders no button
+                    // when onToggleDiagnostics is absent.
                     diagnosticsEnabled={store.captureDiagnostics}
-                    onToggleDiagnostics={(next) => store.setCaptureDiagnostics(next)}
+                    onToggleDiagnostics={store.showDebugDocs ? (next) => store.setCaptureDiagnostics(next) : undefined}
                   />
                 )}
               </Box>

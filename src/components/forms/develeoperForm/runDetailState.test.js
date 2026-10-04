@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel } from './runDetailState';
 
 describe('formatRunDuration', () => {
   test('formats a completed run as seconds with one decimal', () => {
@@ -122,3 +122,16 @@ describe('mergeRunLog', () => {
     expect(mergeRunLog([y], undefined, [x]).map((e) => e._id)).toEqual(['x', 'y']);
   });
 });
+
+describe('formatCaptureLabel', () => {
+  test('labels only runs that were actually captured', () => {
+    expect(formatCaptureLabel({ captureMode: 'verbose' })).toBe('Verbose capture');
+    expect(formatCaptureLabel({ captureMode: 'retain-on-failure' })).toBe('Capture on failure');
+  });
+  test('no label for a normal run or a missing run', () => {
+    expect(formatCaptureLabel({})).toBe('');
+    expect(formatCaptureLabel({ captureMode: 'normal' })).toBe('');
+    expect(formatCaptureLabel(null)).toBe('');
+  });
+});
+
