@@ -3,6 +3,10 @@ import {
   buildEventQueryParams,
   mergeLiveRows,
   computeLiveOverflow,
+  formatRequestLine,
+  formatRequestDetail,
+  buildDetailsText,
+  buildLogsCsv,
   appendOlderEvents,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -134,5 +138,66 @@ describe('filterFacetValues', () => {
 
   test('returns an empty array when nothing matches', () => {
     expect(filterFacetValues(values, 'zzz')).toEqual([]);
+  });
+});
+
+describe('formatRequestLine / formatRequestDetail', () => {
+  test('empty for a missing context', () => {
+    expect(formatRequestLine(undefined)).toBe('');
+    expect(formatRequestDetail({})).toBe('');
+  });
+
+  test('request line shows method, url and status', () => {
+    expect(formatRequestLine({ method: 'GET', url: 'https://h/x', status: 404 })).toBe('GET https://h/x -> 404');
+    expect(formatRequestLine({ url: 'https://h/x' })).toBe('https://h/x');
+  });
+
+  test('detail adds attempt, body and response when present', () => {
+    const out = formatRequestDetail({
+      method: 'POST',
+      url: 'https://h/wiql',
+      status: 400,
+      attempt: 3,
+      requestBody: '{"query":"q"}',
+      responseExcerpt: 'bad query',
+    });
+    expect(out.split('\n')).toEqual([
+      'POST https://h/wiql -> 400',
+      'Attempt: 3',
+      'Body: {"query":"q"}',
+      'Response: bad query',
+    ]);
+  });
+});
+
+describe('buildDetailsText', () => {
+  const context = { method: 'GET', url: 'https://h/x', status: 404 };
+  test('request detail and stack joined by a blank line', () => {
+    expect(buildDetailsText({ context, err: { stack: 'STACK' } })).toBe('GET https://h/x -> 404\n\nSTACK');
+  });
+  test('context-only, stack-only and neither', () => {
+    expect(buildDetailsText({ context })).toBe('GET https://h/x -> 404');
+    expect(buildDetailsText({ err: { stack: 'STACK' } })).toBe('STACK');
+    expect(buildDetailsText({})).toBe('');
+  });
+});
+
+describe('buildLogsCsv', () => {
+  test('header has a Request column and rows carry the request detail', () => {
+    const csv = buildLogsCsv([
+      { ts: '2026-10-04T10:00:00.000Z', level: 'error', message: 'boom', context: { method: 'GET', url: 'https://h/x', status: 404 } },
+    ]);
+    const [header, row] = csv.split('\n');
+    expect(header).toBe('Time,Level,Service,Project,Type,Run,Message,Request,Stack');
+    expect(row).toContain('GET https://h/x -> 404');
+  });
+  test('quotes cells containing commas, quotes and newlines', () => {
+    const row = buildLogsCsv([{ level: 'error', message: 'a,"b"\nc' }]).split('\n')[1];
+    expect(row).toContain('"a,""b""');
+  });
+  test('neutralises formula-leading cells', () => {
+    const row = buildLogsCsv([{ level: 'error', message: '=HYPERLINK("http://x")' }]).split('\n')[1];
+    expect(row).toContain(`"'=HYPERLINK(""http://x"")"`);
+    expect(buildLogsCsv([{ message: '@SUM(1)' }])).toContain("'@SUM(1)");
   });
 });
