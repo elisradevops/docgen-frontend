@@ -657,17 +657,16 @@ export const getDiagnosticsIssue = async (issueId) => {
   }
 };
 
-// requireSession + requireCsrf on the backend (models/Issue.ts's only mutation) — this is the
-// one Monitoring call that needs a real acting user, so it goes through the same
-// withSharePointSessionAuth wrapper the SharePoint calls above use. wrapSharePointError keeps
-// err.status so the component can distinguish a 401 (not signed in — show "sign in to
-// resolve") from any other failure, per the Phase 7a plan.
-export const resolveDiagnosticsIssue = async (issueId) => {
+// requireMongo on the backend (models/Issue.ts's only mutation). The acting user is sent as
+// X-User-Id — the same identity hint the SharePoint calls use — and recorded as resolvedBy
+// (attribution only, not an authorization decision). wrapSharePointError keeps err.status so
+// the component can still distinguish a 401 from any other failure.
+export const resolveDiagnosticsIssue = async (issueId, userId) => {
   try {
     const res = await axios.post(
       `${C.jsonDocument_url}/diagnostics/issues/${issueId}/resolve`,
       {},
-      withSharePointSessionAuth({ headers: baseHeaders, timeout: DEFAULT_TIMEOUT })
+      withSharePointSessionAuth({ headers: { ...baseHeaders, 'X-User-Id': userId || '' }, timeout: DEFAULT_TIMEOUT })
     );
     return res.data;
   } catch (err) {

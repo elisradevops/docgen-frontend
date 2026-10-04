@@ -14,6 +14,7 @@ import {
 import SettingsIcon from '@mui/icons-material/Settings';
 import { Select as AntSelect, Tag as AntTag } from 'antd';
 import { LOGS_FILTER_DEFAULTS, loadLogsFilterSettings, saveLogsFilterSettings } from './logsFilterSettings';
+import { levelColors as LEVEL_COLOR } from '../../../theme/tokens';
 
 const WINDOW_OPTIONS = [
   { label: 'Last hour', value: 1 },
@@ -22,7 +23,6 @@ const WINDOW_OPTIONS = [
   { label: 'Last 30 days', value: 720 },
 ];
 
-const LEVEL_COLOR = { error: '#D1434B', warn: '#ED6C02', info: '#94a3b8', debug: '#64748b' };
 const LEVEL_OPTIONS = ['error', 'warn', 'info', 'debug'].map((l) => ({ label: l.toUpperCase(), value: l }));
 
 const levelTagRender = ({ label, value, closable, onClose }) => (

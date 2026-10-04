@@ -56,3 +56,18 @@ export const formatDiffValue = (value) => {
   }
   return String(value);
 };
+
+/**
+ * Merges run-log event lists into one chronological list: deduped by _id, oldest first (ties by
+ * _id). Used to show the newest page of a run's log together with every error from the whole
+ * run, and to prepend older pages on "Load earlier".
+ */
+export const mergeRunLog = (...lists) => {
+  const byId = new Map();
+  for (const list of lists) for (const e of list || []) byId.set(e._id, e);
+  return [...byId.values()].sort((a, b) => {
+    const diff = new Date(a.ts) - new Date(b.ts);
+    return diff !== 0 ? diff : String(a._id).localeCompare(String(b._id));
+  });
+};
+

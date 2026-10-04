@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Divider, IconButton, Link, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
@@ -7,10 +7,12 @@ import {
   getDiagnosticsRunReportUrl,
   getDiagnosticsEvents,
 } from '../../../store/data/docManagerApi';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, mergeRunLog } from './runDetailState';
+import { levelColors as LEVEL_COLOR, colors } from '../../../theme/tokens';
 
 const STATUS_COLOR = { failed: 'error', succeeded: 'success', running: 'info' };
-const LEVEL_COLOR = { error: '#D1434B', warn: '#ED6C02', info: '#94a3b8', debug: '#64748b' };
+const LOG_PAGE_SIZE = 200;
+const ERROR_LIMIT = 50;
 
 const RunDetail = ({ runId, onBack, onOpenCompare }) => {
   const [loading, setLoading] = useState(false);
@@ -18,6 +20,18 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
   const [run, setRun] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [log, setLog] = useState([]);
+  // Cursor for the next-older page of the run's log; undefined once the whole log is loaded.
+  const [logCursor, setLogCursor] = useState(undefined);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  // The log is oldest-first, so a freshly loaded panel would otherwise open on its oldest rows
+  // and hide the newest events and errors — the reason someone opens a failed run. Scrolled to
+  // the bottom once per load; "Load earlier" must not move it.
+  const logScrollRef = useRef(null);
+  const [logLoadCount, setLogLoadCount] = useState(0);
+  useEffect(() => {
+    const el = logScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logLoadCount]);
   const [comparing, setComparing] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -32,13 +46,18 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
     setLoading(true);
     setError('');
     try {
-      const [detail, logRes] = await Promise.all([
+      // The newest page of the log, plus every error from the whole run: in a verbose run the
+      // failure is usually near the end, and a first-N-ascending page would cut it off.
+      const [detail, tailRes, errorRes] = await Promise.all([
         getDiagnosticsRun(runId),
-        getDiagnosticsEvents({ runId, limit: 200, sortBy: 'ts', sortDir: 'asc' }),
+        getDiagnosticsEvents({ runId, limit: LOG_PAGE_SIZE, sortBy: 'ts', sortDir: 'desc' }),
+        getDiagnosticsEvents({ runId, level: 'error', limit: ERROR_LIMIT, sortBy: 'ts', sortDir: 'desc' }),
       ]);
       setRun(detail.run);
       setTimeline(detail.timeline || []);
-      setLog(logRes.events || []);
+      setLog(mergeRunLog(tailRes.events, errorRes.events));
+      setLogCursor(tailRes.nextCursor);
+      setLogLoadCount((n) => n + 1);
     } catch (err) {
       setError(err.message || 'Failed to load run.');
     } finally {
@@ -49,6 +68,26 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadEarlier = async () => {
+    if (!logCursor) return;
+    setLoadingEarlier(true);
+    try {
+      const res = await getDiagnosticsEvents({
+        runId,
+        limit: LOG_PAGE_SIZE,
+        sortBy: 'ts',
+        sortDir: 'desc',
+        cursor: logCursor,
+      });
+      setLog((prev) => mergeRunLog(prev, res.events));
+      setLogCursor(res.nextCursor);
+    } catch (err) {
+      setError(err.message || 'Failed to load earlier events.');
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
 
   const timelineRows = useMemo(() => buildTimelineRows(run, timeline), [run, timeline]);
 
@@ -82,7 +121,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
       ) : run ? (
         <>
           <Paper variant='outlined' sx={{ p: 2 }}>
-            <Stack direction='row' spacing={1} alignItems='center' flexWrap='wrap'>
+            <Stack useFlexGap direction='row' spacing={1} alignItems='center' flexWrap='wrap'>
               <Typography variant='h6' sx={{ fontFamily: 'monospace' }}>
                 {run.runId}
               </Typography>
@@ -93,7 +132,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
               </Tooltip>
               <Chip size='small' color={STATUS_COLOR[run.status] || 'default'} label={formatRunStatusLabel(run.status)} />
             </Stack>
-            <Stack direction='row' spacing={2} flexWrap='wrap' sx={{ mt: 1 }}>
+            <Stack useFlexGap direction='row' spacing={2} flexWrap='wrap' sx={{ mt: 1 }}>
               <Typography variant='body2' color='text.secondary'>
                 <b>{run.docType || 'unknown'}</b> · {run.project || 'unknown'}
               </Typography>
@@ -178,18 +217,30 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
             <Typography variant='subtitle2' sx={{ mb: 1 }}>
               Run log · all services, time-ordered
             </Typography>
-            <Paper variant='outlined' sx={{ maxHeight: 360, overflowY: 'auto' }}>
+            {logCursor ? (
+              <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
+                Showing the newest {LOG_PAGE_SIZE} events plus the run&apos;s errors — earlier events are not shown yet.
+              </Typography>
+            ) : null}
+            <Paper ref={logScrollRef} variant='outlined' sx={{ maxHeight: 360, overflowY: 'auto' }}>
               {log.length === 0 ? (
                 <Typography variant='body2' color='text.secondary' sx={{ p: 2 }}>
                   No log events captured for this run.
                 </Typography>
               ) : (
                 <Stack divider={<Divider />}>
+                  {logCursor ? (
+                    <Box sx={{ textAlign: 'center', p: 1 }}>
+                      <Button size='small' onClick={loadEarlier} disabled={loadingEarlier}>
+                        {loadingEarlier ? 'Loading…' : 'Load earlier events'}
+                      </Button>
+                    </Box>
+                  ) : null}
                   {log.map((e) => (
                     <Box key={e._id} sx={{ display: 'grid', gridTemplateColumns: '90px 50px 130px 1fr', gap: 1, p: 1, fontSize: '0.78rem', fontFamily: 'monospace' }}>
                       <span>{new Date(e.ts).toLocaleTimeString()}</span>
                       <span style={{ color: LEVEL_COLOR[e.level], fontWeight: 700 }}>{e.level.toUpperCase()}</span>
-                      <span style={{ color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.service}</span>
+                      <span style={{ color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.service}</span>
                       <span>{e.message}</span>
                     </Box>
                   ))}

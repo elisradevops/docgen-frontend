@@ -8,6 +8,9 @@ import {
   buildDetailsText,
   buildLogsCsv,
   appendOlderEvents,
+  hasReachedRowCap,
+  canLiveTail,
+  LOG_ROW_CAP,
   buildHistogramBars,
   formatBucketRangeLabel,
   filterFacetValues,
@@ -199,5 +202,22 @@ describe('buildLogsCsv', () => {
     const row = buildLogsCsv([{ level: 'error', message: '=HYPERLINK("http://x")' }]).split('\n')[1];
     expect(row).toContain(`"'=HYPERLINK(""http://x"")"`);
     expect(buildLogsCsv([{ message: '@SUM(1)' }])).toContain("'@SUM(1)");
+  });
+});
+
+describe('row cap and live-tail gating', () => {
+  const rows = (n, start = 0) => Array.from({ length: n }, (_, i) => ({ _id: `e${start + i}`, ts: '2026-10-04T10:00:00Z' }));
+  test('appendOlderEvents never grows past maxTotal', () => {
+    expect(appendOlderEvents(rows(1990), rows(50, 1990)).length).toBe(LOG_ROW_CAP);
+    expect(appendOlderEvents(rows(3), rows(5, 3), { maxTotal: 4 }).map((e) => e._id)).toEqual(['e0', 'e1', 'e2', 'e3']);
+  });
+  test('hasReachedRowCap flips at the cap', () => {
+    expect(hasReachedRowCap(LOG_ROW_CAP - 1)).toBe(false);
+    expect(hasReachedRowCap(LOG_ROW_CAP)).toBe(true);
+  });
+  test('live tail only for newest-first time sort', () => {
+    expect(canLiveTail('ts', 'desc')).toBe(true);
+    expect(canLiveTail('ts', 'asc')).toBe(false);
+    expect(canLiveTail('service', 'desc')).toBe(false);
   });
 });

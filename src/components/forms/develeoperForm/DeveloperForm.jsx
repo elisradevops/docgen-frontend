@@ -86,7 +86,7 @@ const DeveloperForm = observer(({ store }) => {
       {selectedSubTab === SUBTAB_CONNECTIONS ? <ServiceConnectionsDashboard /> : null}
 
       {selectedSubTab === SUBTAB_MONITORING ? (
-        <MonitoringDashboard onViewConnections={() => setSelectedSubTab(SUBTAB_CONNECTIONS)} />
+        <MonitoringDashboard userId={store.userDetails?.name} onViewConnections={() => setSelectedSubTab(SUBTAB_CONNECTIONS)} />
       ) : null}
 
       {selectedSubTab === SUBTAB_BUILDER ? (
