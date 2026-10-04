@@ -7,7 +7,7 @@ import {
   getDiagnosticsRunReportUrl,
   getDiagnosticsEvents,
 } from '../../../store/data/docManagerApi';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, mergeRunLog } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, mergeRunLog, formatCaptureLabel } from './runDetailState';
 import { levelColors as LEVEL_COLOR, colors } from '../../../theme/tokens';
 
 const STATUS_COLOR = { failed: 'error', succeeded: 'success', running: 'info' };
@@ -131,6 +131,11 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
                 </IconButton>
               </Tooltip>
               <Chip size='small' color={STATUS_COLOR[run.status] || 'default'} label={formatRunStatusLabel(run.status)} />
+              {formatCaptureLabel(run) ? (
+                <Tooltip title='Detailed (debug/info) logs were captured for this run, so its log below is longer than usual.'>
+                  <Chip size='small' variant='outlined' color='warning' label={formatCaptureLabel(run)} />
+                </Tooltip>
+              ) : null}
             </Stack>
             <Stack useFlexGap direction='row' spacing={2} flexWrap='wrap' sx={{ mt: 1 }}>
               <Typography variant='body2' color='text.secondary'>

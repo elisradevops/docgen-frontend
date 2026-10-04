@@ -71,3 +71,13 @@ export const mergeRunLog = (...lists) => {
   });
 };
 
+/**
+ * Label for the "extra logging was on" chip: only a run that was actually captured (requested
+ * and authorized — api-gate stores captureMode only then) gets one; a normal run gets none.
+ */
+export const formatCaptureLabel = (run) => {
+  if (run?.captureMode === 'verbose') return 'Verbose capture';
+  if (run?.captureMode === 'retain-on-failure') return 'Capture on failure';
+  return '';
+};
+
