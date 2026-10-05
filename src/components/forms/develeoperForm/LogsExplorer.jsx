@@ -20,6 +20,7 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
+  formatStepLine,
   isCorrelationOnlyId,
   formatRunCellLabel,
   TIME_SORT_DIRECTIONS,
@@ -491,6 +492,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
         const isExpanded = expandedRowId === record._id;
         const isLong = (message || '').length > MESSAGE_TRUNCATE_LENGTH;
         const requestLine = formatRequestLine(record.context);
+        const stepLine = formatStepLine(record);
         const hasStack = !!record.err?.stack || !!requestLine;
         const isStackExpanded = expandedStackId === record._id;
         return (
@@ -508,6 +510,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
                 </AntButton>
               ) : null}
             </div>
+            {stepLine ? <div style={{ fontSize: 11, color: '#64748b' }}>{stepLine}</div> : null}
             {requestLine ? (
               <div style={{ fontSize: 11, color: '#94a3b8', wordBreak: 'break-all' }}>{requestLine}</div>
             ) : null}
