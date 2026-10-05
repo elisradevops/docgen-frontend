@@ -159,7 +159,28 @@ export const buildLogsCsv = (events) => {
  */
 export const isRequestId = (id) => typeof id === 'string' && id.startsWith('req-');
 
-/** Short label for the Run column: 8 chars of a run id, or "req ·" plus 6 chars of a request id. */
-export const formatRunCellLabel = (id) =>
-  isRequestId(id) ? `req · ${id.slice(4, 10)}` : String(id).slice(0, 8);
+/** `ses-<uuid>`: the frontend's working session; picker calls are logged under it. Not a run either. */
+export const isSessionId = (id) => typeof id === 'string' && id.startsWith('ses-');
+
+/** Ids that only correlate log lines — there is no run behind them, so no run detail to open. */
+export const isCorrelationOnlyId = (id) => isRequestId(id) || isSessionId(id);
+
+/** Short label for the Run column: 8 chars of a run id, or "req ·" / "session ·" plus 6 chars. */
+export const formatRunCellLabel = (id) => {
+  if (isRequestId(id)) return `req · ${id.slice(4, 10)}`;
+  if (isSessionId(id)) return `session · ${id.slice(4, 10)}`;
+  return String(id).slice(0, 8);
+};
+
+// The Time column starts controlled at "descend" (newest first). antd's default cycle is
+// ascend → descend → cancel, so from "descend" the next click was "cancel", which maps back to
+// newest-first: the column could never reach ascending. Descend first makes the cycle
+// descend → ascend → cancel(→ newest first again).
+export const TIME_SORT_DIRECTIONS = ['descend', 'ascend'];
+
+/** The query's sort for an antd Table `sorter`; a cancelled sorter falls back to newest first. */
+export const sortStateFromSorter = (sorter) =>
+  sorter?.order && sorter?.columnKey
+    ? { sortBy: sorter.columnKey, sortDir: sorter.order === 'ascend' ? 'asc' : 'desc' }
+    : { sortBy: 'ts', sortDir: 'desc' };
 

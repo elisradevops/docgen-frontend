@@ -57,6 +57,9 @@ const MonitoringDashboard = ({ onViewConnections, userId }) => {
   const [resolvingId, setResolvingId] = useState(null);
   const [resolveError, setResolveError] = useState('');
   const [openRunId, setOpenRunId] = useState(null);
+  // Set when Run detail jumps to the Logs filtered to its working session; cleared when the Logs
+  // view is opened from the toggle, so a stale filter never lingers.
+  const [logsRunFilter, setLogsRunFilter] = useState('');
   const [compareIds, setCompareIds] = useState(null);
   const [openIssueId, setOpenIssueId] = useState(null);
   const [comparingIssueId, setComparingIssueId] = useState(null);
@@ -166,7 +169,11 @@ const MonitoringDashboard = ({ onViewConnections, userId }) => {
                 size='small'
                 exclusive
                 value={view}
-                onChange={(_e, next) => next && setView(next)}
+                onChange={(_e, next) => {
+                  if (!next) return;
+                  setLogsRunFilter('');
+                  setView(next);
+                }}
                 aria-label='Monitoring view'
               >
                 <ToggleButton value={VIEW_ATTENTION}>Needs attention</ToggleButton>
@@ -200,13 +207,21 @@ const MonitoringDashboard = ({ onViewConnections, userId }) => {
         {resolveError ? <Alert severity='warning'>{resolveError}</Alert> : null}
 
         {view === VIEW_RUN ? (
-          <RunDetail runId={openRunId} onBack={backToMonitoring} onOpenCompare={openCompare} />
+          <RunDetail
+            runId={openRunId}
+            onBack={backToMonitoring}
+            onOpenCompare={openCompare}
+            onShowInLogs={(sessionId) => {
+              setLogsRunFilter(sessionId);
+              setView(VIEW_LOGS);
+            }}
+          />
         ) : view === VIEW_ISSUE ? (
           <IssueDetail issueId={openIssueId} onBack={backToMonitoring} onOpenRun={openRun} />
         ) : view === VIEW_COMPARE ? (
           <RunCompare a={compareIds?.a} b={compareIds?.b} onBack={backToMonitoring} />
         ) : view === VIEW_LOGS ? (
-          <LogsExplorer onOpenRun={openRun} />
+          <LogsExplorer onOpenRun={openRun} initialRunId={logsRunFilter} />
         ) : loading && !overview ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
             <CircularProgress size={28} />

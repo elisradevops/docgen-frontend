@@ -1,4 +1,6 @@
 import { observable, action, makeObservable, computed, runInAction } from 'mobx';
+import { v4 as uuidV4 } from 'uuid';
+import { setRequestContextProvider } from '../utils/requestContext';
 import { configureLogger, makeLoggable } from 'mobx-log';
 import RestApi, { setAuthErrorHandler } from './actions/AzureDevopsRestApi';
 import cookies from 'js-cookies';
@@ -780,6 +782,13 @@ class DocGenDataStore {
       setAdoBootStatus: action,
     });
     makeLoggable(this);
+    // What the UI is working on, for the API headers (utils/requestContext.js): labels the log
+    // records of picker calls with the project / document type and the working session.
+    setRequestContextProvider(() => ({
+      project: this.teamProjectName,
+      docType: this.documentTypeTitle,
+      sessionId: this.sessionId,
+    }));
     // Global 401 handler -> set flags and dispatch event for UI to react.
     // The event/UI reaction (toast + logout) must only fire on the
     // transition INTO unauthorized, not on every repeated 401 while already
@@ -923,6 +932,10 @@ class DocGenDataStore {
 
   // Toggle for showing debug document types (hidden by default)
   showDebugDocs = false;
+  // The working session (ses-<uuid>): picker calls are logged under it, and the generation that
+  // follows records it on its run, so the activity that led up to a run can be shown with it. A
+  // new one starts after every generation, so each run owns the activity since the previous one.
+  sessionId = `ses-${uuidV4()}`;
   // Phase 6b — opt-in per generation, not sticky like formattingSettings: reset to false in
   // sendRequestToDocGen's finally so it doesn't silently stay on for the next run.
   captureDiagnostics = false;
@@ -2479,6 +2492,7 @@ class DocGenDataStore {
       return await sendDocumentToGenerator(docReq);
     } finally {
       this.setCaptureDiagnostics(false);
+      this.sessionId = `ses-${uuidV4()}`;
     }
   }
 

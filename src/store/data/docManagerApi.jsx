@@ -1,6 +1,7 @@
 import axios from 'axios';
 import C from '../constants';
 import { v4 as uuidV4 } from 'uuid';
+import { getSessionHeader } from '../../utils/requestContext';
 import logger from '../../utils/logger';
 import { setLastApiError } from '../../utils/debug';
 import { enqueueRequest } from '../../utils/requestQueue';
@@ -167,7 +168,9 @@ export const sendDocumentToGenerator = async (docJson) => {
     // left on docJson, so the body posted below stays exactly DocumentRequest-shaped.
     const captureDiagnostics = docJson.captureDiagnostics;
     delete docJson.captureDiagnostics;
-    const headers = { ...baseHeaders, 'x-docgen-run-id': docJson.documentId };
+    // x-docgen-session-id links this run to the picker activity that led up to it (see
+    // utils/requestContext.js); api-gate stores it on the run record.
+    const headers = { ...baseHeaders, 'x-docgen-run-id': docJson.documentId, ...getSessionHeader() };
     if (captureDiagnostics) {
       headers['x-docgen-capture-mode'] = 'verbose';
     }

@@ -3,6 +3,7 @@ import { enqueueRequest } from '../../utils/requestQueue';
 import C from '../constants';
 import logger from '../../utils/logger';
 import { setLastApiError } from '../../utils/debug';
+import { getPickerContextHeaders } from '../../utils/requestContext';
 
 let globalAuthErrorHandler = null;
 export function setAuthErrorHandler(fn) {
@@ -22,6 +23,10 @@ export default class AzureDevopsRestApi {
       // Pass org and PAT to the API gateway; adjust header names to what your gateway expects
       'X-Ado-Org-Url': this.orgUrl || '',
       'X-Ado-PAT': this.pat || '',
+      // Project, document type and session of what the user is working on: labels the log
+      // records of these calls so an error here can be filtered by project / doc type and tied
+      // to the generation that follows. See utils/requestContext.js.
+      ...getPickerContextHeaders(),
     };
   }
 

@@ -20,7 +20,10 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
+  isCorrelationOnlyId,
   formatRunCellLabel,
+  TIME_SORT_DIRECTIONS,
+  sortStateFromSorter,
   LOG_ROW_CAP,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -228,7 +231,7 @@ function FacetFilterDropdown({ dimension, facetValues, selected, onChange, onCle
   );
 }
 
-const LogsExplorer = ({ onOpenRun }) => {
+const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   const [filterSettings, setFilterSettings] = useState(loadLogsFilterSettings);
   const [windowHours, setWindowHours] = useState(() => loadLogsFilterSettings().defaultWindowHours);
   const [filters, setFilters] = useState(() => {
@@ -236,7 +239,7 @@ const LogsExplorer = ({ onOpenRun }) => {
     return { level: s.defaultLevels ?? [], service: s.defaultServices ?? [], project: [], docType: [] };
   });
   const [q, setQ] = useState('');
-  const [runId, setRunId] = useState('');
+  const [runId, setRunId] = useState(initialRunId);
   const [sortBy, setSortBy] = useState('ts');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -429,6 +432,7 @@ const LogsExplorer = ({ onOpenRun }) => {
       key: 'ts',
       width: 170,
       sorter: true,
+      sortDirections: TIME_SORT_DIRECTIONS,
       sortOrder: sortBy === 'ts' ? (sortDir === 'asc' ? 'ascend' : 'descend') : null,
       render: (ts) => new Date(ts).toLocaleString(),
     },
@@ -461,11 +465,17 @@ const LogsExplorer = ({ onOpenRun }) => {
               size='small'
               style={{ padding: 0 }}
               onClick={() => setRunId(id)}
-              title={isRequestId(id) ? 'A request id, not a document run — filter to this request' : 'Filter this table to this run'}
+              title={
+                isRequestId(id)
+                  ? 'A request id, not a document run — filter to this request'
+                  : isCorrelationOnlyId(id)
+                    ? 'A working session, not a document run — filter to this session'
+                    : 'Filter this table to this run'
+              }
             >
               {formatRunCellLabel(id)}
             </AntButton>
-            {typeof onOpenRun === 'function' && !isRequestId(id) ? (
+            {typeof onOpenRun === 'function' && !isCorrelationOnlyId(id) ? (
               <AntButton type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail' aria-label='Open run detail'>
                 ↗
               </AntButton>
@@ -538,13 +548,9 @@ const LogsExplorer = ({ onOpenRun }) => {
   ];
 
   const handleTableChange = (_pagination, _tableFilters, sorter) => {
-    if (sorter?.order) {
-      setSortBy(sorter.columnKey);
-      setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
-    } else {
-      setSortBy('ts');
-      setSortDir('desc');
-    }
+    const next = sortStateFromSorter(sorter);
+    setSortBy(next.sortBy);
+    setSortDir(next.sortDir);
   };
 
   const grandTotal = histogramBars.reduce((sum, b) => sum + b.total, 0);
