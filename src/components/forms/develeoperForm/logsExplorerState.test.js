@@ -11,6 +11,7 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
+  formatStepLine,
   isSessionId,
   isCorrelationOnlyId,
   formatRunCellLabel,
@@ -197,7 +198,7 @@ describe('buildLogsCsv', () => {
       { ts: '2026-10-04T10:00:00.000Z', level: 'error', message: 'boom', context: { method: 'GET', url: 'https://h/x', status: 404 } },
     ]);
     const [header, row] = csv.split('\n');
-    expect(header).toBe('Time,Level,Service,Project,Type,Run,Message,Request,Stack');
+    expect(header).toBe('Time,Level,Service,Project,Type,Run,Step,Message,Request,Stack');
     expect(row).toContain('GET https://h/x -> 404');
   });
   test('quotes cells containing commas, quotes and newlines', () => {
@@ -287,6 +288,26 @@ describe('Time column sort', () => {
       order = state.sortDir === 'asc' ? 'ascend' : 'descend'; // the controlled sortOrder after the update
     }
     expect(clicks).toEqual(['asc', 'desc', 'asc']);
+  });
+});
+
+describe('formatStepLine', () => {
+  test('step and content control title, either may be missing', () => {
+    expect(formatStepLine({ step: 'generate-content-control', contentControlTitle: 'Test Plan' })).toBe(
+      'generate-content-control › Test Plan'
+    );
+    expect(formatStepLine({ step: 'render-document' })).toBe('render-document');
+    expect(formatStepLine({ contentControlTitle: 'Test Plan' })).toBe('Test Plan');
+  });
+  test('empty when the record has neither (interactive request, system line)', () => {
+    expect(formatStepLine({})).toBe('');
+    expect(formatStepLine({ step: '  ', contentControlTitle: 5 })).toBe('');
+    expect(formatStepLine(null)).toBe('');
+  });
+  test('the CSV carries it in a Step column', () => {
+    const csv = buildLogsCsv([{ ts: '2026-10-05T08:00:00Z', level: 'warn', message: 'm', step: 'generate-content-control', contentControlTitle: 'Release range' }]);
+    const [, row] = csv.split('\n');
+    expect(row).toContain(',generate-content-control › Release range,m');
   });
 });
 

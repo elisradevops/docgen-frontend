@@ -108,6 +108,13 @@ export const formatRequestLine = (context) => {
   return context.status ? `${target} -> ${context.status}` : target;
 };
 
+/**
+ * Which generation stage (and content control) a record belongs to: "generate-content-control › Test
+ * Plan". Either part may be missing; '' when there is neither (an interactive request, a system line).
+ */
+export const formatStepLine = (record) =>
+  [record?.step, record?.contentControlTitle].filter((part) => typeof part === 'string' && part.trim()).join(' › ');
+
 /** Multi-line detail block (request line, attempt, body, server response); '' when no context. */
 export const formatRequestDetail = (context) => {
   const line = formatRequestLine(context);
@@ -134,7 +141,7 @@ const escapeCsvCell = (val) => {
 };
 
 export const buildLogsCsv = (events) => {
-  const header = 'Time,Level,Service,Project,Type,Run,Message,Request,Stack';
+  const header = 'Time,Level,Service,Project,Type,Run,Step,Message,Request,Stack';
   const rows = events.map((e) =>
     [
       e.ts ? new Date(e.ts).toISOString() : '',
@@ -143,6 +150,7 @@ export const buildLogsCsv = (events) => {
       e.project || '',
       e.docType || '',
       e.runId || '',
+      formatStepLine(e),
       e.message || '',
       formatRequestDetail(e.context),
       e.err?.stack || '',

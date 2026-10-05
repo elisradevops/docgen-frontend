@@ -32,6 +32,7 @@ import {
   formatCaptureLabel,
   pickRunInput,
 } from './runDetailState';
+import { formatStepLine } from './logsExplorerState';
 // The same renderer the Documents tab uses for a document's input, so a run shows it identically.
 import { SelectedInputPopoverContent } from '../documentsTab/SelectedInputPopover';
 import { levelColors as LEVEL_COLOR, colors } from '../../../theme/tokens';
@@ -371,7 +372,12 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
                       <span>{new Date(e.ts).toLocaleTimeString()}</span>
                       <span style={{ color: LEVEL_COLOR[e.level], fontWeight: 700 }}>{e.level.toUpperCase()}</span>
                       <span style={{ color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.service}</span>
-                      <span>{e.message}</span>
+                      <span>
+                        {e.message}
+                        {formatStepLine(e) ? (
+                          <span style={{ display: 'block', fontSize: '0.7rem', color: colors.textSecondary }}>{formatStepLine(e)}</span>
+                        ) : null}
+                      </span>
                     </Box>
                   ))}
                 </Stack>
