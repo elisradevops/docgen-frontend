@@ -37,3 +37,18 @@ export function isEventExcluded(event, excludePhrases) {
   return excludePhrases.some((p) => p && msg.includes(p.toLowerCase()));
 }
 
+const LIVE_KEY = 'logs-explorer-live';
+
+/** Live tail is on unless the user switched it off (remembered per browser). */
+export function loadLiveEnabled() {
+  try {
+    return tryLocalStorageGet(makeKey(LIVE_KEY)) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function saveLiveEnabled(enabled) {
+  tryLocalStorageSet(makeKey(LIVE_KEY), enabled ? 'on' : 'off');
+}
+

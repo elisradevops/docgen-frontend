@@ -39,6 +39,7 @@ import { levelColors as LEVEL_COLOR, colors } from '../../../theme/tokens';
 
 const STATUS_COLOR = { failed: 'error', succeeded: 'success', running: 'info' };
 const LOG_PAGE_SIZE = 200;
+const RUNNING_REFRESH_MS = 3000;
 const ERROR_LIMIT = 50;
 
 const SESSION_PREVIEW_LIMIT = 25;
@@ -118,6 +119,51 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
     load();
   }, [load]);
 
+  // The newest page and the run's errors, merged into what is already shown (older pages loaded with
+  // "Load earlier" stay), with no spinner and no error banner — used while the run is still running.
+  const refreshInFlightRef = useRef(false);
+  const stickToBottomRef = useRef(false);
+  const refresh = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    try {
+      const [detail, tailRes, errorRes] = await Promise.all([
+        getDiagnosticsRun(runId),
+        getDiagnosticsEvents({ runId, limit: LOG_PAGE_SIZE, sortBy: 'ts', sortDir: 'desc' }),
+        getDiagnosticsEvents({ runId, level: 'error', limit: ERROR_LIMIT, sortBy: 'ts', sortDir: 'desc' }),
+      ]);
+      // Follow the newest line only if the reader is already at the bottom: scrolling up to read
+      // something must not be yanked back down by the next refresh.
+      const el = logScrollRef.current;
+      stickToBottomRef.current = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      setRun(detail.run);
+      setTimeline(detail.timeline || []);
+      setLog((prev) => mergeRunLog(prev, tailRes.events, errorRes.events));
+    } catch {
+      // the next tick retries
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  }, [runId]);
+
+  useEffect(() => {
+    if (stickToBottomRef.current && logScrollRef.current) {
+      logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight;
+    }
+    stickToBottomRef.current = false;
+  }, [log]);
+
+  const isRunning = run?.status === 'running';
+  useEffect(() => {
+    if (!isRunning) return undefined;
+    const id = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, RUNNING_REFRESH_MS);
+    // The effect re-runs when the status flips away from running, which clears this interval; one
+    // last refresh is not needed because the flip itself came from a refresh that fetched everything.
+    return () => window.clearInterval(id);
+  }, [isRunning, refresh]);
+
   const loadEarlier = async () => {
     if (!logCursor) return;
     setLoadingEarlier(true);
@@ -187,6 +233,11 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
                 </IconButton>
               </Tooltip>
               <Chip size='small' color={STATUS_COLOR[run.status] || 'default'} label={formatRunStatusLabel(run.status)} />
+              {isRunning ? (
+                <Tooltip title='This run is still running — the page refreshes every few seconds until it finishes.'>
+                  <Chip size='small' color='info' variant='outlined' label='Running · live' />
+                </Tooltip>
+              ) : null}
               {formatCaptureLabel(run) ? (
                 <Tooltip title='Detailed (debug/info) logs were captured for this run, so its log below is longer than usual.'>
                   <Chip size='small' variant='outlined' color='warning' label={formatCaptureLabel(run)} />

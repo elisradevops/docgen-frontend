@@ -33,9 +33,55 @@ const rowId = (event) => event?._id;
  */
 export const mergeLiveRows = (existingEvents, polledEvents, { capPerPoll = 200, maxTotal = 1000 } = {}) => {
   const existingIds = new Set(existingEvents.map(rowId));
-  const genuinelyNew = polledEvents.filter((e) => !existingIds.has(rowId(e)));
-  const capped = genuinelyNew.slice(0, capPerPoll);
-  return [...capped, ...existingEvents].slice(0, maxTotal);
+  const genuinelyNew = polledEvents.filter((e) => !existingIds.has(rowId(e))).slice(0, capPerPoll);
+  if (genuinelyNew.length === 0) return existingEvents;
+  // Re-sorted by event time rather than prepended: events arrive by *insertion*, so a slow service's
+  // older event can show up after a newer one and has to slot into its place, not land on top.
+  return [...genuinelyNew, ...existingEvents].sort(newestFirst).slice(0, maxTotal);
+};
+
+const newestFirst = (a, b) => {
+  const diff = Date.parse(b?.ts) - Date.parse(a?.ts);
+  if (Number.isFinite(diff) && diff !== 0) return diff;
+  return String(rowId(b)).localeCompare(String(rowId(a)));
+};
+
+/** How often the Logs table polls while Live is on, and how many rows one poll may return. */
+export const LIVE_POLL_MS = 2000;
+export const LIVE_PAGE_LIMIT = 200;
+
+/**
+ * When a stored event was inserted, from its Mongo `_id` (the first 4 bytes are the creation time in
+ * seconds). This is arrival time on api-gate's clock, unlike `ts`, which is the emitting service's
+ * clock and can be older than the events already shown. NaN for anything that is not an ObjectId.
+ */
+export const idInsertedAtMs = (id) =>
+  typeof id === 'string' && /^[0-9a-f]{24}$/i.test(id) ? parseInt(id.slice(0, 8), 16) * 1000 : NaN;
+
+/**
+ * The live tail's boundary after a poll: the newest insertion time seen, and never earlier than the
+ * previous boundary. With nothing known yet it starts from the server's clock (`serverTimeMs`), so a
+ * browser clock that is off can't drop events. null when there is nothing to anchor to.
+ */
+export const advanceLiveBoundary = (previousMs, events, serverTimeMs) => {
+  const seen = (events || []).map((e) => idInsertedAtMs(e?._id)).filter(Number.isFinite);
+  const candidates = [previousMs, ...seen].filter(Number.isFinite);
+  if (candidates.length > 0) return Math.max(...candidates);
+  return Number.isFinite(serverTimeMs) ? serverTimeMs : null;
+};
+
+/**
+ * What the status chip next to the Live button says. `tone` is one of 'live' | 'warn' | 'idle'.
+ * A failure is only called out after 2 in a row (one missed poll is normal); a hidden tab is shown as
+ * paused because polling stops there on purpose.
+ */
+export const liveStatus = ({ live, hidden, failures, lastOkAt, now }) => {
+  if (!live) return { tone: 'idle', label: 'Live off' };
+  if (hidden) return { tone: 'idle', label: 'Paused — tab hidden' };
+  if (failures >= 2) return { tone: 'warn', label: `Reconnecting… (${failures} failed polls)` };
+  if (!Number.isFinite(lastOkAt)) return { tone: 'live', label: 'Live · connecting…' };
+  const seconds = Math.max(0, Math.round((now - lastOkAt) / 1000));
+  return { tone: 'live', label: seconds <= 1 ? 'Live · just now' : `Live · updated ${seconds}s ago` };
 };
 
 /**
