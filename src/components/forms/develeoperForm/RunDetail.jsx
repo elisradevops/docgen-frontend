@@ -1,5 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, Divider, IconButton, Link, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Divider,
+  IconButton,
+  Link,
+  Paper,
+  Stack,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   getDiagnosticsRun,
@@ -7,7 +24,16 @@ import {
   getDiagnosticsRunReportUrl,
   getDiagnosticsEvents,
 } from '../../../store/data/docManagerApi';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, mergeRunLog, formatCaptureLabel } from './runDetailState';
+import {
+  formatRunDuration,
+  formatRunStatusLabel,
+  buildTimelineRows,
+  mergeRunLog,
+  formatCaptureLabel,
+  pickRunInput,
+} from './runDetailState';
+// The same renderer the Documents tab uses for a document's input, so a run shows it identically.
+import { SelectedInputPopoverContent } from '../documentsTab/SelectedInputPopover';
 import { levelColors as LEVEL_COLOR, colors } from '../../../theme/tokens';
 
 const STATUS_COLOR = { failed: 'error', succeeded: 'success', running: 'info' };
@@ -111,6 +137,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
     }
   };
 
+  const runInput = useMemo(() => pickRunInput(run), [run]);
   const timelineRows = useMemo(() => buildTimelineRows(run, timeline), [run, timeline]);
 
   const handleCompareToBaseline = async () => {
@@ -182,6 +209,50 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
               </Button>
             </Stack>
           </Paper>
+
+          {runInput ? (
+            <Accordion variant='outlined' disableGutters sx={{ '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls='run-input-content' id='run-input-header'>
+                <Stack direction='row' spacing={1.5} alignItems='baseline' sx={{ minWidth: 0 }}>
+                  <Typography variant='subtitle2'>Input</Typography>
+                  <Typography
+                    variant='body2'
+                    color='text.secondary'
+                    noWrap
+                    sx={{ minWidth: 0 }}
+                    title={runInput.summary || undefined}
+                  >
+                    {runInput.summary || (runInput.kind === 'technical' ? 'Technical request details' : '')}
+                  </Typography>
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails>
+                {runInput.kind === 'curated' ? (
+                  <SelectedInputPopoverContent inputSummary={runInput.summary} inputDetails={runInput.details} />
+                ) : (
+                  <Box>
+                    <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 1 }}>
+                      <Typography variant='caption' color='text.secondary'>
+                        The request as recorded for this run (credentials are never stored).
+                      </Typography>
+                      <Button
+                        size='small'
+                        onClick={() => navigator.clipboard.writeText(JSON.stringify(runInput.details, null, 2))}
+                      >
+                        Copy JSON
+                      </Button>
+                    </Stack>
+                    <Box
+                      component='pre'
+                      sx={{ m: 0, p: 1.5, maxHeight: 320, overflow: 'auto', fontSize: '0.78rem', bgcolor: 'action.hover', borderRadius: 1 }}
+                    >
+                      {JSON.stringify(runInput.details, null, 2)}
+                    </Box>
+                  </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
+          ) : null}
 
           <Box>
             <Typography variant='subtitle2' sx={{ mb: 1 }}>

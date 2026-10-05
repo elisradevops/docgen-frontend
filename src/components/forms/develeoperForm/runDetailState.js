@@ -81,3 +81,23 @@ export const formatCaptureLabel = (run) => {
   return '';
 };
 
+/**
+ * What to show as a run's "Input". The curated input (the same summary/details the Documents tab
+ * shows) when the run has one; otherwise the technical inputs recorded in the manifest, which
+ * every run has (a run started by a pipeline has no curated one); otherwise nothing.
+ */
+export const pickRunInput = (run) => {
+  const summary = typeof run?.input?.summary === 'string' ? run.input.summary.trim() : '';
+  const details =
+    run?.input?.details && typeof run.input.details === 'object' && !Array.isArray(run.input.details)
+      ? run.input.details
+      : null;
+  if (summary || details) return { kind: 'curated', summary, details };
+
+  const inputs = run?.manifest?.inputs;
+  if (inputs && typeof inputs === 'object' && !Array.isArray(inputs) && Object.keys(inputs).length > 0) {
+    return { kind: 'technical', summary: '', details: inputs };
+  }
+  return null;
+};
+

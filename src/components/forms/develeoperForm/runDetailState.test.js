@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput } from './runDetailState';
 
 describe('formatRunDuration', () => {
   test('formats a completed run as seconds with one decimal', () => {
@@ -132,6 +132,30 @@ describe('formatCaptureLabel', () => {
     expect(formatCaptureLabel({})).toBe('');
     expect(formatCaptureLabel({ captureMode: 'normal' })).toBe('');
     expect(formatCaptureLabel(null)).toBe('');
+  });
+});
+
+describe('pickRunInput', () => {
+  test('prefers the curated input (summary and/or details)', () => {
+    const run = { input: { summary: ' Doc Type: STD ', details: { docType: 'STD' } }, manifest: { inputs: { templateName: 't' } } };
+    expect(pickRunInput(run)).toEqual({ kind: 'curated', summary: 'Doc Type: STD', details: { docType: 'STD' } });
+    expect(pickRunInput({ input: { summary: 'only a summary' } })).toEqual({ kind: 'curated', summary: 'only a summary', details: null });
+    expect(pickRunInput({ input: { details: { a: 1 } } })).toEqual({ kind: 'curated', summary: '', details: { a: 1 } });
+  });
+
+  test('falls back to the technical manifest inputs when there is no curated input', () => {
+    expect(pickRunInput({ manifest: { inputs: { templateName: 't', project: 'P' } } })).toEqual({
+      kind: 'technical',
+      summary: '',
+      details: { templateName: 't', project: 'P' },
+    });
+  });
+
+  test('nothing to show for a run with neither, and tolerates odd shapes', () => {
+    expect(pickRunInput(null)).toBeNull();
+    expect(pickRunInput({})).toBeNull();
+    expect(pickRunInput({ input: { summary: '  ', details: [1, 2] }, manifest: { inputs: {} } })).toBeNull();
+    expect(pickRunInput({ input: { details: 'text' }, manifest: { inputs: [] } })).toBeNull();
   });
 });
 
