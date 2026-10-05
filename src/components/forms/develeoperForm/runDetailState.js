@@ -101,3 +101,59 @@ export const pickRunInput = (run) => {
   return null;
 };
 
+const MAX_FACTS = 4;
+const MAX_FACT_LEN = 40;
+const SUMMARY_PREVIEW_LEN = 80;
+
+const clampText = (value, max) => {
+  const text = String(value ?? '').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+};
+
+// "STD.dotx" out of ".../templates/shared/STD/STD.dotx?X-Amz-Signature=..." — a template shown by its
+// file name, never a URL (which may carry a presigned query).
+const fileNameOf = (url) => {
+  const last = String(url ?? '').split(/[?#]/)[0].split('/').filter(Boolean).pop() || '';
+  try {
+    return decodeURIComponent(last);
+  } catch {
+    return last;
+  }
+};
+
+const controlCountLabel = (list) =>
+  Array.isArray(list) && list.length > 0 ? `${list.length} content control${list.length === 1 ? '' : 's'}` : '';
+
+/**
+ * A few short "key facts" for the collapsed Input card — document type, template, context, how many
+ * content controls — so the header says what the run was asked to do without printing the (up to 1024
+ * characters) summary on one line. At most 4, each clamped, each keeping its full text for a tooltip.
+ * Returns [] when there is nothing to say.
+ */
+export const buildInputFacts = (runInput, run) => {
+  if (!runInput) return [];
+  const facts = [];
+  const add = (key, label, value) => {
+    const full = String(value ?? '').trim();
+    if (full) facts.push({ key, label, value: clampText(full, MAX_FACT_LEN), full });
+  };
+
+  if (runInput.kind === 'technical') {
+    const inputs = runInput.details || {};
+    add('template', 'Template', fileNameOf(inputs.templateName));
+    add('project', 'Project', inputs.project);
+    add('controls', '', controlCountLabel(inputs.contentControls));
+  } else if (runInput.details) {
+    const details = runInput.details;
+    add('docType', 'Type', details.docType || run?.docType);
+    add('template', 'Template', details.template?.name || fileNameOf(run?.templateName));
+    add('context', 'Context', details.contextName);
+    add('controls', '', controlCountLabel(details.contentControls));
+  } else if (runInput.summary) {
+    // Summary only (no details object): a short preview, not the whole line.
+    const full = runInput.summary.trim();
+    facts.push({ key: 'summary', label: '', value: clampText(full, SUMMARY_PREVIEW_LEN), full });
+  }
+  return facts.slice(0, MAX_FACTS);
+};
+

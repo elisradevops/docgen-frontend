@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { FilterOutlined } from '@ant-design/icons';
 import { Table, Button as AntButton, Select as AntSelect, Input, Checkbox, Space } from 'antd';
 import LoadingState from '../../common/LoadingState';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
@@ -23,6 +24,7 @@ import {
   formatStepLine,
   isCorrelationOnlyId,
   formatRunCellLabel,
+  runCellActions,
   TIME_SORT_DIRECTIONS,
   sortStateFromSorter,
   LOG_ROW_CAP,
@@ -457,32 +459,43 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       title: 'Run',
       dataIndex: 'runId',
       key: 'runId',
-      width: 130,
-      render: (id) =>
-        id ? (
-          <span>
+      width: 150,
+      render: (id) => {
+        if (!id) return null;
+        const actions = runCellActions(id, typeof onOpenRun === 'function');
+        const filterTitle = isRequestId(id)
+          ? 'A request id, not a document run — filter to this request'
+          : isCorrelationOnlyId(id)
+            ? 'A working session, not a document run — filter to this session'
+            : 'Show only this run';
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+            {/* A real run: the id opens its detail (the primary thing anyone wants from it) and a
+                separate icon narrows the table. A request/session id has no run page, so it filters. */}
             <AntButton
               type='link'
               size='small'
-              style={{ padding: 0 }}
-              onClick={() => setRunId(id)}
-              title={
-                isRequestId(id)
-                  ? 'A request id, not a document run — filter to this request'
-                  : isCorrelationOnlyId(id)
-                    ? 'A working session, not a document run — filter to this session'
-                    : 'Filter this table to this run'
-              }
+              style={{ padding: 0, fontFamily: 'monospace' }}
+              onClick={() => (actions.primary === 'open' ? onOpenRun(id) : setRunId(id))}
+              title={actions.primary === 'open' ? 'Open run detail' : filterTitle}
+              aria-label={actions.primary === 'open' ? 'Open run detail' : filterTitle}
             >
               {formatRunCellLabel(id)}
             </AntButton>
-            {typeof onOpenRun === 'function' && !isCorrelationOnlyId(id) ? (
-              <AntButton type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail' aria-label='Open run detail'>
-                ↗
-              </AntButton>
+            {actions.showFilterIcon ? (
+              <AntButton
+                type='text'
+                size='small'
+                icon={<FilterOutlined />}
+                style={{ color: '#64748b' }}
+                onClick={() => setRunId(id)}
+                title='Show only this run'
+                aria-label='Show only this run'
+              />
             ) : null}
           </span>
-        ) : null,
+        );
+      },
     },
     {
       title: 'Message',

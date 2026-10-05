@@ -192,3 +192,15 @@ export const sortStateFromSorter = (sorter) =>
     ? { sortBy: sorter.columnKey, sortDir: sorter.order === 'ascend' ? 'asc' : 'desc' }
     : { sortBy: 'ts', sortDir: 'desc' };
 
+/**
+ * What the Run column does for an id. A real run opens its detail on click (a small filter icon
+ * narrows the table to it instead); a request or session id has no run page, so it filters; without
+ * an open handler there is nothing to open, so it filters too.
+ */
+export const runCellActions = (id, canOpen) => {
+  if (!id) return { primary: 'none', showFilterIcon: false };
+  if (isCorrelationOnlyId(id)) return { primary: 'filter', showFilterIcon: false };
+  if (canOpen) return { primary: 'open', showFilterIcon: true };
+  return { primary: 'filter', showFilterIcon: false };
+};
+

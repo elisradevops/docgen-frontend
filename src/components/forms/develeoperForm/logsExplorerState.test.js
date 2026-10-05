@@ -11,6 +11,7 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
+  runCellActions,
   formatStepLine,
   isSessionId,
   isCorrelationOnlyId,
@@ -308,6 +309,23 @@ describe('formatStepLine', () => {
     const csv = buildLogsCsv([{ ts: '2026-10-05T08:00:00Z', level: 'warn', message: 'm', step: 'generate-content-control', contentControlTitle: 'Release range' }]);
     const [, row] = csv.split('\n');
     expect(row).toContain(',generate-content-control › Release range,m');
+  });
+});
+
+describe('runCellActions', () => {
+  test('a real run opens on click and offers a filter icon', () => {
+    expect(runCellActions('3f2504e0-4f89-11d3', true)).toEqual({ primary: 'open', showFilterIcon: true });
+  });
+  test('without an open handler a run id filters', () => {
+    expect(runCellActions('3f2504e0-4f89-11d3', false)).toEqual({ primary: 'filter', showFilterIcon: false });
+  });
+  test('request and session ids have no run page: they filter, with no extra icon', () => {
+    expect(runCellActions('req-3f2504e0', true)).toEqual({ primary: 'filter', showFilterIcon: false });
+    expect(runCellActions('ses-3f2504e0', true)).toEqual({ primary: 'filter', showFilterIcon: false });
+  });
+  test('no id, no actions', () => {
+    expect(runCellActions('', true)).toEqual({ primary: 'none', showFilterIcon: false });
+    expect(runCellActions(undefined, true)).toEqual({ primary: 'none', showFilterIcon: false });
   });
 });
 

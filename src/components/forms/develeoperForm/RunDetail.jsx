@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Divider,
   IconButton,
   Link,
@@ -17,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   getDiagnosticsRun,
@@ -31,6 +30,7 @@ import {
   mergeRunLog,
   formatCaptureLabel,
   pickRunInput,
+  buildInputFacts,
 } from './runDetailState';
 import { formatStepLine } from './logsExplorerState';
 // The same renderer the Documents tab uses for a document's input, so a run shows it identically.
@@ -139,6 +139,12 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
   };
 
   const runInput = useMemo(() => pickRunInput(run), [run]);
+  const inputFacts = useMemo(() => buildInputFacts(runInput, run), [runInput, run]);
+  const [inputOpen, setInputOpen] = useState(false);
+  // A different run starts collapsed again.
+  useEffect(() => {
+    setInputOpen(false);
+  }, [runId]);
   const timelineRows = useMemo(() => buildTimelineRows(run, timeline), [run, timeline]);
 
   const handleCompareToBaseline = async () => {
@@ -212,47 +218,86 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
           </Paper>
 
           {runInput ? (
-            <Accordion variant='outlined' disableGutters sx={{ '&:before': { display: 'none' } }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls='run-input-content' id='run-input-header'>
-                <Stack direction='row' spacing={1.5} alignItems='baseline' sx={{ minWidth: 0 }}>
-                  <Typography variant='subtitle2'>Input</Typography>
-                  <Typography
-                    variant='body2'
-                    color='text.secondary'
-                    noWrap
-                    sx={{ minWidth: 0 }}
-                    title={runInput.summary || undefined}
-                  >
-                    {runInput.summary || (runInput.kind === 'technical' ? 'Technical request details' : '')}
-                  </Typography>
-                </Stack>
-              </AccordionSummary>
-              <AccordionDetails>
-                {runInput.kind === 'curated' ? (
-                  <SelectedInputPopoverContent inputSummary={runInput.summary} inputDetails={runInput.details} />
-                ) : (
-                  <Box>
-                    <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 1 }}>
-                      <Typography variant='caption' color='text.secondary'>
-                        The request as recorded for this run (credentials are never stored).
-                      </Typography>
-                      <Button
+            <Paper variant='outlined'>
+              {/* The whole header is the control (role=button): the label, the key facts and the
+                  "Show details" cue all toggle it. The long summary is never printed here — only a
+                  few short facts — so the header always fits and the cue is always visible. */}
+              <Box
+                role='button'
+                tabIndex={0}
+                aria-expanded={inputOpen}
+                aria-controls='run-input-body'
+                onClick={() => setInputOpen((open) => !open)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setInputOpen((open) => !open);
+                  }
+                }}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                  px: 2,
+                  py: 1.25,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  borderRadius: 'inherit',
+                  '&:hover': { bgcolor: 'action.hover' },
+                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
+                }}
+              >
+                <Typography variant='subtitle2'>Input</Typography>
+                <Stack direction='row' useFlexGap flexWrap='wrap' spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+                  {inputFacts.map((fact) => (
+                    <Tooltip key={fact.key} title={fact.full}>
+                      <Chip
                         size='small'
-                        onClick={() => navigator.clipboard.writeText(JSON.stringify(runInput.details, null, 2))}
+                        variant='outlined'
+                        label={fact.label ? `${fact.label}: ${fact.value}` : fact.value}
+                        sx={{ maxWidth: '100%' }}
+                      />
+                    </Tooltip>
+                  ))}
+                </Stack>
+                <Box
+                  component='span'
+                  sx={{ ml: 'auto', display: 'inline-flex', alignItems: 'center', color: 'primary.main', fontWeight: 600, fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+                >
+                  {inputOpen ? 'Hide details' : 'Show details'}
+                  {inputOpen ? <ExpandLessIcon fontSize='small' /> : <ExpandMoreIcon fontSize='small' />}
+                </Box>
+              </Box>
+              <Collapse in={inputOpen} unmountOnExit>
+                <Divider />
+                <Box id='run-input-body' sx={{ p: 2, overflowX: 'auto' }}>
+                  {runInput.kind === 'curated' ? (
+                    <SelectedInputPopoverContent inputSummary={runInput.summary} inputDetails={runInput.details} />
+                  ) : (
+                    <Box>
+                      <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 1 }}>
+                        <Typography variant='caption' color='text.secondary'>
+                          The request as recorded for this run (credentials are never stored).
+                        </Typography>
+                        <Button
+                          size='small'
+                          onClick={() => navigator.clipboard.writeText(JSON.stringify(runInput.details, null, 2))}
+                        >
+                          Copy JSON
+                        </Button>
+                      </Stack>
+                      <Box
+                        component='pre'
+                        sx={{ m: 0, p: 1.5, maxHeight: 320, overflow: 'auto', fontSize: '0.78rem', bgcolor: 'action.hover', borderRadius: 1 }}
                       >
-                        Copy JSON
-                      </Button>
-                    </Stack>
-                    <Box
-                      component='pre'
-                      sx={{ m: 0, p: 1.5, maxHeight: 320, overflow: 'auto', fontSize: '0.78rem', bgcolor: 'action.hover', borderRadius: 1 }}
-                    >
-                      {JSON.stringify(runInput.details, null, 2)}
+                        {JSON.stringify(runInput.details, null, 2)}
+                      </Box>
                     </Box>
-                  </Box>
-                )}
-              </AccordionDetails>
-            </Accordion>
+                  )}
+                </Box>
+              </Collapse>
+            </Paper>
           ) : null}
 
           <Box>
