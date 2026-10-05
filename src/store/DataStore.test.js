@@ -158,6 +158,21 @@ describe('DataStore sendRequestToDocGen (Phase 6b captureDiagnostics)', () => {
     expect(store.captureDiagnostics).toBe(false);
   });
 
+  test('disarms captureDiagnostics when the document type changes, keeps it when unchanged', async () => {
+    const store = (await import('./DataStore')).default;
+    store.setDocType('STD');
+    store.setCaptureDiagnostics(true);
+
+    store.setDocType('STD');
+    expect(store.captureDiagnostics).toBe(true);
+
+    store.setDocType('STR');
+    expect(store.captureDiagnostics).toBe(false);
+
+    store.setDocType('STD');
+    expect(store.captureDiagnostics).toBe(false);
+  });
+
   test('resets captureDiagnostics to false even when the request fails', async () => {
     const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
     sendDocumentToGenerator.mockRejectedValue(new Error('server down'));

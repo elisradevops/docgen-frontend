@@ -937,7 +937,8 @@ class DocGenDataStore {
   // new one starts after every generation, so each run owns the activity since the previous one.
   sessionId = `ses-${uuidV4()}`;
   // Phase 6b — opt-in per generation, not sticky like formattingSettings: reset to false in
-  // sendRequestToDocGen's finally so it doesn't silently stay on for the next run.
+  // sendRequestToDocGen's finally, when the document type (tab) changes, and when debug mode is
+  // turned off, so it doesn't silently stay on for the next run.
   captureDiagnostics = false;
   // Metadata per document type (tabIndex, isDebug)
   docTypeMeta = {};
@@ -2855,7 +2856,11 @@ class DocGenDataStore {
   }
 
   setDocType(docType) {
-    this.docType = docType || '';
+    const next = docType || '';
+    // Detailed capture is armed for the document tab the user toggled it on; moving to another
+    // tab must not carry it over (and apply it to a generation started from there).
+    if (next !== this.docType) this.setCaptureDiagnostics(false);
+    this.docType = next;
   }
 
   get getDocType() {

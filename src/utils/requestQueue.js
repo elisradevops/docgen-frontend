@@ -82,7 +82,7 @@ const runNext = (queue) => {
         globalActiveCount -= 1;
       }
       const attempt = job.attempt || 0;
-      if (attempt < queue.maxRetries && shouldRetry(err)) {
+      if (job.retry !== false && attempt < queue.maxRetries && shouldRetry(err)) {
         const delay = nextDelay(queue.baseDelayMs, attempt);
         setTimeout(() => {
           const priority = PRIORITIES.includes(job.priority) ? job.priority : 'normal';
@@ -107,7 +107,9 @@ export const enqueueRequest = (fn, options = {}) =>
     const key = options?.key || 'default';
     const priority = PRIORITIES.includes(options?.priority) ? options.priority : 'normal';
     const queue = getQueue(key);
-    queue.items[priority].push({ fn, resolve, reject, attempt: 0, priority });
+    // retry: false for non-idempotent calls (e.g. document generation) that must never be re-sent.
+    const retry = options?.retry !== false;
+    queue.items[priority].push({ fn, resolve, reject, attempt: 0, priority, retry });
     runNext(queue);
   });
 
