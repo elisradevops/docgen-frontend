@@ -11,7 +11,11 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
+  isSessionId,
+  isCorrelationOnlyId,
   formatRunCellLabel,
+  TIME_SORT_DIRECTIONS,
+  sortStateFromSorter,
   LOG_ROW_CAP,
   buildHistogramBars,
   formatBucketRangeLabel,
@@ -234,6 +238,55 @@ describe('request ids vs run ids', () => {
   test('cell label distinguishes them', () => {
     expect(formatRunCellLabel('req-3f2504e0-4f89')).toBe('req · 3f2504');
     expect(formatRunCellLabel('3f2504e0-4f89-11d3')).toBe('3f2504e0');
+  });
+});
+
+describe('session ids', () => {
+  test('ses- ids are sessions, and request and session ids are both correlation-only', () => {
+    expect(isSessionId('ses-9d2f')).toBe(true);
+    expect(isSessionId('req-9d2f')).toBe(false);
+    expect(isCorrelationOnlyId('ses-9d2f')).toBe(true);
+    expect(isCorrelationOnlyId('req-9d2f')).toBe(true);
+    expect(isCorrelationOnlyId('3f2504e0-4f89')).toBe(false);
+    expect(isCorrelationOnlyId(undefined)).toBe(false);
+  });
+  test('session label', () => {
+    expect(formatRunCellLabel('ses-3f2504e0-4f89')).toBe('session · 3f2504');
+  });
+});
+
+describe('Time column sort', () => {
+  // antd's own rule (es/table/hooks/useSorter.js): next = directions[indexOf(current) + 1]; no
+  // current → directions[0]; past the end → undefined, i.e. cancel.
+  const next = (directions, current) => (current ? directions[directions.indexOf(current) + 1] : directions[0]);
+
+  test('the default antd cycle gets stuck on newest-first (the bug)', () => {
+    expect(next(['ascend', 'descend'], 'descend')).toBeUndefined();
+  });
+
+  test('with TIME_SORT_DIRECTIONS the controlled "descend" state can reach ascending, then cancel', () => {
+    expect(next(TIME_SORT_DIRECTIONS, 'descend')).toBe('ascend');
+    expect(next(TIME_SORT_DIRECTIONS, 'ascend')).toBeUndefined();
+  });
+
+  test('sortStateFromSorter maps antd sorters to the query sort; a cancel falls back to newest first', () => {
+    expect(sortStateFromSorter({ columnKey: 'ts', order: 'ascend' })).toEqual({ sortBy: 'ts', sortDir: 'asc' });
+    expect(sortStateFromSorter({ columnKey: 'ts', order: 'descend' })).toEqual({ sortBy: 'ts', sortDir: 'desc' });
+    expect(sortStateFromSorter({ columnKey: 'level', order: 'ascend' })).toEqual({ sortBy: 'level', sortDir: 'asc' });
+    expect(sortStateFromSorter({ columnKey: 'level', order: undefined })).toEqual({ sortBy: 'ts', sortDir: 'desc' });
+    expect(sortStateFromSorter(undefined)).toEqual({ sortBy: 'ts', sortDir: 'desc' });
+  });
+
+  test('a full click sequence on Time goes newest → oldest → newest', () => {
+    let order = 'descend'; // initial controlled state
+    const clicks = [];
+    for (let i = 0; i < 3; i += 1) {
+      order = next(TIME_SORT_DIRECTIONS, order);
+      const state = sortStateFromSorter({ columnKey: 'ts', order });
+      clicks.push(state.sortDir);
+      order = state.sortDir === 'asc' ? 'ascend' : 'descend'; // the controlled sortOrder after the update
+    }
+    expect(clicks).toEqual(['asc', 'desc', 'asc']);
   });
 });
 

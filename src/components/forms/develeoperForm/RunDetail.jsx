@@ -14,7 +14,9 @@ const STATUS_COLOR = { failed: 'error', succeeded: 'success', running: 'info' };
 const LOG_PAGE_SIZE = 200;
 const ERROR_LIMIT = 50;
 
-const RunDetail = ({ runId, onBack, onOpenCompare }) => {
+const SESSION_PREVIEW_LIMIT = 25;
+
+const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [run, setRun] = useState(null);
@@ -23,6 +25,9 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
   // Cursor for the next-older page of the run's log; undefined once the whole log is loaded.
   const [logCursor, setLogCursor] = useState(undefined);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  // What was logged under this run's working session (the picker calls that led up to it).
+  const [sessionEvents, setSessionEvents] = useState([]);
+  const [sessionHasMore, setSessionHasMore] = useState(false);
   // The log is oldest-first, so a freshly loaded panel would otherwise open on its oldest rows
   // and hide the newest events and errors — the reason someone opens a failed run. Scrolled to
   // the bottom once per load; "Load earlier" must not move it.
@@ -58,6 +63,23 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
       setLog(mergeRunLog(tailRes.events, errorRes.events));
       setLogCursor(tailRes.nextCursor);
       setLogLoadCount((n) => n + 1);
+      // Best effort and separate from the page's own load: a failure here must not hide the run.
+      setSessionEvents([]);
+      setSessionHasMore(false);
+      if (detail.run?.sessionId) {
+        try {
+          const sessionRes = await getDiagnosticsEvents({
+            runId: detail.run.sessionId,
+            limit: SESSION_PREVIEW_LIMIT,
+            sortBy: 'ts',
+            sortDir: 'desc',
+          });
+          setSessionEvents(sessionRes.events || []);
+          setSessionHasMore(!!sessionRes.nextCursor);
+        } catch {
+          // leave the section out
+        }
+      }
     } catch (err) {
       setError(err.message || 'Failed to load run.');
     } finally {
@@ -217,6 +239,38 @@ const RunDetail = ({ runId, onBack, onOpenCompare }) => {
               )}
             </Paper>
           </Box>
+
+          {sessionEvents.length > 0 ? (
+            <Box>
+              <Typography variant='subtitle2' sx={{ mb: 0.5 }}>
+                Activity before this run
+              </Typography>
+              <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
+                Warnings and errors from the pickers in the same working session (loading queries, test plans, favorites),
+                newest first. They are not part of the run itself.
+              </Typography>
+              <Paper variant='outlined' sx={{ maxHeight: 220, overflowY: 'auto' }}>
+                <Stack divider={<Divider />}>
+                  {sessionEvents.map((e) => (
+                    <Box
+                      key={e._id}
+                      sx={{ display: 'grid', gridTemplateColumns: '90px 50px 130px 1fr', gap: 1, p: 1, fontSize: '0.78rem', fontFamily: 'monospace' }}
+                    >
+                      <span>{new Date(e.ts).toLocaleTimeString()}</span>
+                      <span style={{ color: LEVEL_COLOR[e.level], fontWeight: 700 }}>{String(e.level).toUpperCase()}</span>
+                      <span style={{ color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.service}</span>
+                      <span>{e.message}</span>
+                    </Box>
+                  ))}
+                </Stack>
+              </Paper>
+              {onShowInLogs ? (
+                <Button size='small' sx={{ mt: 1 }} onClick={() => onShowInLogs(run.sessionId)}>
+                  {sessionHasMore ? `Show all in Logs (more than ${SESSION_PREVIEW_LIMIT})` : 'Show in Logs'}
+                </Button>
+              ) : null}
+            </Box>
+          ) : null}
 
           <Box>
             <Typography variant='subtitle2' sx={{ mb: 1 }}>

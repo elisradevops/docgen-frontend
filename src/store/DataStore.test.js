@@ -182,6 +182,42 @@ describe('DataStore sendRequestToDocGen (Phase 6b captureDiagnostics)', () => {
     expect(store.captureDiagnostics).toBe(false);
   });
 
+  test('registers the request context and rotates the session id after each generation', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    sendDocumentToGenerator.mockResolvedValue({ ok: true });
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    const { getPickerContextHeaders } = await import('../utils/requestContext');
+    const store = (await import('./DataStore')).default;
+    store.ensureFreshAdoAccessToken = vi.fn().mockResolvedValue(undefined);
+    store.setDocumentTypeTitle('STD');
+    store.teamProjectName = 'MEWP';
+
+    const before = store.sessionId;
+    expect(before).toMatch(/^ses-[0-9a-f-]{36}$/);
+    expect(getPickerContextHeaders()).toEqual({
+      'x-docgen-project': 'MEWP',
+      'x-docgen-doc-type': 'STD',
+      'x-docgen-run-id': before,
+    });
+
+    await store.sendRequestToDocGen();
+
+    expect(store.sessionId).not.toBe(before);
+    expect(store.sessionId).toMatch(/^ses-[0-9a-f-]{36}$/);
+    expect(getPickerContextHeaders()['x-docgen-run-id']).toBe(store.sessionId);
+  });
+
+  test('rotates the session even when the generation request fails', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    sendDocumentToGenerator.mockRejectedValue(new Error('boom'));
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    const store = (await import('./DataStore')).default;
+    store.ensureFreshAdoAccessToken = vi.fn().mockResolvedValue(undefined);
+    const before = store.sessionId;
+    await expect(store.sendRequestToDocGen()).rejects.toThrow('boom');
+    expect(store.sessionId).not.toBe(before);
+  });
+
   test('defaults captureDiagnostics to false when never toggled on', async () => {
     const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
     sendDocumentToGenerator.mockResolvedValue({ ok: true });
