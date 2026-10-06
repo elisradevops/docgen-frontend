@@ -114,6 +114,26 @@ export const liveStatus = ({ live, hidden, failures, lastOkAt, now }) => {
 export const liveAnnouncement = (status) =>
   status.tone === 'warn' ? 'Live updates are reconnecting' : status.tone === 'live' ? 'Live updates on' : status.label;
 
+/** Back-to-back polls allowed to drain a burst before waiting for the next interval (keeps the page responsive). */
+export const LIVE_MAX_DRAIN = 10;
+
+/**
+ * Whether a tail-mode response filled the page, i.e. more events are probably waiting and the next poll
+ * should follow straight away. Only the cursor tail (`tail: true` in the response) pages this way.
+ */
+export const isFullTailPage = (res, limit = LIVE_PAGE_LIMIT) =>
+  res?.tail === true && Array.isArray(res.events) && res.events.length >= limit;
+
+/** The id to continue from after a tail poll: the newest (last, as the page is oldest-first) event, or null. */
+export const tailCursorAfter = (res) => {
+  const last = res?.tail === true && Array.isArray(res.events) ? res.events[res.events.length - 1] : null;
+  return last?._id ? String(last._id) : null;
+};
+
+/** How many events the tail is behind after this poll (0 when caught up, or not a tail-mode response). */
+export const liveBehind = (res) =>
+  res?.tail === true && Number.isFinite(res.behind) ? Math.max(0, Math.floor(res.behind)) : 0;
+
 /**
  * Live-tail burst signal: how many more events matched the poll's (incremental, since-last-poll)
  * window than the page actually returned. 0 means nothing was dropped — either matchedCount
@@ -280,3 +300,44 @@ export const runCellActions = (id, canOpen) => {
   return { primary: 'filter', showFilterIcon: false };
 };
 
+
+/** Height (px) of the scrolling log area: the viewport minus the page chrome above it, within sane bounds. */
+export const logsBodyHeight = (viewportHeight) => {
+  const h = Number.isFinite(viewportHeight) ? viewportHeight - 360 : 520;
+  return Math.min(1200, Math.max(320, Math.round(h)));
+};
+
+/**
+ * How many rows were added ahead of the row that used to be first, given the new rows (newest first).
+ * 0 when nothing was prepended; -1 when the old first row is gone (a different query, a sort change, or
+ * the row cap trimmed it), which the list treats as a reset rather than a prepend.
+ */
+export const countPrepended = (previousFirstId, rows, idOf = (row) => row?._id) => {
+  if (previousFirstId === undefined || previousFirstId === null) return 0;
+  return Array.isArray(rows) ? rows.findIndex((row) => idOf(row) === previousFirstId) : -1;
+};
+
+/** Room kept for the vertical scrollbar next to the table's columns (px), in the table's minimum width. */
+export const LOGS_SCROLLBAR_GUTTER_PX = 17;
+
+/** CSS selector (within a table) of the header table antd renders, for the given antd class prefix. */
+export const antTableSelectors = (prefix = 'ant-table') => ({
+  table: `.${prefix}`,
+  headerTable: `.${prefix}-header table`,
+});
+
+/**
+ * The header's column widths as measured cells, rounded to 0.1 px, or null when the number of cells is not the
+ * number of columns (then the rows fall back to proportional widths).
+ */
+export const pickHeaderWidths = (cellWidths, columnCount) =>
+  Array.isArray(cellWidths) && cellWidths.length >= columnCount
+    ? cellWidths.slice(0, columnCount).map((w) => Math.round(w * 10) / 10)
+    : null;
+
+/** Whether two width lists differ by less than `tolerance` px everywhere (so no state update is needed). */
+export const sameWidths = (a, b, tolerance = 0.5) =>
+  Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((w, i) => Math.abs(w - b[i]) < tolerance);
+
+/** The label of the "jump to the newest" pill shown while the reader is scrolled away from the top. */
+export const newEventsLabel = (count) => `${count.toLocaleString()} new event${count === 1 ? '' : 's'}`;
