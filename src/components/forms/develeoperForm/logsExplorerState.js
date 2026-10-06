@@ -50,6 +50,29 @@ const newestFirst = (a, b) => {
 export const LIVE_POLL_MS = 2000;
 export const LIVE_PAGE_LIMIT = 200;
 
+/** The chart and facet counts are re-fetched at most this often while Live brings new rows. */
+export const AGGREGATE_REFRESH_MS = 10000;
+
+/**
+ * How long to wait before re-fetching the aggregates (histogram + facet counts) after a live poll,
+ * or null when no refresh should be scheduled. The live poll only merges rows into the table; the
+ * aggregates come from separate queries, so they are re-fetched on a throttle instead of on every
+ * poll. Nothing is scheduled when the poll brought no rows, a refresh is already waiting (it reads
+ * the latest state when it fires, so it also covers these rows), or the view is a frozen bucket.
+ */
+export const aggregateRefreshDelay = ({
+  newRows,
+  lastRefreshAt,
+  now,
+  pending = false,
+  paused = false,
+  intervalMs = AGGREGATE_REFRESH_MS,
+}) => {
+  if (paused || pending || !(newRows > 0)) return null;
+  const sinceLast = Number.isFinite(lastRefreshAt) ? now - lastRefreshAt : Infinity;
+  return Math.max(0, intervalMs - sinceLast);
+};
+
 /**
  * When a stored event was inserted, from its Mongo `_id` (the first 4 bytes are the creation time in
  * seconds). This is arrival time on api-gate's clock, unlike `ts`, which is the emitting service's

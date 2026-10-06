@@ -23,6 +23,7 @@ import {
   isRequestId,
   LIVE_POLL_MS,
   LIVE_PAGE_LIMIT,
+  aggregateRefreshDelay,
   advanceLiveBoundary,
   liveStatus,
   formatStepLine,
@@ -290,6 +291,11 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   // overwriting newer state.
   const requestSeqRef = useRef(0);
   const [windowCapped, setWindowCapped] = useState(false);
+  // When the chart and facet counts were last fetched (a full load or a live refresh), and whether a
+  // histogram bar is selected: the live refresh waits its turn and leaves a selected bar's view alone.
+  const aggregatesRefreshedAtRef = useRef(0);
+  const bucketSelectedRef = useRef(false);
+  bucketSelectedRef.current = selectedBucketIdx !== null || bucketFilter !== null;
 
   const loadFirstPage = useCallback(async () => {
     const seq = ++requestSeqRef.current;
@@ -311,6 +317,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       serverTimeRef.current = Number.isFinite(serverMs) ? serverMs : null;
       setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
       setHistogram(histogramRes.buckets || []);
+      aggregatesRefreshedAtRef.current = Date.now();
       setSelectedBucketIdx(null);
       setBucketFilter(null);
     } catch (err) {
@@ -367,6 +374,41 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     });
     setLiveFailures(0);
 
+    // The poll only merges rows into the table; the chart and the facet counts come from their own
+    // queries. Re-fetch them on a throttle when rows arrive (see aggregateRefreshDelay), reading the
+    // current state when the timer fires so a burst is covered by one refresh. A response is dropped
+    // if a full load started meanwhile, and a failed refresh just keeps what is on screen.
+    let aggregateTimer = null;
+    const refreshAggregates = async () => {
+      aggregateTimer = null;
+      if (cancelled || bucketSelectedRef.current) return;
+      const seq = requestSeqRef.current;
+      aggregatesRefreshedAtRef.current = Date.now();
+      try {
+        const params = buildEventQueryParams(queryState);
+        if (queryState.runId) params.runId = queryState.runId;
+        const [facetsRes, histogramRes] = await Promise.all([
+          getDiagnosticsEventFacets(params),
+          getDiagnosticsEventHistogram(params),
+        ]);
+        if (cancelled || seq !== requestSeqRef.current || bucketSelectedRef.current) return;
+        setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
+        setHistogram(histogramRes.buckets || []);
+      } catch {
+        // Keep the current chart; the next poll with new rows tries again.
+      }
+    };
+    const scheduleAggregateRefresh = (newRows) => {
+      const delay = aggregateRefreshDelay({
+        newRows,
+        lastRefreshAt: aggregatesRefreshedAtRef.current,
+        now: Date.now(),
+        pending: aggregateTimer !== null,
+        paused: bucketSelectedRef.current,
+      });
+      if (delay !== null) aggregateTimer = window.setTimeout(refreshAggregates, delay);
+    };
+
     const tick = async () => {
       if (cancelled || tickInFlight || document.hidden) return;
       tickInFlight = true;
@@ -392,6 +434,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
         setLiveOverflow(computeLiveOverflow(res.matchedCount, res.events?.length ?? 0));
         setLiveFailures(0);
         setLiveLastOkAt(Date.now());
+        scheduleAggregateRefresh(res.events?.length ?? 0);
       } catch {
         // One missed poll is normal and the next tick retries; a run of them is shown in the status chip.
         if (!cancelled) setLiveFailures((n) => n + 1);
@@ -412,6 +455,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onVisibility);
       if (liveTimerRef.current) window.clearInterval(liveTimerRef.current);
+      if (aggregateTimer !== null) window.clearTimeout(aggregateTimer);
       setLiveOverflow(0);
     };
   }, [live, queryState, sortBy, sortDir]);

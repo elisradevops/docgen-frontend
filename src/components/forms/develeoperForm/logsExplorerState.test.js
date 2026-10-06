@@ -3,6 +3,8 @@ import {
   buildEventQueryParams,
   mergeLiveRows,
   computeLiveOverflow,
+  aggregateRefreshDelay,
+  AGGREGATE_REFRESH_MS,
   formatRequestLine,
   formatRequestDetail,
   buildDetailsText,
@@ -402,3 +404,36 @@ describe('runCellActions', () => {
   });
 });
 
+
+describe('aggregateRefreshDelay', () => {
+  const base = { newRows: 3, lastRefreshAt: 0, now: 1_000_000, pending: false, paused: false };
+
+  test('refreshes at once when the last refresh is older than the interval', () => {
+    expect(aggregateRefreshDelay(base)).toBe(0);
+  });
+
+  test('waits out the rest of the interval after a recent refresh', () => {
+    expect(aggregateRefreshDelay({ ...base, lastRefreshAt: base.now - 4000 })).toBe(AGGREGATE_REFRESH_MS - 4000);
+  });
+
+  test('treats a missing last refresh as old', () => {
+    expect(aggregateRefreshDelay({ ...base, lastRefreshAt: undefined })).toBe(0);
+  });
+
+  test('schedules nothing when the poll brought no rows', () => {
+    expect(aggregateRefreshDelay({ ...base, newRows: 0 })).toBeNull();
+    expect(aggregateRefreshDelay({ ...base, newRows: undefined })).toBeNull();
+  });
+
+  test('schedules nothing while a refresh is already waiting', () => {
+    expect(aggregateRefreshDelay({ ...base, pending: true })).toBeNull();
+  });
+
+  test('schedules nothing while a histogram bar is selected', () => {
+    expect(aggregateRefreshDelay({ ...base, paused: true })).toBeNull();
+  });
+
+  test('never returns a negative delay', () => {
+    expect(aggregateRefreshDelay({ ...base, lastRefreshAt: base.now - 60_000 })).toBe(0);
+  });
+});
