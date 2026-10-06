@@ -181,12 +181,11 @@ export const sendDocumentToGenerator = async (docJson) => {
           // thread it through AsyncLocalStorage as the run's correlation id before the
           // handler ever parses the body — see docgen-api-gate's runContext.ts.
           headers,
-          // No timeout here previously meant a hung generation hung the UI forever. Document
-          // generation is genuinely slow, so this uses the same long-duration precedent as the
-          // sync call below, not DEFAULT_TIMEOUT (10s, meant for quick metadata calls).
-          timeout: 300000,
         }),
-      { key: 'docs', priority: 'high' }
+      // retry: false — generation is long-running and not idempotent. Re-sending it (the queue's
+      // default for timeouts/5xx) starts a second generation of the same run while the first is
+      // still running. No axios timeout either: a large document legitimately takes minutes.
+      { key: 'docs', priority: 'high', retry: false }
     );
     window.currentdoc = docJson.documentId;
     return res.data;

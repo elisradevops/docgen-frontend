@@ -39,6 +39,7 @@ const DASHBOARD_BACKGROUND =
   'linear-gradient(145deg, rgba(15,23,42,0.03) 0%, rgba(2,132,199,0.07) 35%, rgba(20,184,166,0.06) 100%)';
 
 const RESOLVED_RECENTLY_DAYS = 7;
+const ATTENTION_REFRESH_MS = 15000;
 const VIEW_ATTENTION = 'attention';
 const VIEW_LOGS = 'logs';
 const VIEW_RUN = 'run';
@@ -64,9 +65,13 @@ const MonitoringDashboard = ({ onViewConnections, userId }) => {
   const [openIssueId, setOpenIssueId] = useState(null);
   const [comparingIssueId, setComparingIssueId] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  // `silent` is the background refresh: no spinner, no error banner (a failed background poll just
+  // tries again next time), and nothing visible changes unless the data did.
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const since = new Date(Date.now() - RESOLVED_RECENTLY_DAYS * 24 * 60 * 60 * 1000).toISOString();
       const [healthPayload, overviewPayload, unresolvedPayload, resolvedPayload] = await Promise.all([
@@ -80,15 +85,26 @@ const MonitoringDashboard = ({ onViewConnections, userId }) => {
       setUnresolvedIssues(unresolvedPayload?.issues || []);
       setResolvedIssues(resolvedPayload?.issues || []);
     } catch (err) {
-      setError(err.message || 'Failed to load Monitoring data.');
+      if (!silent) setError(err.message || 'Failed to load Monitoring data.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Keeps "Needs attention" current while it is on screen: new issues and counts appear without
+  // pressing Refresh. Only while this view is showing and the tab is visible; the other views have
+  // their own refresh (or none), and a hidden tab should not poll for nobody.
+  useEffect(() => {
+    if (view !== VIEW_ATTENTION) return undefined;
+    const id = window.setInterval(() => {
+      if (!document.hidden) load({ silent: true });
+    }, ATTENTION_REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [view, load]);
 
   const healthSentence = useMemo(() => buildHealthSentence(health?.services), [health]);
   const runsSentence = useMemo(() => buildRunsSentence(overview), [overview]);

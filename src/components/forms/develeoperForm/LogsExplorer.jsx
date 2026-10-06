@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { FilterOutlined } from '@ant-design/icons';
 import { Table, Button as AntButton, Select as AntSelect, Input, Checkbox, Space } from 'antd';
 import LoadingState from '../../common/LoadingState';
 import useDebouncedValue from '../../../hooks/useDebouncedValue';
@@ -20,9 +21,15 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
+  LIVE_POLL_MS,
+  LIVE_PAGE_LIMIT,
+  aggregateRefreshDelay,
+  advanceLiveBoundary,
+  liveStatus,
   formatStepLine,
   isCorrelationOnlyId,
   formatRunCellLabel,
+  runCellActions,
   TIME_SORT_DIRECTIONS,
   sortStateFromSorter,
   LOG_ROW_CAP,
@@ -31,6 +38,8 @@ import {
   filterFacetValues,
 } from './logsExplorerState';
 import {
+  loadLiveEnabled,
+  saveLiveEnabled,
   loadLogsFilterSettings,
   isEventExcluded,
 } from './logsFilterSettings';
@@ -42,7 +51,6 @@ const WINDOW_OPTIONS = [
   { label: 'Last 7 days', value: 168 },
   { label: 'Last 30 days', value: 720 },
 ];
-const LIVE_POLL_MS = 5000;
 const MESSAGE_TRUNCATE_LENGTH = 140;
 
 const FACET_DIMENSIONS = ['level', 'service', 'project', 'docType'];
@@ -254,12 +262,15 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
-  const [live, setLive] = useState(false);
+  // On by default (remembered): a debugging session wants the tail running from the first screen.
+  const [live, setLive] = useState(loadLiveEnabled);
+  const [liveHidden, setLiveHidden] = useState(() => typeof document !== 'undefined' && document.hidden);
+  const [liveFailures, setLiveFailures] = useState(0);
+  const [liveLastOkAt, setLiveLastOkAt] = useState(undefined);
+  const [liveNow, setLiveNow] = useState(() => Date.now());
+  // Server clock (ms) at the last full load: where the live tail starts when nothing else anchors it.
+  const serverTimeRef = useRef(null);
   const liveTimerRef = useRef(null);
-  // Incremental "since" boundary for live polling — advances forward each tick so a poll only
-  // ever asks "what's new since last time", not "everything in the whole sliding window" (which
-  // would make matchedCount always huge and unrelated to any actual burst).
-  const liveBoundaryRef = useRef(null);
   const [liveOverflow, setLiveOverflow] = useState(0);
 
   const [selectedBucketIdx, setSelectedBucketIdx] = useState(null);
@@ -280,6 +291,11 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   // overwriting newer state.
   const requestSeqRef = useRef(0);
   const [windowCapped, setWindowCapped] = useState(false);
+  // When the chart and facet counts were last fetched (a full load or a live refresh), and whether a
+  // histogram bar is selected: the live refresh waits its turn and leaves a selected bar's view alone.
+  const aggregatesRefreshedAtRef = useRef(0);
+  const bucketSelectedRef = useRef(false);
+  bucketSelectedRef.current = selectedBucketIdx !== null || bucketFilter !== null;
 
   const loadFirstPage = useCallback(async () => {
     const seq = ++requestSeqRef.current;
@@ -297,8 +313,11 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       setEvents(eventsRes.events || []);
       setNextCursor(eventsRes.nextCursor);
       setWindowCapped(!!eventsRes.windowCapped);
+      const serverMs = Date.parse(eventsRes.serverTime);
+      serverTimeRef.current = Number.isFinite(serverMs) ? serverMs : null;
       setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
       setHistogram(histogramRes.buckets || []);
+      aggregatesRefreshedAtRef.current = Date.now();
       setSelectedBucketIdx(null);
       setBucketFilter(null);
     } catch (err) {
@@ -331,53 +350,122 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     loadFirstPage();
   }, [loadFirstPage]);
 
-  // Live tail: each tick asks only "what's new since the last tick" (an incremental boundary,
-  // not the whole sliding window — see liveBoundaryRef's own comment), prepending genuinely-new
-  // rows, capped per poll so a synthetic burst can't flood the table in one tick — see
-  // mergeLiveRows. matchedCount (requested via includeCount) vs. how many actually came back is
-  // what drives the "+N more events, narrow your query" signal — see computeLiveOverflow.
+  // Live tail. Each tick asks for what was INSERTED since the last one (`insertedAfter`), not for
+  // events newer than the newest `ts` seen: events reach the store late and out of order (every
+  // service buffers and flushes on its own), so a ts boundary skipped a slow service's older events
+  // for good — they only appeared after a manual refresh. The boundary is the newest insertion time
+  // seen (from the rows' _id), seeded from the SERVER's clock; the server overlaps the range a little
+  // and mergeLiveRows drops the duplicates and keeps the table in time order.
+  // matchedCount vs. what came back drives the "+N more events" burst signal (computeLiveOverflow).
+  const liveBoundaryMsRef = useRef(null);
   useEffect(() => {
     if (!live || !canLiveTail(sortBy, sortDir)) return undefined;
     // Set by the cleanup: a tick still awaiting its response when the filters change (or Live is
     // switched off) must not merge its now-stale rows into the table.
     let cancelled = false;
     let tickInFlight = false;
-    // Seed the boundary from the newest currently-displayed row (or now, if the table is empty)
-    // — a no-op state update purely to read the latest `events` without adding it as an effect
-    // dependency, which would otherwise restart this interval on every merged-in row.
+    // Seed: the server time of the last full load; failing that, the newest row on screen. A no-op
+    // state update, only to read the latest `events` without making them an effect dependency (which
+    // would restart this interval on every merged-in row).
     setEvents((prev) => {
-      liveBoundaryRef.current = prev[0]?.ts ? new Date(prev[0].ts) : new Date();
+      liveBoundaryMsRef.current =
+        Number.isFinite(serverTimeRef.current) ? serverTimeRef.current : advanceLiveBoundary(null, prev, undefined);
       return prev;
     });
-    liveTimerRef.current = window.setInterval(async () => {
-      // A hidden tab keeps its interval; skipping the tick avoids polling for nobody. A tick
-      // still in flight (slow server) isn't stacked with another one.
-      if (document.hidden || tickInFlight) return;
+    setLiveFailures(0);
+
+    // The poll only merges rows into the table; the chart and the facet counts come from their own
+    // queries. Re-fetch them on a throttle when rows arrive (see aggregateRefreshDelay), reading the
+    // current state when the timer fires so a burst is covered by one refresh. A response is dropped
+    // if a full load started meanwhile, and a failed refresh just keeps what is on screen.
+    let aggregateTimer = null;
+    const refreshAggregates = async () => {
+      aggregateTimer = null;
+      if (cancelled || bucketSelectedRef.current) return;
+      const seq = requestSeqRef.current;
+      aggregatesRefreshedAtRef.current = Date.now();
+      try {
+        const params = buildEventQueryParams(queryState);
+        if (queryState.runId) params.runId = queryState.runId;
+        const [facetsRes, histogramRes] = await Promise.all([
+          getDiagnosticsEventFacets(params),
+          getDiagnosticsEventHistogram(params),
+        ]);
+        if (cancelled || seq !== requestSeqRef.current || bucketSelectedRef.current) return;
+        setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
+        setHistogram(histogramRes.buckets || []);
+      } catch {
+        // Keep the current chart; the next poll with new rows tries again.
+      }
+    };
+    const scheduleAggregateRefresh = (newRows) => {
+      const delay = aggregateRefreshDelay({
+        newRows,
+        lastRefreshAt: aggregatesRefreshedAtRef.current,
+        now: Date.now(),
+        pending: aggregateTimer !== null,
+        paused: bucketSelectedRef.current,
+      });
+      if (delay !== null) aggregateTimer = window.setTimeout(refreshAggregates, delay);
+    };
+
+    const tick = async () => {
+      if (cancelled || tickInFlight || document.hidden) return;
       tickInFlight = true;
       try {
         const params = buildEventQueryParams(queryState);
         if (queryState.runId) params.runId = queryState.runId;
-        params.since = liveBoundaryRef.current.toISOString();
         delete params.until; // live tail only ever looks forward, never has an upper bound
+        params.limit = LIVE_PAGE_LIMIT;
         params.includeCount = true;
+        // Without a boundary yet (no server time, nothing on screen) this first poll just returns the
+        // newest page; the response then anchors the boundary.
+        if (Number.isFinite(liveBoundaryMsRef.current)) {
+          params.insertedAfter = new Date(liveBoundaryMsRef.current).toISOString();
+        }
         const res = await getDiagnosticsEvents(params);
         if (cancelled) return;
-        const newestTs = res.events?.[0]?.ts;
-        if (newestTs) liveBoundaryRef.current = new Date(newestTs);
+        liveBoundaryMsRef.current = advanceLiveBoundary(
+          liveBoundaryMsRef.current,
+          res.events,
+          Date.parse(res.serverTime)
+        );
         setEvents((prev) => mergeLiveRows(prev, res.events || []));
         setLiveOverflow(computeLiveOverflow(res.matchedCount, res.events?.length ?? 0));
+        setLiveFailures(0);
+        setLiveLastOkAt(Date.now());
+        scheduleAggregateRefresh(res.events?.length ?? 0);
       } catch {
-        // A single missed poll isn't worth surfacing as an error banner — the next tick retries.
+        // One missed poll is normal and the next tick retries; a run of them is shown in the status chip.
+        if (!cancelled) setLiveFailures((n) => n + 1);
       } finally {
         tickInFlight = false;
       }
-    }, LIVE_POLL_MS);
+    };
+
+    liveTimerRef.current = window.setInterval(tick, LIVE_POLL_MS);
+    tick(); // don't make the first look wait a full interval
+    // Coming back to a hidden tab: catch up straight away instead of at the next interval.
+    const onVisibility = () => {
+      setLiveHidden(document.hidden);
+      if (!document.hidden) tick();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
       if (liveTimerRef.current) window.clearInterval(liveTimerRef.current);
+      if (aggregateTimer !== null) window.clearTimeout(aggregateTimer);
       setLiveOverflow(0);
     };
   }, [live, queryState, sortBy, sortDir]);
+
+  // Re-renders the "updated 2s ago" label; only while Live is on.
+  useEffect(() => {
+    if (!live) return undefined;
+    const id = window.setInterval(() => setLiveNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [live]);
 
   const loadOlder = async () => {
     if (!nextCursor) return;
@@ -457,32 +545,43 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       title: 'Run',
       dataIndex: 'runId',
       key: 'runId',
-      width: 130,
-      render: (id) =>
-        id ? (
-          <span>
+      width: 150,
+      render: (id) => {
+        if (!id) return null;
+        const actions = runCellActions(id, typeof onOpenRun === 'function');
+        const filterTitle = isRequestId(id)
+          ? 'A request id, not a document run — filter to this request'
+          : isCorrelationOnlyId(id)
+            ? 'A working session, not a document run — filter to this session'
+            : 'Show only this run';
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, whiteSpace: 'nowrap' }}>
+            {/* A real run: the id opens its detail (the primary thing anyone wants from it) and a
+                separate icon narrows the table. A request/session id has no run page, so it filters. */}
             <AntButton
               type='link'
               size='small'
-              style={{ padding: 0 }}
-              onClick={() => setRunId(id)}
-              title={
-                isRequestId(id)
-                  ? 'A request id, not a document run — filter to this request'
-                  : isCorrelationOnlyId(id)
-                    ? 'A working session, not a document run — filter to this session'
-                    : 'Filter this table to this run'
-              }
+              style={{ padding: 0, fontFamily: 'monospace' }}
+              onClick={() => (actions.primary === 'open' ? onOpenRun(id) : setRunId(id))}
+              title={actions.primary === 'open' ? 'Open run detail' : filterTitle}
+              aria-label={actions.primary === 'open' ? 'Open run detail' : filterTitle}
             >
               {formatRunCellLabel(id)}
             </AntButton>
-            {typeof onOpenRun === 'function' && !isCorrelationOnlyId(id) ? (
-              <AntButton type='link' size='small' style={{ padding: '0 0 0 4px' }} onClick={() => onOpenRun(id)} title='Open run detail' aria-label='Open run detail'>
-                ↗
-              </AntButton>
+            {actions.showFilterIcon ? (
+              <AntButton
+                type='text'
+                size='small'
+                icon={<FilterOutlined />}
+                style={{ color: '#64748b' }}
+                onClick={() => setRunId(id)}
+                title='Show only this run'
+                aria-label='Show only this run'
+              />
             ) : null}
           </span>
-        ) : null,
+        );
+      },
     },
     {
       title: 'Message',
@@ -591,12 +690,30 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
               type={live ? 'primary' : 'default'}
               danger={live}
               disabled={!canLiveTail(sortBy, sortDir)}
-              onClick={() => setLive((v) => !v)}
+              onClick={() => {
+                const next = !live;
+                setLive(next);
+                saveLiveEnabled(next);
+              }}
             >
               {live ? '● Live' : 'Live'}
             </AntButton>
           </span>
         </Tooltip>
+        {(() => {
+          const status = liveStatus({ live: live && canLiveTail(sortBy, sortDir), hidden: liveHidden, failures: liveFailures, lastOkAt: liveLastOkAt, now: liveNow });
+          const color = status.tone === 'warn' ? '#b45309' : status.tone === 'live' ? '#15803d' : '#64748b';
+          return (
+            <Box
+              component='span'
+              role='status'
+              aria-live='polite'
+              sx={{ fontSize: 12, fontWeight: 500, color, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+            >
+              {status.label}
+            </Box>
+          );
+        })()}
         {live && liveOverflow > 0 ? (
           <Box
             component='span'

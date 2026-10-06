@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import axios from 'axios';
+import { enqueueRequest } from '../../utils/requestQueue';
 
 vi.mock('axios', () => {
   // `axios` is called both as a function (makeRequest's `axios(url, config)`)
@@ -81,6 +82,19 @@ describe('docManagerApi sendDocumentToGenerator', () => {
     await expect(sendDocumentToGenerator({})).rejects.toThrow('Release history failed');
   });
 
+  test('queues the generation POST without retry and without an axios timeout', async () => {
+    axios.post.mockResolvedValueOnce({ data: { success: true } });
+
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+    await sendDocumentToGenerator({});
+
+    expect(axios.post.mock.calls[0][2]).not.toHaveProperty('timeout');
+    expect(enqueueRequest).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ key: 'docs', retry: false })
+    );
+  });
+
   test('sends the generated documentId as the x-docgen-run-id header', async () => {
     axios.post.mockResolvedValueOnce({ data: { success: true } });
 
@@ -117,15 +131,6 @@ describe('docManagerApi sendDocumentToGenerator', () => {
     expect(config.headers).not.toHaveProperty('x-docgen-capture-mode');
   });
 
-  test('sets a long timeout so a hung generation cannot hang the UI forever', async () => {
-    axios.post.mockResolvedValueOnce({ data: { success: true } });
-
-    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
-    await sendDocumentToGenerator({});
-
-    const [, , config] = axios.post.mock.calls[0];
-    expect(config.timeout).toBe(300000);
-  });
 });
 
 describe('docManagerApi getDiagnosticsIssue', () => {

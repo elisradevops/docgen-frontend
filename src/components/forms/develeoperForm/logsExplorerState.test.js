@@ -3,6 +3,8 @@ import {
   buildEventQueryParams,
   mergeLiveRows,
   computeLiveOverflow,
+  aggregateRefreshDelay,
+  AGGREGATE_REFRESH_MS,
   formatRequestLine,
   formatRequestDetail,
   buildDetailsText,
@@ -11,6 +13,10 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
+  idInsertedAtMs,
+  advanceLiveBoundary,
+  liveStatus,
+  runCellActions,
   formatStepLine,
   isSessionId,
   isCorrelationOnlyId,
@@ -49,29 +55,99 @@ describe('buildEventQueryParams', () => {
 });
 
 describe('mergeLiveRows', () => {
-  test('prepends genuinely new rows ahead of the existing list', () => {
-    const existing = [{ _id: '2' }, { _id: '1' }];
-    const polled = [{ _id: '3' }, { _id: '2' }];
-    expect(mergeLiveRows(existing, polled)).toEqual([{ _id: '3' }, { _id: '2' }, { _id: '1' }]);
+  const ev = (id, ts) => ({ _id: id, ts });
+
+  test('puts genuinely new rows in time order, newest first', () => {
+    const existing = [ev('2', '2026-10-05T10:00:02Z'), ev('1', '2026-10-05T10:00:01Z')];
+    const polled = [ev('3', '2026-10-05T10:00:03Z'), ev('2', '2026-10-05T10:00:02Z')];
+    expect(mergeLiveRows(existing, polled).map((e) => e._id)).toEqual(['3', '2', '1']);
   });
 
-  test('is a no-op when the poll returns only already-seen rows', () => {
-    const existing = [{ _id: '1' }];
-    expect(mergeLiveRows(existing, [{ _id: '1' }])).toEqual(existing);
+  test('a late event (older ts, stored after a newer one) slots into its place instead of landing on top', () => {
+    const existing = [ev('b', '2026-10-05T10:00:03Z'), ev('a', '2026-10-05T10:00:00Z')];
+    const late = [ev('c', '2026-10-05T10:00:01Z')]; // the slow service's event, arriving last
+    expect(mergeLiveRows(existing, late).map((e) => e._id)).toEqual(['b', 'c', 'a']);
+  });
+
+  test('equal timestamps order by id, newest id first, and the result is stable across merges', () => {
+    const t = '2026-10-05T10:00:00Z';
+    const merged = mergeLiveRows([ev('a1', t)], [ev('a3', t), ev('a2', t)]);
+    expect(merged.map((e) => e._id)).toEqual(['a3', 'a2', 'a1']);
+    expect(mergeLiveRows(merged, [ev('a2', t)])).toBe(merged);
+  });
+
+  test('is a no-op (same array) when the poll returns only already-seen rows', () => {
+    const existing = [ev('1', '2026-10-05T10:00:00Z')];
+    expect(mergeLiveRows(existing, [ev('1', '2026-10-05T10:00:00Z')])).toBe(existing);
   });
 
   test('caps how many new rows are admitted in a single poll (burst protection)', () => {
-    const polled = Array.from({ length: 10 }, (_, i) => ({ _id: `new-${i}` }));
-    const result = mergeLiveRows([], polled, { capPerPoll: 3, maxTotal: 1000 });
-    expect(result).toHaveLength(3);
+    const polled = Array.from({ length: 10 }, (_, i) => ev(`new-${i}`, '2026-10-05T10:00:00Z'));
+    expect(mergeLiveRows([], polled, { capPerPoll: 3, maxTotal: 1000 })).toHaveLength(3);
   });
 
-  test('caps the combined total so a long-running tail stays bounded', () => {
-    const existing = Array.from({ length: 998 }, (_, i) => ({ _id: `old-${i}` }));
-    const polled = [{ _id: 'new-1' }, { _id: 'new-2' }, { _id: 'new-3' }];
+  test('caps the combined total: the newest rows survive, the oldest fall off the end', () => {
+    const existing = Array.from({ length: 998 }, (_, i) => ev(`old-${i}`, new Date(Date.UTC(2026, 9, 5, 9, 0, 0) + i * 1000).toISOString()));
+    const polled = [ev('new-1', '2026-10-05T11:00:03Z'), ev('new-2', '2026-10-05T11:00:02Z'), ev('new-3', '2026-10-05T11:00:01Z')];
     const result = mergeLiveRows(existing, polled, { capPerPoll: 200, maxTotal: 1000 });
     expect(result).toHaveLength(1000);
-    expect(result[0]._id).toBe('new-1'); // newest rows survive the cap, oldest fall off the end
+    expect(result[0]._id).toBe('new-1');
+  });
+});
+
+describe('idInsertedAtMs / advanceLiveBoundary (live tail by arrival)', () => {
+  // ObjectId creation time: first 4 bytes, seconds since the epoch.
+  const oid = (iso) => Math.floor(Date.parse(iso) / 1000).toString(16).padStart(8, '0') + 'a1b2c3d4e5f60718';
+
+  test('reads the insertion time from an ObjectId, and NaN from anything else', () => {
+    expect(idInsertedAtMs(oid('2026-10-05T10:00:12Z'))).toBe(Date.parse('2026-10-05T10:00:12Z'));
+    ['', 'abc', undefined, null, 42, 'zzzzzzzzzzzzzzzzzzzzzzzz', oid('2026-10-05T10:00:12Z') + '0'].forEach((bad) =>
+      expect(Number.isNaN(idInsertedAtMs(bad))).toBe(true)
+    );
+  });
+
+  test('advances to the newest insertion time seen', () => {
+    const events = [{ _id: oid('2026-10-05T10:00:05Z') }, { _id: oid('2026-10-05T10:00:09Z') }];
+    expect(advanceLiveBoundary(Date.parse('2026-10-05T10:00:01Z'), events, undefined)).toBe(Date.parse('2026-10-05T10:00:09Z'));
+  });
+
+  test('never goes backwards: a poll of older rows leaves the boundary where it was', () => {
+    const events = [{ _id: oid('2026-10-05T10:00:02Z') }];
+    expect(advanceLiveBoundary(Date.parse('2026-10-05T10:00:09Z'), events, undefined)).toBe(Date.parse('2026-10-05T10:00:09Z'));
+  });
+
+  test('with nothing yet, starts from the SERVER clock — never the browser\'s', () => {
+    expect(advanceLiveBoundary(null, [], Date.parse('2026-10-05T10:00:00Z'))).toBe(Date.parse('2026-10-05T10:00:00Z'));
+    expect(advanceLiveBoundary(undefined, [{ _id: 'not-an-id' }], 5)).toBe(5);
+  });
+
+  test('null when there is nothing to anchor to', () => {
+    expect(advanceLiveBoundary(null, [], undefined)).toBeNull();
+  });
+
+  test('the bug this exists for: a late event with an old ts is still after the boundary by id', () => {
+    // seen: an api-gate event stamped 10:00:03, stored 10:00:03. Then the content-control event stamped
+    // 10:00:01 is stored at 10:00:04 — older ts, newer id. A ts boundary (10:00:03) would skip it; the
+    // insertion boundary does not.
+    const boundary = advanceLiveBoundary(null, [{ _id: oid('2026-10-05T10:00:03Z'), ts: '2026-10-05T10:00:03Z' }], undefined);
+    const late = { _id: oid('2026-10-05T10:00:04Z'), ts: '2026-10-05T10:00:01Z' };
+    expect(idInsertedAtMs(late._id)).toBeGreaterThanOrEqual(boundary);
+    expect(Date.parse(late.ts)).toBeLessThan(boundary); // what a ts boundary would have wrongly excluded
+  });
+});
+
+describe('liveStatus', () => {
+  const base = { live: true, hidden: false, failures: 0, lastOkAt: 10_000, now: 12_000 };
+  test('off', () => expect(liveStatus({ ...base, live: false })).toEqual({ tone: 'idle', label: 'Live off' }));
+  test('paused while the tab is hidden', () => expect(liveStatus({ ...base, hidden: true }).label).toContain('Paused'));
+  test('one failed poll is not called out; two are', () => {
+    expect(liveStatus({ ...base, failures: 1 }).tone).toBe('live');
+    expect(liveStatus({ ...base, failures: 2 })).toMatchObject({ tone: 'warn', label: expect.stringContaining('Reconnecting') });
+  });
+  test('connecting before the first poll, then how long ago it updated', () => {
+    expect(liveStatus({ ...base, lastOkAt: undefined }).label).toBe('Live · connecting…');
+    expect(liveStatus(base).label).toBe('Live · updated 2s ago');
+    expect(liveStatus({ ...base, now: 10_400 }).label).toBe('Live · just now');
   });
 });
 
@@ -311,3 +387,53 @@ describe('formatStepLine', () => {
   });
 });
 
+describe('runCellActions', () => {
+  test('a real run opens on click and offers a filter icon', () => {
+    expect(runCellActions('3f2504e0-4f89-11d3', true)).toEqual({ primary: 'open', showFilterIcon: true });
+  });
+  test('without an open handler a run id filters', () => {
+    expect(runCellActions('3f2504e0-4f89-11d3', false)).toEqual({ primary: 'filter', showFilterIcon: false });
+  });
+  test('request and session ids have no run page: they filter, with no extra icon', () => {
+    expect(runCellActions('req-3f2504e0', true)).toEqual({ primary: 'filter', showFilterIcon: false });
+    expect(runCellActions('ses-3f2504e0', true)).toEqual({ primary: 'filter', showFilterIcon: false });
+  });
+  test('no id, no actions', () => {
+    expect(runCellActions('', true)).toEqual({ primary: 'none', showFilterIcon: false });
+    expect(runCellActions(undefined, true)).toEqual({ primary: 'none', showFilterIcon: false });
+  });
+});
+
+
+describe('aggregateRefreshDelay', () => {
+  const base = { newRows: 3, lastRefreshAt: 0, now: 1_000_000, pending: false, paused: false };
+
+  test('refreshes at once when the last refresh is older than the interval', () => {
+    expect(aggregateRefreshDelay(base)).toBe(0);
+  });
+
+  test('waits out the rest of the interval after a recent refresh', () => {
+    expect(aggregateRefreshDelay({ ...base, lastRefreshAt: base.now - 4000 })).toBe(AGGREGATE_REFRESH_MS - 4000);
+  });
+
+  test('treats a missing last refresh as old', () => {
+    expect(aggregateRefreshDelay({ ...base, lastRefreshAt: undefined })).toBe(0);
+  });
+
+  test('schedules nothing when the poll brought no rows', () => {
+    expect(aggregateRefreshDelay({ ...base, newRows: 0 })).toBeNull();
+    expect(aggregateRefreshDelay({ ...base, newRows: undefined })).toBeNull();
+  });
+
+  test('schedules nothing while a refresh is already waiting', () => {
+    expect(aggregateRefreshDelay({ ...base, pending: true })).toBeNull();
+  });
+
+  test('schedules nothing while a histogram bar is selected', () => {
+    expect(aggregateRefreshDelay({ ...base, paused: true })).toBeNull();
+  });
+
+  test('never returns a negative delay', () => {
+    expect(aggregateRefreshDelay({ ...base, lastRefreshAt: base.now - 60_000 })).toBe(0);
+  });
+});

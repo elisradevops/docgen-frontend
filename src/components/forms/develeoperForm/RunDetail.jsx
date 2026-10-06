@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Divider,
   IconButton,
   Link,
@@ -17,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   getDiagnosticsRun,
@@ -31,6 +30,7 @@ import {
   mergeRunLog,
   formatCaptureLabel,
   pickRunInput,
+  buildInputFacts,
 } from './runDetailState';
 import { formatStepLine } from './logsExplorerState';
 // The same renderer the Documents tab uses for a document's input, so a run shows it identically.
@@ -39,6 +39,7 @@ import { levelColors as LEVEL_COLOR, colors } from '../../../theme/tokens';
 
 const STATUS_COLOR = { failed: 'error', succeeded: 'success', running: 'info' };
 const LOG_PAGE_SIZE = 200;
+const RUNNING_REFRESH_MS = 3000;
 const ERROR_LIMIT = 50;
 
 const SESSION_PREVIEW_LIMIT = 25;
@@ -118,6 +119,51 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
     load();
   }, [load]);
 
+  // The newest page and the run's errors, merged into what is already shown (older pages loaded with
+  // "Load earlier" stay), with no spinner and no error banner — used while the run is still running.
+  const refreshInFlightRef = useRef(false);
+  const stickToBottomRef = useRef(false);
+  const refresh = useCallback(async () => {
+    if (refreshInFlightRef.current) return;
+    refreshInFlightRef.current = true;
+    try {
+      const [detail, tailRes, errorRes] = await Promise.all([
+        getDiagnosticsRun(runId),
+        getDiagnosticsEvents({ runId, limit: LOG_PAGE_SIZE, sortBy: 'ts', sortDir: 'desc' }),
+        getDiagnosticsEvents({ runId, level: 'error', limit: ERROR_LIMIT, sortBy: 'ts', sortDir: 'desc' }),
+      ]);
+      // Follow the newest line only if the reader is already at the bottom: scrolling up to read
+      // something must not be yanked back down by the next refresh.
+      const el = logScrollRef.current;
+      stickToBottomRef.current = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      setRun(detail.run);
+      setTimeline(detail.timeline || []);
+      setLog((prev) => mergeRunLog(prev, tailRes.events, errorRes.events));
+    } catch {
+      // the next tick retries
+    } finally {
+      refreshInFlightRef.current = false;
+    }
+  }, [runId]);
+
+  useEffect(() => {
+    if (stickToBottomRef.current && logScrollRef.current) {
+      logScrollRef.current.scrollTop = logScrollRef.current.scrollHeight;
+    }
+    stickToBottomRef.current = false;
+  }, [log]);
+
+  const isRunning = run?.status === 'running';
+  useEffect(() => {
+    if (!isRunning) return undefined;
+    const id = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, RUNNING_REFRESH_MS);
+    // The effect re-runs when the status flips away from running, which clears this interval; one
+    // last refresh is not needed because the flip itself came from a refresh that fetched everything.
+    return () => window.clearInterval(id);
+  }, [isRunning, refresh]);
+
   const loadEarlier = async () => {
     if (!logCursor) return;
     setLoadingEarlier(true);
@@ -139,6 +185,12 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
   };
 
   const runInput = useMemo(() => pickRunInput(run), [run]);
+  const inputFacts = useMemo(() => buildInputFacts(runInput, run), [runInput, run]);
+  const [inputOpen, setInputOpen] = useState(false);
+  // A different run starts collapsed again.
+  useEffect(() => {
+    setInputOpen(false);
+  }, [runId]);
   const timelineRows = useMemo(() => buildTimelineRows(run, timeline), [run, timeline]);
 
   const handleCompareToBaseline = async () => {
@@ -181,6 +233,11 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
                 </IconButton>
               </Tooltip>
               <Chip size='small' color={STATUS_COLOR[run.status] || 'default'} label={formatRunStatusLabel(run.status)} />
+              {isRunning ? (
+                <Tooltip title='This run is still running — the page refreshes every few seconds until it finishes.'>
+                  <Chip size='small' color='info' variant='outlined' label='Running · live' />
+                </Tooltip>
+              ) : null}
               {formatCaptureLabel(run) ? (
                 <Tooltip title='Detailed (debug/info) logs were captured for this run, so its log below is longer than usual.'>
                   <Chip size='small' variant='outlined' color='warning' label={formatCaptureLabel(run)} />
@@ -212,47 +269,86 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
           </Paper>
 
           {runInput ? (
-            <Accordion variant='outlined' disableGutters sx={{ '&:before': { display: 'none' } }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls='run-input-content' id='run-input-header'>
-                <Stack direction='row' spacing={1.5} alignItems='baseline' sx={{ minWidth: 0 }}>
-                  <Typography variant='subtitle2'>Input</Typography>
-                  <Typography
-                    variant='body2'
-                    color='text.secondary'
-                    noWrap
-                    sx={{ minWidth: 0 }}
-                    title={runInput.summary || undefined}
-                  >
-                    {runInput.summary || (runInput.kind === 'technical' ? 'Technical request details' : '')}
-                  </Typography>
-                </Stack>
-              </AccordionSummary>
-              <AccordionDetails>
-                {runInput.kind === 'curated' ? (
-                  <SelectedInputPopoverContent inputSummary={runInput.summary} inputDetails={runInput.details} />
-                ) : (
-                  <Box>
-                    <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 1 }}>
-                      <Typography variant='caption' color='text.secondary'>
-                        The request as recorded for this run (credentials are never stored).
-                      </Typography>
-                      <Button
+            <Paper variant='outlined'>
+              {/* The whole header is the control (role=button): the label, the key facts and the
+                  "Show details" cue all toggle it. The long summary is never printed here — only a
+                  few short facts — so the header always fits and the cue is always visible. */}
+              <Box
+                role='button'
+                tabIndex={0}
+                aria-expanded={inputOpen}
+                aria-controls='run-input-body'
+                onClick={() => setInputOpen((open) => !open)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setInputOpen((open) => !open);
+                  }
+                }}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                  px: 2,
+                  py: 1.25,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  borderRadius: 'inherit',
+                  '&:hover': { bgcolor: 'action.hover' },
+                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
+                }}
+              >
+                <Typography variant='subtitle2'>Input</Typography>
+                <Stack direction='row' useFlexGap flexWrap='wrap' spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+                  {inputFacts.map((fact) => (
+                    <Tooltip key={fact.key} title={fact.full}>
+                      <Chip
                         size='small'
-                        onClick={() => navigator.clipboard.writeText(JSON.stringify(runInput.details, null, 2))}
+                        variant='outlined'
+                        label={fact.label ? `${fact.label}: ${fact.value}` : fact.value}
+                        sx={{ maxWidth: '100%' }}
+                      />
+                    </Tooltip>
+                  ))}
+                </Stack>
+                <Box
+                  component='span'
+                  sx={{ ml: 'auto', display: 'inline-flex', alignItems: 'center', color: 'primary.main', fontWeight: 600, fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+                >
+                  {inputOpen ? 'Hide details' : 'Show details'}
+                  {inputOpen ? <ExpandLessIcon fontSize='small' /> : <ExpandMoreIcon fontSize='small' />}
+                </Box>
+              </Box>
+              <Collapse in={inputOpen} unmountOnExit>
+                <Divider />
+                <Box id='run-input-body' sx={{ p: 2, overflowX: 'auto' }}>
+                  {runInput.kind === 'curated' ? (
+                    <SelectedInputPopoverContent inputSummary={runInput.summary} inputDetails={runInput.details} />
+                  ) : (
+                    <Box>
+                      <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 1 }}>
+                        <Typography variant='caption' color='text.secondary'>
+                          The request as recorded for this run (credentials are never stored).
+                        </Typography>
+                        <Button
+                          size='small'
+                          onClick={() => navigator.clipboard.writeText(JSON.stringify(runInput.details, null, 2))}
+                        >
+                          Copy JSON
+                        </Button>
+                      </Stack>
+                      <Box
+                        component='pre'
+                        sx={{ m: 0, p: 1.5, maxHeight: 320, overflow: 'auto', fontSize: '0.78rem', bgcolor: 'action.hover', borderRadius: 1 }}
                       >
-                        Copy JSON
-                      </Button>
-                    </Stack>
-                    <Box
-                      component='pre'
-                      sx={{ m: 0, p: 1.5, maxHeight: 320, overflow: 'auto', fontSize: '0.78rem', bgcolor: 'action.hover', borderRadius: 1 }}
-                    >
-                      {JSON.stringify(runInput.details, null, 2)}
+                        {JSON.stringify(runInput.details, null, 2)}
+                      </Box>
                     </Box>
-                  </Box>
-                )}
-              </AccordionDetails>
-            </Accordion>
+                  )}
+                </Box>
+              </Collapse>
+            </Paper>
           ) : null}
 
           <Box>

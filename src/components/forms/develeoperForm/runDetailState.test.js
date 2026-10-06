@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput, buildInputFacts } from './runDetailState';
 
 describe('formatRunDuration', () => {
   test('formats a completed run as seconds with one decimal', () => {
@@ -156,6 +156,63 @@ describe('pickRunInput', () => {
     expect(pickRunInput({})).toBeNull();
     expect(pickRunInput({ input: { summary: '  ', details: [1, 2] }, manifest: { inputs: {} } })).toBeNull();
     expect(pickRunInput({ input: { details: 'text' }, manifest: { inputs: [] } })).toBeNull();
+  });
+});
+
+describe('buildInputFacts', () => {
+  const curated = (details, summary = '') => ({ kind: 'curated', summary, details });
+
+  test('curated input: type, template, context and the content-control count', () => {
+    const facts = buildInputFacts(
+      curated({ docType: 'STD', template: { name: 'STD.dotx' }, contextName: 'release-30', contentControls: [{}, {}] }),
+      {}
+    );
+    expect(facts.map((f) => [f.key, f.label, f.value])).toEqual([
+      ['docType', 'Type', 'STD'],
+      ['template', 'Template', 'STD.dotx'],
+      ['context', 'Context', 'release-30'],
+      ['controls', '', '2 content controls'],
+    ]);
+  });
+
+  test('singular count, and sparse details fall back to the run record', () => {
+    const facts = buildInputFacts(curated({ contentControls: [{}] }), { docType: 'SVD', templateName: 'http://h/templates/shared/SVD/SVD%20Template.dotx?sig=abc' });
+    expect(facts.map((f) => f.value)).toEqual(['SVD', 'SVD Template.dotx', '1 content control']);
+  });
+
+  test('a summary-only input gives one short preview chip, never the whole summary', () => {
+    const summary = 'Document Type: STD | ' + 'Suite 1000, '.repeat(80);
+    const [fact, ...rest] = buildInputFacts(curated(null, summary), {});
+    expect(rest).toEqual([]);
+    expect(fact.key).toBe('summary');
+    expect(fact.value.length).toBeLessThanOrEqual(80);
+    expect(fact.full).toBe(summary.trim());
+  });
+
+  test('the technical fallback: template file name (no URL or query), project, control count', () => {
+    const facts = buildInputFacts(
+      { kind: 'technical', summary: '', details: { templateName: 'http://s3/templates/shared/STD/STD.dotx?X-Amz-Signature=secret', project: 'MEWP', contentControls: [{}, {}, {}] } },
+      {}
+    );
+    expect(facts.map((f) => f.value)).toEqual(['STD.dotx', 'MEWP', '3 content controls']);
+    expect(JSON.stringify(facts)).not.toContain('secret');
+  });
+
+  test('every chip is bounded, keeps its full text, and there are at most four', () => {
+    const long = 'x'.repeat(300);
+    const facts = buildInputFacts(
+      curated({ docType: long, template: { name: long }, contextName: long, contentControls: Array(9).fill({}), extra: 1 }),
+      {}
+    );
+    expect(facts.length).toBeLessThanOrEqual(4);
+    facts.forEach((f) => expect(f.value.length).toBeLessThanOrEqual(40));
+    expect(facts[0].full).toBe(long);
+  });
+
+  test('nothing to say: empty list', () => {
+    expect(buildInputFacts(null, {})).toEqual([]);
+    expect(buildInputFacts(curated({}), {})).toEqual([]);
+    expect(buildInputFacts({ kind: 'technical', summary: '', details: {} }, {})).toEqual([]);
   });
 });
 
