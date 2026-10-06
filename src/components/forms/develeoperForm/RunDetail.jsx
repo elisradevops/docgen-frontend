@@ -31,6 +31,7 @@ import {
   formatCaptureLabel,
   pickRunInput,
   buildInputFacts,
+  formatResolvedRange,
 } from './runDetailState';
 import { formatStepLine } from './logsExplorerState';
 // The same renderer the Documents tab uses for a document's input, so a run shows it identically.
@@ -186,6 +187,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
 
   const runInput = useMemo(() => pickRunInput(run), [run]);
   const inputFacts = useMemo(() => buildInputFacts(runInput, run), [runInput, run]);
+  const resolvedRange = useMemo(() => formatResolvedRange(run?.manifest?.inputs?.resolvedRange), [run]);
   const [inputOpen, setInputOpen] = useState(false);
   // A different run starts collapsed again.
   useEffect(() => {
@@ -323,6 +325,24 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
               <Collapse in={inputOpen} unmountOnExit>
                 <Divider />
                 <Box id='run-input-body' sx={{ p: 2, overflowX: 'auto' }}>
+                  {resolvedRange ? (
+                    <Box sx={{ mb: 2, p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                      <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 0.5 }}>
+                        <Typography variant='subtitle2'>Resolved range</Typography>
+                        <Button size='small' onClick={() => navigator.clipboard.writeText(resolvedRange.copyText)}>
+                          Copy
+                        </Button>
+                      </Stack>
+                      <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.75 }}>
+                        What this run actually used. Enter it in the UI to produce the same document by hand.
+                      </Typography>
+                      {resolvedRange.lines.map((line) => (
+                        <Typography key={line} variant='body2'>
+                          {line}
+                        </Typography>
+                      ))}
+                    </Box>
+                  ) : null}
                   {runInput.kind === 'curated' ? (
                     <SelectedInputPopoverContent inputSummary={runInput.summary} inputDetails={runInput.details} />
                   ) : (

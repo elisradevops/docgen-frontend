@@ -101,6 +101,50 @@ export const pickRunInput = (run) => {
   return null;
 };
 
+const sourceLabel = (source) => (source === 'auto' ? 'auto-discovered' : source === 'explicit' ? 'as requested' : '');
+
+const rangeSide = (side) => {
+  if (!side || typeof side !== 'object') return { id: '', text: 'not recorded' };
+  if (side.id === undefined || side.id === null) {
+    if (side.source === 'none') return { id: '', text: 'none found (a baseline run)' };
+    return { id: '', text: side.source === 'auto' ? 'not resolved — auto-discovery found nothing' : 'not recorded' };
+  }
+  const name = side.name ? ` (${side.name})` : '';
+  const how = sourceLabel(side.source);
+  return { id: String(side.id), text: `#${side.id}${name}${how ? ` — ${how}` : ''}` };
+};
+
+/**
+ * What an SVD run actually resolved its range to (api-gate stores it in manifest.inputs.resolvedRange),
+ * as a short chip label and plain lines. An omitted from/to is auto-discovered, so this is what to enter
+ * in the UI to produce the same document by hand. Returns null when the run recorded none.
+ */
+export const formatResolvedRange = (range) => {
+  if (!range || typeof range !== 'object' || Array.isArray(range)) return null;
+  const kind = range.rangeType === 'pipeline' ? 'pipeline' : 'release';
+  const from = rangeSide(range.from);
+  const to = rangeSide(range.to);
+  const definitionName = range.definition?.name ? String(range.definition.name) : '';
+  const definitionId = range.definition?.id !== undefined ? ` #${range.definition.id}` : '';
+  const definition = definitionName ? `${definitionName}${definitionId}` : definitionId.trim();
+  const definitionLabel = definitionName || definitionId.trim();
+  const chip = `${kind}${definitionLabel ? ` ${definitionLabel}` : ''}: ${from.id ? `#${from.id}` : '?'} → ${to.id ? `#${to.id}` : '?'}`;
+  const lines = [
+    `${kind === 'pipeline' ? 'Pipeline' : 'Release definition'}: ${definition || 'not recorded'}`,
+    `From: ${from.text}`,
+    `To: ${to.text}`,
+  ];
+  return { chip, lines, copyText: lines.join('\n') };
+};
+
+/** Label and tone for one finding in the Compare screen. */
+export const findingLabel = (severity) =>
+  severity === 'severe'
+    ? { label: 'Differs', color: 'error' }
+    : severity === 'moderate'
+      ? { label: 'Check', color: 'warning' }
+      : { label: 'Note', color: 'default' };
+
 const MAX_FACTS = 4;
 const MAX_FACT_LEN = 40;
 const SUMMARY_PREVIEW_LEN = 80;
@@ -137,16 +181,19 @@ export const buildInputFacts = (runInput, run) => {
     const full = String(value ?? '').trim();
     if (full) facts.push({ key, label, value: clampText(full, MAX_FACT_LEN), full });
   };
+  const rangeView = formatResolvedRange(run?.manifest?.inputs?.resolvedRange);
 
   if (runInput.kind === 'technical') {
     const inputs = runInput.details || {};
     add('template', 'Template', fileNameOf(inputs.templateName));
     add('project', 'Project', inputs.project);
+    add('range', 'Range', rangeView?.chip);
     add('controls', '', controlCountLabel(inputs.contentControls));
   } else if (runInput.details) {
     const details = runInput.details;
     add('docType', 'Type', details.docType || run?.docType);
     add('template', 'Template', details.template?.name || fileNameOf(run?.templateName));
+    add('range', 'Range', rangeView?.chip);
     add('context', 'Context', details.contextName);
     add('controls', '', controlCountLabel(details.contentControls));
   } else if (runInput.summary) {

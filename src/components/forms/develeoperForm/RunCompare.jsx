@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
+  Chip,
   CircularProgress,
   Divider,
   FormControl,
@@ -15,7 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import { getDiagnosticsCompare, getDiagnosticsCompareReportUrl, getDiagnosticsRun, getDiagnosticsRuns } from '../../../store/data/docManagerApi';
-import { sortDiffRows, bandLabel, formatDiffValue } from './runDetailState';
+import { sortDiffRows, bandLabel, formatDiffValue, findingLabel } from './runDetailState';
 import { diffColors } from '../../../theme/tokens';
 
 // LCS-based line diff for two JSON values. Caps at MAX_LINES per side before the quadratic
@@ -458,6 +459,26 @@ const RunCompare = ({ a: initialA, b: initialB, onBack }) => {
       </Paper>
 
       {error ? <Alert severity='error'>{error}</Alert> : null}
+
+      {/* ── Findings: where the runs diverge first, and what is ruled out ───── */}
+      {diff?.findings?.length > 0 ? (
+        <Paper variant='outlined' sx={{ p: 2 }}>
+          <Typography variant='subtitle2' sx={{ mb: 1 }}>
+            Findings
+          </Typography>
+          <Stack spacing={0.75}>
+            {diff.findings.map((finding, index) => {
+              const tone = findingLabel(finding.severity);
+              return (
+                <Stack key={`${finding.key}-${index}`} direction='row' spacing={1} alignItems='flex-start'>
+                  <Chip size='small' variant='outlined' color={tone.color} label={tone.label} sx={{ flexShrink: 0 }} />
+                  <Typography variant='body2'>{finding.text}</Typography>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </Paper>
+      ) : null}
 
       {/* ── Diff bands ─────────────────────────────────────────────────────── */}
       {loading && !diff ? (
