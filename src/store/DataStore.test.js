@@ -222,6 +222,50 @@ describe('DataStore sendRequestToDocGen (Phase 6b captureDiagnostics)', () => {
     expect(getPickerContextHeaders()['x-docgen-run-id']).toBe(store.sessionId);
   });
 
+  test('Cancel during the token refresh stops the request before it is sent', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    const store = (await import('./DataStore')).default;
+    let finishRefresh = () => undefined;
+    store.ensureFreshAdoAccessToken = vi.fn(() => new Promise((resolve) => { finishRefresh = resolve; }));
+
+    const sending = store.sendRequestToDocGen();
+    store.cancelGeneration();
+    finishRefresh();
+
+    await expect(sending).rejects.toMatchObject({ cancelled: true });
+    expect(sendDocumentToGenerator).not.toHaveBeenCalled();
+    expect(store.generationAbortController).toBeNull();
+  });
+
+  test('Cancel while the request is in flight aborts its signal and clears the controller', async () => {
+    const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
+    createIfBucketDoesNotExist.mockResolvedValue(undefined);
+    let signal;
+    sendDocumentToGenerator.mockImplementation(
+      (_doc, options) =>
+        new Promise((_resolve, reject) => {
+          signal = options.signal;
+          signal.addEventListener('abort', () => reject(Object.assign(new Error('cancelled'), { cancelled: true })));
+        })
+    );
+    const store = (await import('./DataStore')).default;
+    store.ensureFreshAdoAccessToken = vi.fn().mockResolvedValue(undefined);
+
+    const sending = store.sendRequestToDocGen();
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    store.cancelGeneration();
+
+    await expect(sending).rejects.toMatchObject({ cancelled: true });
+    expect(signal.aborted).toBe(true);
+    expect(store.generationAbortController).toBeNull();
+  });
+
+  test('cancelGeneration with nothing running does nothing', async () => {
+    const store = (await import('./DataStore')).default;
+    expect(() => store.cancelGeneration()).not.toThrow();
+  });
+
   test('rotates the session even when the generation request fails', async () => {
     const { sendDocumentToGenerator, createIfBucketDoesNotExist } = await import('./data/docManagerApi');
     sendDocumentToGenerator.mockRejectedValue(new Error('boom'));

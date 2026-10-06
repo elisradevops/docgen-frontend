@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildEventQueryParams,
   mergeLiveRows,
+  liveAnnouncement,
   computeLiveOverflow,
   aggregateRefreshDelay,
   AGGREGATE_REFRESH_MS,
@@ -435,5 +436,31 @@ describe('aggregateRefreshDelay', () => {
 
   test('never returns a negative delay', () => {
     expect(aggregateRefreshDelay({ ...base, lastRefreshAt: base.now - 60_000 })).toBe(0);
+  });
+});
+
+describe('mergeLiveRows keeps rows loaded with Load older', () => {
+  const row = (n) => ({ _id: String(n).padStart(6, '0'), ts: new Date(Date.UTC(2026, 9, 5, 10, 0, 0) - n * 1000).toISOString() });
+
+  test('does not trim a table that is longer than 1000 rows (up to the row cap)', () => {
+    const existing = Array.from({ length: 1500 }, (_, i) => row(i + 10));
+    const merged = mergeLiveRows(existing, [row(1)]);
+    expect(merged).toHaveLength(1501);
+    expect(merged[1500]).toBe(existing[1499]);
+  });
+
+  test('never grows past the row cap', () => {
+    const existing = Array.from({ length: LOG_ROW_CAP }, (_, i) => row(i + 10));
+    expect(mergeLiveRows(existing, [row(1)])).toHaveLength(LOG_ROW_CAP);
+  });
+});
+
+describe('liveAnnouncement', () => {
+  test('is stable while the status only counts seconds', () => {
+    expect(liveAnnouncement({ tone: 'live', label: 'Live · updated 7s ago' })).toBe(liveAnnouncement({ tone: 'live', label: 'Live · just now' }));
+  });
+  test('says when it is reconnecting and passes an idle label through', () => {
+    expect(liveAnnouncement({ tone: 'warn', label: 'Reconnecting… (3 failed polls)' })).toBe('Live updates are reconnecting');
+    expect(liveAnnouncement({ tone: 'idle', label: 'Live off' })).toBe('Live off');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput, buildInputFacts, formatResolvedRange, findingLabel } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput, buildInputFacts, formatResolvedRange, formatCredential, buildEffectiveInput, jsonLinesWithMarkers, findingLabel } from './runDetailState';
 
 describe('formatRunDuration', () => {
   test('formats a completed run as seconds with one decimal', () => {
@@ -306,5 +306,231 @@ describe('findingLabel', () => {
     expect(findingLabel('moderate')).toEqual({ label: 'Check', color: 'warning' });
     expect(findingLabel('info')).toEqual({ label: 'Note', color: 'default' });
     expect(findingLabel(undefined).label).toBe('Note');
+  });
+});
+
+describe('formatCredential', () => {
+  const access = {
+    project: { status: 'ok', count: 4 },
+    repositories: { status: 'ok', count: 3 },
+    workItems: { status: 'ok', count: 0 },
+    builds: { status: 'ok', count: 0 },
+    releases: { status: 'denied', httpStatus: 403 },
+    testPlans: { status: 'notFound', httpStatus: 404 },
+  };
+
+  test('shows who ran it and one chip per area, in a fixed order', () => {
+    const view = formatCredential({ kind: 'bearer', identity: 'build-service', name: 'MEWP Build Service (Org)', access });
+
+    expect(view.title).toBe('MEWP Build Service (Org)');
+    expect(view.line).toBe('bearer token · build service');
+    expect(view.chips.map((c) => c.key)).toEqual(['repositories', 'workItems', 'builds', 'releases', 'testPlans', 'project']);
+  });
+
+  test('gives each outcome its own wording and tone', () => {
+    const chips = Object.fromEntries(formatCredential({ access }).chips.map((c) => [c.key, c]));
+
+    expect(chips.repositories).toMatchObject({ label: 'Repositories 3', tone: 'success' });
+    expect(chips.releases).toMatchObject({ label: 'Releases ✗ 403', tone: 'error' });
+    expect(chips.testPlans).toMatchObject({ label: 'Test plans n/a', tone: 'default' });
+    expect(chips.project).toMatchObject({ label: 'Project visible', tone: 'success' });
+  });
+
+  test('flags zero repositories or work items as suspicious, but not zero builds', () => {
+    const chips = Object.fromEntries(formatCredential({ access }).chips.map((c) => [c.key, c]));
+
+    expect(chips.workItems).toMatchObject({ label: 'Work items 0 (check)', tone: 'warning' });
+    expect(chips.builds).toMatchObject({ label: 'Builds 0', tone: 'default' });
+  });
+
+  test('says an invisible project and an unreadable area plainly', () => {
+    const chips = Object.fromEntries(formatCredential({ access: { project: { status: 'notFound' }, builds: { status: 'error' } } }).chips.map((c) => [c.key, c]));
+
+    expect(chips.project).toMatchObject({ label: 'Project not visible (check)', tone: 'warning' });
+    expect(chips.builds.tooltip).toContain('says nothing about permissions');
+  });
+
+  test('works with only the kind and class (an older run), and falls back to a generic title', () => {
+    const view = formatCredential({ kind: 'pat', identity: 'user' });
+
+    expect(view).toMatchObject({ title: 'A user identity', line: 'personal access token · user', hasAccess: false, chips: [] });
+  });
+
+  test('is null when nothing was recorded or the value is not an object', () => {
+    expect(formatCredential(undefined)).toBeNull();
+    expect(formatCredential({})).toBeNull();
+    expect(formatCredential([])).toBeNull();
+    expect(formatCredential('x')).toBeNull();
+  });
+});
+
+describe('buildEffectiveInput', () => {
+  const sent = () => ({
+    project: 'MEWP',
+    contentControls: [
+      {
+        title: 'required-states-and-modes',
+        type: 'change-description-table',
+        data: {
+          rangeType: 'release',
+          repoId: 12,
+          from: '',
+          fromText: '(backend auto-discovers previous release)',
+          to: '',
+          toText: '(backend auto-discovers latest release)',
+          compareMode: 'consecutive',
+        },
+      },
+    ],
+  });
+  const range = (over = {}) => ({
+    rangeType: 'release',
+    definition: { id: 12, name: 'MyRelease' },
+    to: { id: 418, name: 'Release-418', source: 'auto' },
+    from: { id: 409, source: 'auto' },
+    ...over,
+  });
+
+  test('fills in the auto-discovered from and to and replaces the placeholder texts', () => {
+    const result = buildEffectiveInput(sent(), range());
+
+    expect(result.applied).toBe(true);
+    const data = result.details.contentControls[0].data;
+    expect(data).toMatchObject({ from: 409, to: 418, fromText: '#409', toText: 'Release-418', compareMode: 'consecutive' });
+    expect(result.changedPaths).toEqual([
+      'contentControls[0].data.from',
+      'contentControls[0].data.fromText',
+      'contentControls[0].data.to',
+      'contentControls[0].data.toText',
+    ]);
+  });
+
+  test('never changes the recorded request', () => {
+    const input = sent();
+    const before = JSON.stringify(input);
+
+    buildEffectiveInput(input, range());
+
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  test('leaves an explicit side exactly as requested and fills only the discovered one', () => {
+    const input = sent();
+    input.contentControls[0].data.to = 20;
+    input.contentControls[0].data.toText = 'Release-20';
+
+    const result = buildEffectiveInput(input, range({ to: { id: 20, name: 'Release-20', source: 'explicit' } }));
+
+    expect(result.details.contentControls[0].data).toMatchObject({ from: 409, to: 20, toText: 'Release-20' });
+    expect(result.changedPaths).toEqual(['contentControls[0].data.from', 'contentControls[0].data.fromText']);
+  });
+
+  test('does not touch a side that discovery could not resolve, or the baseline "none"', () => {
+    const result = buildEffectiveInput(sent(), range({ from: { source: 'none' }, to: { source: 'auto' } }));
+
+    expect(result.applied).toBe(false);
+    expect(result.details).toEqual(sent());
+  });
+
+  test('treats zero, null and non-numeric as "discover it"', () => {
+    for (const unset of [0, '0', null, undefined, 'abc']) {
+      const input = sent();
+      input.contentControls[0].data.from = unset;
+      expect(buildEffectiveInput(input, range()).details.contentControls[0].data.from).toBe(409);
+    }
+  });
+
+  test('only touches content controls of the same range type, and leaves a missing text key missing', () => {
+    const input = {
+      contentControls: [
+        { title: 'a', data: { rangeType: 'pipeline', from: '', to: '' } },
+        { title: 'b', data: { rangeType: 'release', repoId: 12, from: '', to: '' } },
+      ],
+    };
+
+    const result = buildEffectiveInput(input, range());
+
+    expect(result.details.contentControls[0].data).toEqual({ rangeType: 'pipeline', from: '', to: '' });
+    expect(result.details.contentControls[1].data).toEqual({ rangeType: 'release', repoId: 12, from: 409, to: 418 });
+  });
+
+  test('two controls of the same type: only the one whose repoId is the range definition is filled', () => {
+    const input = {
+      contentControls: [
+        { data: { rangeType: 'release', repoId: 12, from: '', to: '' } },
+        { data: { rangeType: 'release', repoId: 99, from: '', to: '' } },
+      ],
+    };
+    const result = buildEffectiveInput(input, range());
+    expect(result.details.contentControls[0].data).toMatchObject({ from: 409, to: 418 });
+    expect(result.details.contentControls[1].data).toEqual({ rangeType: 'release', repoId: 99, from: '', to: '' });
+  });
+
+  test('without repoIds, several same-type controls are left alone; a single one is filled', () => {
+    const two = { contentControls: [{ data: { rangeType: 'release', from: '' } }, { data: { rangeType: 'release', from: '' } }] };
+    expect(buildEffectiveInput(two, range()).applied).toBe(false);
+    const one = { contentControls: [{ data: { rangeType: 'release', from: '' } }] };
+    expect(buildEffectiveInput(one, range()).details.contentControls[0].data.from).toBe(409);
+  });
+
+  test('a non-array contentControls does not break it', () => {
+    expect(buildEffectiveInput({ contentControls: 'x' }, range()).applied).toBe(false);
+  });
+
+  test('a pipeline range names builds, not releases', () => {
+    const input = { contentControls: [{ data: { rangeType: 'pipeline', from: '', fromText: '', to: '', toText: '' } }] };
+
+    const result = buildEffectiveInput(input, {
+      rangeType: 'pipeline',
+      definition: { id: 5 },
+      to: { id: 100, name: '2026.10.5', source: 'auto' },
+      from: { id: 99, source: 'auto' },
+    });
+
+    expect(result.details.contentControls[0].data).toMatchObject({ from: 99, fromText: '#99', to: 100, toText: '2026.10.5' });
+  });
+
+  test('is not applied without a recorded range or request', () => {
+    expect(buildEffectiveInput(sent(), undefined).applied).toBe(false);
+    expect(buildEffectiveInput(undefined, range()).applied).toBe(false);
+    expect(buildEffectiveInput([], range()).applied).toBe(false);
+    expect(buildEffectiveInput({ project: 'P' }, range()).applied).toBe(false);
+  });
+});
+
+describe('jsonLinesWithMarkers', () => {
+  const sample = { a: 1, list: [1, { b: 'x' }, []], empty: {}, nested: { s: 'text', n: null, t: true }, skip: undefined };
+
+  test('matches JSON.stringify(value, null, 2) exactly when nothing is marked', () => {
+    expect(jsonLinesWithMarkers(sample).map((l) => l.text).join('\n')).toBe(JSON.stringify(sample, null, 2));
+    expect(jsonLinesWithMarkers([]).map((l) => l.text).join('\n')).toBe('[]');
+    expect(jsonLinesWithMarkers('x').map((l) => l.text).join('\n')).toBe('"x"');
+  });
+
+  test('flags only the marked values and adds the note', () => {
+    const lines = jsonLinesWithMarkers({ data: { from: 409, to: 2, other: 'x' } }, ['data.from']);
+
+    expect(lines.filter((l) => l.changed).map((l) => l.text)).toEqual(['    "from": 409,  // auto-discovered']);
+    expect(lines.find((l) => l.text.includes('"to"')).changed).toBe(false);
+  });
+
+  test('addresses array elements by index', () => {
+    const lines = jsonLinesWithMarkers({ controls: [{ from: 1 }, { from: 2 }] }, ['controls[1].from']);
+
+    expect(lines.filter((l) => l.changed)).toHaveLength(1);
+    expect(lines.filter((l) => l.changed)[0].text).toContain('"from": 2');
+  });
+
+  test('works together with buildEffectiveInput', () => {
+    const input = { contentControls: [{ data: { rangeType: 'release', from: '', to: 7 } }] };
+    const effective = buildEffectiveInput(input, {
+      rangeType: 'release',
+      definition: {},
+      to: { id: 7, source: 'explicit' },
+      from: { id: 5, source: 'auto' },
+    });
+
+    const marked = jsonLinesWithMarkers(effective.details, effective.changedPaths).filter((l) => l.changed);
+    expect(marked.map((l) => l.text.trim())).toEqual(['"from": 5,  // auto-discovered']);
   });
 });

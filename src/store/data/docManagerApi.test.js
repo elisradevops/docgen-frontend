@@ -82,13 +82,55 @@ describe('docManagerApi sendDocumentToGenerator', () => {
     await expect(sendDocumentToGenerator({})).rejects.toThrow('Release history failed');
   });
 
-  test('queues the generation POST without retry and without an axios timeout', async () => {
+  test('waits at most 60 minutes and passes the caller\'s signal to the request', async () => {
+    axios.post.mockResolvedValueOnce({ data: 'http://doc' });
+    const { sendDocumentToGenerator, GENERATION_TIMEOUT_MS } = await import('./docManagerApi.jsx');
+    const controller = new AbortController();
+
+    await sendDocumentToGenerator({}, { signal: controller.signal });
+
+    const config = axios.post.mock.calls[0][2];
+    expect(GENERATION_TIMEOUT_MS).toBe(3600000);
+    expect(config.timeout).toBe(GENERATION_TIMEOUT_MS);
+    expect(config.signal).toBe(controller.signal);
+  });
+
+  test('a cancelled generation is reported as cancelled and is not sent again', async () => {
+    axios.post.mockRejectedValue(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED', name: 'CanceledError' }));
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+
+    const failure = await sendDocumentToGenerator({}, { signal: new AbortController().signal }).catch((e) => e);
+
+    expect(failure.cancelled).toBe(true);
+    expect(failure.message).toMatch(/cancelled/i);
+    expect(axios.post).toHaveBeenCalledTimes(1);
+  });
+
+  test('a timeout is not retried and says the run may still finish', async () => {
+    axios.post.mockRejectedValue(Object.assign(new Error('timeout of 3600000ms exceeded'), { code: 'ECONNABORTED' }));
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+
+    await expect(sendDocumentToGenerator({})).rejects.toThrow(/60 minutes.*may still finish/);
+    expect(axios.post).toHaveBeenCalledTimes(1);
+  });
+
+  test('a cancelled request frees its queue slot for the next generation', async () => {
+    axios.post
+      .mockRejectedValueOnce(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED', name: 'CanceledError' }))
+      .mockResolvedValueOnce({ data: 'http://doc2' });
+    const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
+
+    await sendDocumentToGenerator({}).catch(() => undefined);
+    await expect(sendDocumentToGenerator({})).resolves.toBe('http://doc2');
+  });
+
+  test('queues the generation POST without retry, with the 60 minute ceiling as its only timeout', async () => {
     axios.post.mockResolvedValueOnce({ data: { success: true } });
 
     const { sendDocumentToGenerator } = await import('./docManagerApi.jsx');
     await sendDocumentToGenerator({});
 
-    expect(axios.post.mock.calls[0][2]).not.toHaveProperty('timeout');
+    expect(axios.post.mock.calls[0][2].timeout).toBe(60 * 60 * 1000);
     expect(enqueueRequest).toHaveBeenCalledWith(
       expect.any(Function),
       expect.objectContaining({ key: 'docs', retry: false })

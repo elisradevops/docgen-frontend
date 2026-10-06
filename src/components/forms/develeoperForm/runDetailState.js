@@ -125,7 +125,7 @@ export const formatResolvedRange = (range) => {
   const from = rangeSide(range.from);
   const to = rangeSide(range.to);
   const definitionName = range.definition?.name ? String(range.definition.name) : '';
-  const definitionId = range.definition?.id !== undefined ? ` #${range.definition.id}` : '';
+  const definitionId = range.definition?.id != null ? ` #${range.definition.id}` : '';
   const definition = definitionName ? `${definitionName}${definitionId}` : definitionId.trim();
   const definitionLabel = definitionName || definitionId.trim();
   const chip = `${kind}${definitionLabel ? ` ${definitionLabel}` : ''}: ${from.id ? `#${from.id}` : '?'} → ${to.id ? `#${to.id}` : '?'}`;
@@ -135,6 +135,150 @@ export const formatResolvedRange = (range) => {
     `To: ${to.text}`,
   ];
   return { chip, lines, copyText: lines.join('\n') };
+};
+
+const ACCESS_AREAS = [
+  ['repositories', 'Repositories'],
+  ['workItems', 'Work items'],
+  ['builds', 'Builds'],
+  ['releases', 'Releases'],
+  ['testPlans', 'Test plans'],
+  ['project', 'Project'],
+];
+
+// What one area of the access probe shows, as chip text, a tone and a tooltip. A reader without access
+// often sees an empty list instead of an error, so zero repositories or work items is flagged too.
+const accessChip = (key, label, area) => {
+  if (!area || typeof area !== 'object') return null;
+  if (area.status === 'ok') {
+    const count = area.count;
+    if (key === 'project') {
+      return { key, label: `${label} visible`, tone: 'success', tooltip: 'The project is in this credential\'s project list.' };
+    }
+    const none = count === 0;
+    const suspicious = none && (key === 'repositories' || key === 'workItems');
+    // Work items are probed with a one-row query, so a count there only means "some".
+    const countless = key === 'workItems';
+    const shown = countless ? (none ? '0' : '✓') : (count ?? '✓');
+    return {
+      key,
+      label: `${label} ${shown}${suspicious ? ' (check)' : ''}`,
+      tone: suspicious ? 'warning' : none ? 'default' : 'success',
+      tooltip: none
+        ? `This credential sees no ${label.toLowerCase()} in the project.`
+        : countless || count === undefined
+          ? `This credential can see ${label.toLowerCase()} in the project.`
+          : `This credential can see ${count} ${label.toLowerCase()}.`,
+    };
+  }
+  if (area.status === 'denied') {
+    return { key, label: `${label} ✗${area.httpStatus ? ` ${area.httpStatus}` : ''}`, tone: 'error', tooltip: `This credential is denied access to ${label.toLowerCase()}.` };
+  }
+  if (area.status === 'notFound') {
+    return { key, label: key === 'project' ? 'Project not visible (check)' : `${label} n/a`, tone: key === 'project' ? 'warning' : 'default', tooltip: key === 'project' ? 'The project is not in this credential\'s project list.' : 'Not available on this server, or not visible to this credential.' };
+  }
+  if (area.status === 'error') {
+    return { key, label: `${label} ?`, tone: 'default', tooltip: 'This could not be read (a timeout or a server error), which says nothing about permissions.' };
+  }
+  return { key, label: `${label} ?`, tone: 'default', tooltip: 'The access check returned an answer this screen does not know.' };
+};
+
+/**
+ * Who a run's credential is and what it could see in the project (api-gate stores it in
+ * manifest.environment.credential): a title, a short line and one chip per area. Null when the run
+ * recorded none. A person's name is shown as recorded.
+ */
+export const formatCredential = (credential) => {
+  if (!credential || typeof credential !== 'object' || Array.isArray(credential)) return null;
+  const kind = credential.kind === 'bearer' ? 'bearer token' : credential.kind === 'pat' ? 'personal access token' : '';
+  const identity =
+    credential.identity === 'build-service' ? 'build service' : credential.identity === 'user' ? 'user' : '';
+  const name = typeof credential.name === 'string' ? credential.name.trim() : '';
+  const chips =
+    credential.access && typeof credential.access === 'object'
+      ? ACCESS_AREAS.map(([key, label]) => accessChip(key, label, credential.access[key])).filter(Boolean)
+      : [];
+  if (!name && !kind && !identity && chips.length === 0) return null;
+  return {
+    title: name || (identity ? `A ${identity} identity` : 'Credential'),
+    line: [kind, identity].filter(Boolean).join(' · '),
+    chips,
+    hasAccess: chips.length > 0,
+  };
+};
+
+// An empty, zero or non-numeric from/to means "discover it" (what the Auto SVD script sends).
+const isUnsetVersion = (value) => {
+  const n = Number(value);
+  return !Number.isFinite(n) || n <= 0;
+};
+
+/**
+ * The input as it effectively ran: the request as recorded, with the from/to that were auto-discovered filled
+ * in (and their fromText/toText placeholders replaced) on the SVD content control(s), so the run page shows
+ * the versions actually used, not an empty field. Built only from the recorded request and the recorded
+ * resolvedRange; the recorded request is never changed. A side that was given explicitly, or that discovery
+ * could not resolve, is left as it was. `changedPaths` lists what was filled, for highlighting.
+ */
+export const buildEffectiveInput = (inputs, range) => {
+  const none = { applied: false, details: inputs, changedPaths: [] };
+  if (!inputs || typeof inputs !== 'object' || Array.isArray(inputs) || !range || typeof range !== 'object') return none;
+  const kind = range.rangeType === 'pipeline' ? 'pipeline' : 'release';
+  const controls = Array.isArray(inputs.contentControls) ? inputs.contentControls : [];
+  // The recorded range belongs to one control: the one whose repoId is the range's definition; when
+  // controls carry no repoId, only a single control of that range type can be it.
+  const definitionId = range.definition?.id;
+  const ofKind = controls.filter((c) => c?.data && typeof c.data === 'object' && c.data.rangeType === kind);
+  const owners = ofKind.filter((c) =>
+    c.data.repoId != null && definitionId != null ? Number(c.data.repoId) === Number(definitionId) : ofKind.length === 1
+  );
+  if (owners.length === 0) return none;
+  const details = JSON.parse(JSON.stringify(inputs));
+  const changedPaths = [];
+  details.contentControls.forEach((control, index) => {
+    const data = control?.data;
+    if (!data || typeof data !== 'object' || !owners.includes(controls[index])) return;
+    for (const side of ['from', 'to']) {
+      const resolved = range[side];
+      if (resolved?.source !== 'auto' || resolved.id === undefined || resolved.id === null) continue;
+      if (!isUnsetVersion(data[side])) continue;
+      data[side] = resolved.id;
+      changedPaths.push(`contentControls[${index}].data.${side}`);
+      const textKey = `${side}Text`;
+      if (typeof data[textKey] === 'string') {
+        data[textKey] = resolved.name || `#${resolved.id}`;
+        changedPaths.push(`contentControls[${index}].data.${textKey}`);
+      }
+    }
+  });
+  return changedPaths.length > 0 ? { applied: true, details, changedPaths } : none;
+};
+
+/**
+ * JSON.stringify(value, null, 2) as lines, each flagged when its value was filled from discovery and
+ * given a trailing "// auto-discovered" note. Identical to JSON.stringify's layout when nothing changed.
+ */
+export const jsonLinesWithMarkers = (value, changedPaths = [], marker = 'auto-discovered') => {
+  const changed = new Set(changedPaths);
+  const lines = [];
+  const emit = (text, path, isChanged) => lines.push({ text: isChanged ? `${text}  // ${marker}` : text, changed: isChanged });
+  const walk = (val, path, indent, prefix, comma) => {
+    if (val !== null && typeof val === 'object') {
+      const isArray = Array.isArray(val);
+      const entries = isArray ? val.map((v, i) => [i, v]) : Object.entries(val).filter(([, v]) => v !== undefined && typeof v !== 'function');
+      const [open, close] = isArray ? ['[', ']'] : ['{', '}'];
+      if (entries.length === 0) return emit(`${indent}${prefix}${open}${close}${comma}`, path, false);
+      emit(`${indent}${prefix}${open}`, path, false);
+      entries.forEach(([key, child], i) => {
+        const childPath = isArray ? `${path}[${key}]` : path ? `${path}.${key}` : String(key);
+        walk(child, childPath, `${indent}  `, isArray ? '' : `${JSON.stringify(String(key))}: `, i < entries.length - 1 ? ',' : '');
+      });
+      return emit(`${indent}${close}${comma}`, path, false);
+    }
+    return emit(`${indent}${prefix}${JSON.stringify(val)}${comma}`, path, changed.has(path));
+  };
+  walk(value, '', '', '', '');
+  return lines;
 };
 
 /** Label and tone for one finding in the Compare screen. */

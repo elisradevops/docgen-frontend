@@ -391,6 +391,10 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
         }
       }
     } catch (error) {
+      if (error?.cancelled) {
+        toast.info(error.message);
+        return;
+      }
       logger.error(`Error occurred while generating document of type ${docType}: ${error.message}`);
       logger.error('Error Stack:', error.stack);
       toast.error(`Failed to generate ${docType}: ${error.message}`, {
@@ -561,6 +565,7 @@ const DocFormGenerator = observer(({ docType, store, selectedTeamProject }) => {
                     disabled={sendDisabled}
                     loading={loading}
                     onClick={handleSendRequest}
+                    onCancel={() => store.cancelGeneration()}
                     disabledTooltip={validationMessage || 'Please complete required selections'}
                     endIcon={<SendIcon />}
                     // Diagnostics capture is a troubleshooting tool: only offered in debug mode

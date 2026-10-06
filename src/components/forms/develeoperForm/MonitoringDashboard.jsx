@@ -224,6 +224,7 @@ const MonitoringDashboard = ({ onViewConnections, userId }) => {
 
         {view === VIEW_RUN ? (
           <RunDetail
+            key={openRunId}
             runId={openRunId}
             onBack={backToMonitoring}
             onOpenCompare={openCompare}
