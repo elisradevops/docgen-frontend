@@ -15,6 +15,8 @@ const FooterBar = ({
   // never generates a document) to leave FooterBar exactly as before.
   diagnosticsEnabled = false,
   onToggleDiagnostics,
+  // Shown while `loading`, to stop waiting for a generation that does not finish.
+  onCancel,
 }) => {
   return (
     <Paper
@@ -69,6 +71,11 @@ const FooterBar = ({
             <TroubleshootIcon fontSize='small' />
           </ToggleButton>
         </Tooltip>
+      ) : null}
+      {loading && onCancel ? (
+        <Button variant='outlined' color='inherit' size='large' onClick={onCancel} sx={{ alignSelf: { xs: 'stretch', sm: 'center' }, borderRadius: 2 }}>
+          Cancel
+        </Button>
       ) : null}
       <Tooltip title={disabled ? disabledTooltip : ''} arrow>
         <span>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -371,16 +371,21 @@ const RunCompare = ({ a: initialA, b: initialB, onBack }) => {
   }, [currentRun?.project, currentRun?.docType, currentRunId]);
 
   // Load diff whenever both sides are known.
+  const loadSeqRef = useRef(0);
   const load = useCallback(async () => {
     if (!baselineRunId || !currentRunId) return;
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError('');
+    // The previous pair's result must not stay next to a new pair's error (or while it loads).
+    setDiff(null);
     try {
-      setDiff(await getDiagnosticsCompare(baselineRunId, currentRunId));
+      const result = await getDiagnosticsCompare(baselineRunId, currentRunId);
+      if (seq === loadSeqRef.current) setDiff(result);
     } catch (err) {
-      setError(err.message || 'Failed to compare runs.');
+      if (seq === loadSeqRef.current) setError(err.message || 'Failed to compare runs.');
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [baselineRunId, currentRunId]);
 

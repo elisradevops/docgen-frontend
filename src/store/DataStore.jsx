@@ -936,6 +936,8 @@ class DocGenDataStore {
   // follows records it on its run, so the activity that led up to a run can be shown with it. A
   // new one starts after every generation, so each run owns the activity since the previous one.
   sessionId = `ses-${uuidV4()}`;
+  // Aborts the generation request this page is waiting for (see cancelGeneration); not observable.
+  generationAbortController = null;
   // Phase 6b — opt-in per generation, not sticky like formattingSettings: reset to false in
   // sendRequestToDocGen's finally, when the document type (tab) changes, and when debug mode is
   // turned off, so it doesn't silently stay on for the next run.
@@ -2480,18 +2482,36 @@ class DocGenDataStore {
 
     this.clearLoadedFavorite();
   };
+  // Stops this page waiting for the running generation (frees the request slot; the server may still
+  // finish the run). Not observable state: only the Cancel button calls it.
+  cancelGeneration() {
+    this.generationAbortController?.abort();
+  }
+
   async sendRequestToDocGen() {
-    await this.ensureFreshAdoAccessToken();
-    await createIfBucketDoesNotExist(this.ProjectBucketName);
-    let docReq = this.requestJson;
-    // Phase 6b — a run-level opt-in, not part of DocumentRequest's shape (sendDocumentToGenerator
-    // extracts it into the x-docgen-capture-mode header instead, mirroring how documentId
-    // already becomes x-docgen-run-id). Reset in finally so it never silently stays on for
-    // the next generation — unlike formattingSettings, this isn't meant to be sticky.
-    docReq.captureDiagnostics = this.captureDiagnostics;
+    // Created first: Cancel is offered as soon as the page is waiting, which includes the token refresh and
+    // bucket check below, so a click during them must stop the request from being sent at all.
+    const controller = new AbortController();
+    this.generationAbortController = controller;
+    const cancelledError = () => {
+      const err = new Error('Generation cancelled.');
+      err.cancelled = true;
+      return err;
+    };
     try {
-      return await sendDocumentToGenerator(docReq);
+      await this.ensureFreshAdoAccessToken();
+      if (controller.signal.aborted) throw cancelledError();
+      await createIfBucketDoesNotExist(this.ProjectBucketName);
+      if (controller.signal.aborted) throw cancelledError();
+      let docReq = this.requestJson;
+      // Phase 6b — a run-level opt-in, not part of DocumentRequest's shape (sendDocumentToGenerator
+      // extracts it into the x-docgen-capture-mode header instead, mirroring how documentId
+      // already becomes x-docgen-run-id). Reset in finally so it never silently stays on for
+      // the next generation — unlike formattingSettings, this isn't meant to be sticky.
+      docReq.captureDiagnostics = this.captureDiagnostics;
+      return await sendDocumentToGenerator(docReq, { signal: controller.signal });
     } finally {
+      if (this.generationAbortController === controller) this.generationAbortController = null;
       this.setCaptureDiagnostics(false);
       this.sessionId = `ses-${uuidV4()}`;
     }

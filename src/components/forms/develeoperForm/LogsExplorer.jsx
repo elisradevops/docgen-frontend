@@ -13,6 +13,7 @@ import {
 import {
   buildEventQueryParams,
   mergeLiveRows,
+  liveAnnouncement,
   computeLiveOverflow,
   formatRequestLine,
   buildDetailsText,
@@ -420,7 +421,8 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
         params.includeCount = true;
         // Without a boundary yet (no server time, nothing on screen) this first poll just returns the
         // newest page; the response then anchors the boundary.
-        if (Number.isFinite(liveBoundaryMsRef.current)) {
+        const hadBoundary = Number.isFinite(liveBoundaryMsRef.current);
+        if (hadBoundary) {
           params.insertedAfter = new Date(liveBoundaryMsRef.current).toISOString();
         }
         const res = await getDiagnosticsEvents(params);
@@ -431,7 +433,8 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
           Date.parse(res.serverTime)
         );
         setEvents((prev) => mergeLiveRows(prev, res.events || []));
-        setLiveOverflow(computeLiveOverflow(res.matchedCount, res.events?.length ?? 0));
+        // Without a boundary the poll matched the whole query, not "what arrived since": no burst signal.
+        setLiveOverflow(hadBoundary ? computeLiveOverflow(res.matchedCount, res.events?.length ?? 0) : 0);
         setLiveFailures(0);
         setLiveLastOkAt(Date.now());
         scheduleAggregateRefresh(res.events?.length ?? 0);
@@ -704,14 +707,22 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
           const status = liveStatus({ live: live && canLiveTail(sortBy, sortDir), hidden: liveHidden, failures: liveFailures, lastOkAt: liveLastOkAt, now: liveNow });
           const color = status.tone === 'warn' ? '#b45309' : status.tone === 'live' ? '#15803d' : '#64748b';
           return (
-            <Box
-              component='span'
-              role='status'
-              aria-live='polite'
-              sx={{ fontSize: 12, fontWeight: 500, color, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-            >
-              {status.label}
-            </Box>
+            <>
+              <Box
+                component='span'
+                sx={{ fontSize: 12, fontWeight: 500, color, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+              >
+                {status.label}
+              </Box>
+              <Box
+                component='span'
+                role='status'
+                aria-live='polite'
+                sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
+              >
+                {liveAnnouncement(status)}
+              </Box>
+            </>
           );
         })()}
         {live && liveOverflow > 0 ? (

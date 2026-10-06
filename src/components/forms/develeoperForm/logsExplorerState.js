@@ -31,7 +31,7 @@ const rowId = (event) => event?._id;
  * burst can't flood the table in one tick, and the combined list is capped at maxTotal so
  * memory/DOM size stays bounded under a long-running tail.
  */
-export const mergeLiveRows = (existingEvents, polledEvents, { capPerPoll = 200, maxTotal = 1000 } = {}) => {
+export const mergeLiveRows = (existingEvents, polledEvents, { capPerPoll = 200, maxTotal = LOG_ROW_CAP } = {}) => {
   const existingIds = new Set(existingEvents.map(rowId));
   const genuinelyNew = polledEvents.filter((e) => !existingIds.has(rowId(e))).slice(0, capPerPoll);
   if (genuinelyNew.length === 0) return existingEvents;
@@ -106,6 +106,13 @@ export const liveStatus = ({ live, hidden, failures, lastOkAt, now }) => {
   const seconds = Math.max(0, Math.round((now - lastOkAt) / 1000));
   return { tone: 'live', label: seconds <= 1 ? 'Live · just now' : `Live · updated ${seconds}s ago` };
 };
+
+/**
+ * What a screen reader is told about the Live status: only when its tone changes, never the per-second
+ * "updated Ns ago" text (which would be announced every tick).
+ */
+export const liveAnnouncement = (status) =>
+  status.tone === 'warn' ? 'Live updates are reconnecting' : status.tone === 'live' ? 'Live updates on' : status.label;
 
 /**
  * Live-tail burst signal: how many more events matched the poll's (incremental, since-last-poll)

@@ -11,6 +11,8 @@ import {
   Link,
   Paper,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -32,8 +34,12 @@ import {
   pickRunInput,
   buildInputFacts,
   formatResolvedRange,
+  formatCredential,
+  buildEffectiveInput,
+  jsonLinesWithMarkers,
 } from './runDetailState';
 import { formatStepLine } from './logsExplorerState';
+import { copyToClipboard } from '../../../utils/clipboard';
 // The same renderer the Documents tab uses for a document's input, so a run shows it identically.
 import { SelectedInputPopoverContent } from '../documentsTab/SelectedInputPopover';
 import { levelColors as LEVEL_COLOR, colors } from '../../../theme/tokens';
@@ -69,11 +75,15 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
   const [comparing, setComparing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleCopyRunId = () => {
-    navigator.clipboard.writeText(runId).then(() => {
+  // A load or refresh that finishes after the page moved to another run must not show its answer.
+  const currentRunIdRef = useRef(runId);
+  currentRunIdRef.current = runId;
+
+  const handleCopyRunId = async () => {
+    if (await copyToClipboard(runId)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    });
+    }
   };
 
   const load = useCallback(async () => {
@@ -87,6 +97,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
         getDiagnosticsEvents({ runId, limit: LOG_PAGE_SIZE, sortBy: 'ts', sortDir: 'desc' }),
         getDiagnosticsEvents({ runId, level: 'error', limit: ERROR_LIMIT, sortBy: 'ts', sortDir: 'desc' }),
       ]);
+      if (currentRunIdRef.current !== runId) return;
       setRun(detail.run);
       setTimeline(detail.timeline || []);
       setLog(mergeRunLog(tailRes.events, errorRes.events));
@@ -99,10 +110,12 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
         try {
           const sessionRes = await getDiagnosticsEvents({
             runId: detail.run.sessionId,
+            level: ['warn', 'error'],
             limit: SESSION_PREVIEW_LIMIT,
             sortBy: 'ts',
             sortDir: 'desc',
           });
+          if (currentRunIdRef.current !== runId) return;
           setSessionEvents(sessionRes.events || []);
           setSessionHasMore(!!sessionRes.nextCursor);
         } catch {
@@ -110,9 +123,9 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
         }
       }
     } catch (err) {
-      setError(err.message || 'Failed to load run.');
+      if (currentRunIdRef.current === runId) setError(err.message || 'Failed to load run.');
     } finally {
-      setLoading(false);
+      if (currentRunIdRef.current === runId) setLoading(false);
     }
   }, [runId]);
 
@@ -133,6 +146,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
         getDiagnosticsEvents({ runId, limit: LOG_PAGE_SIZE, sortBy: 'ts', sortDir: 'desc' }),
         getDiagnosticsEvents({ runId, level: 'error', limit: ERROR_LIMIT, sortBy: 'ts', sortDir: 'desc' }),
       ]);
+      if (currentRunIdRef.current !== runId) return;
       // Follow the newest line only if the reader is already at the bottom: scrolling up to read
       // something must not be yanked back down by the next refresh.
       const el = logScrollRef.current;
@@ -176,10 +190,11 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
         sortDir: 'desc',
         cursor: logCursor,
       });
+      if (currentRunIdRef.current !== runId) return;
       setLog((prev) => mergeRunLog(prev, res.events));
       setLogCursor(res.nextCursor);
     } catch (err) {
-      setError(err.message || 'Failed to load earlier events.');
+      if (currentRunIdRef.current === runId) setError(err.message || 'Failed to load earlier events.');
     } finally {
       setLoadingEarlier(false);
     }
@@ -188,10 +203,33 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
   const runInput = useMemo(() => pickRunInput(run), [run]);
   const inputFacts = useMemo(() => buildInputFacts(runInput, run), [runInput, run]);
   const resolvedRange = useMemo(() => formatResolvedRange(run?.manifest?.inputs?.resolvedRange), [run]);
+  const credential = useMemo(() => formatCredential(run?.manifest?.environment?.credential), [run]);
+  // The request with the auto-discovered from/to filled in; only for runs recorded as a technical request (a
+  // pipeline-started run). The recorded request itself is never changed.
+  const effectiveInput = useMemo(
+    () => (runInput?.kind === 'technical' ? buildEffectiveInput(runInput.details, run?.manifest?.inputs?.resolvedRange) : null),
+    [runInput, run]
+  );
+  const [inputView, setInputView] = useState('effective');
+  const showEffective = !!effectiveInput?.applied && inputView === 'effective';
+  const shownInput = showEffective ? effectiveInput.details : runInput?.details;
   const [inputOpen, setInputOpen] = useState(false);
-  // A different run starts collapsed again.
+  // Only while the panel is open (a large request is thousands of lines), and unchanged lines are merged into
+  // plain text blocks so only the filled-in lines are styled elements.
+  const shownBlocks = useMemo(() => {
+    if (!inputOpen || shownInput === undefined) return [];
+    const blocks = [];
+    for (const line of jsonLinesWithMarkers(shownInput, showEffective ? effectiveInput.changedPaths : [])) {
+      const last = blocks[blocks.length - 1];
+      if (!line.changed && last && !last.changed) last.text += `\n${line.text}`;
+      else blocks.push({ changed: line.changed, text: line.text });
+    }
+    return blocks;
+  }, [inputOpen, shownInput, showEffective, effectiveInput]);
+  // A different run starts collapsed again, with the default input view.
   useEffect(() => {
     setInputOpen(false);
+    setInputView('effective');
   }, [runId]);
   const timelineRows = useMemo(() => buildTimelineRows(run, timeline), [run, timeline]);
 
@@ -270,6 +308,36 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
             </Stack>
           </Paper>
 
+          {credential ? (
+            <Paper variant='outlined' sx={{ p: 2 }}>
+              <Stack direction='row' spacing={1} alignItems='baseline' flexWrap='wrap' useFlexGap sx={{ mb: credential.hasAccess ? 1 : 0 }}>
+                <Typography variant='subtitle2'>Ran as</Typography>
+                <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                  {credential.title}
+                </Typography>
+                {credential.line ? (
+                  <Typography variant='caption' color='text.secondary'>
+                    {credential.line}
+                  </Typography>
+                ) : null}
+              </Stack>
+              {credential.hasAccess ? (
+                <>
+                  <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 0.75 }}>
+                    What this credential could see in the project. A missing permission often shows as an empty list, not an error.
+                  </Typography>
+                  <Stack direction='row' useFlexGap flexWrap='wrap' spacing={1}>
+                    {credential.chips.map((chip) => (
+                      <Tooltip key={chip.key} title={chip.tooltip}>
+                        <Chip size='small' variant='outlined' color={chip.tone} label={chip.label} />
+                      </Tooltip>
+                    ))}
+                  </Stack>
+                </>
+              ) : null}
+            </Paper>
+          ) : null}
+
           {runInput ? (
             <Paper variant='outlined'>
               {/* The whole header is the control (role=button): the label, the key facts and the
@@ -329,7 +397,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
                     <Box sx={{ mb: 2, p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                       <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 0.5 }}>
                         <Typography variant='subtitle2'>Resolved range</Typography>
-                        <Button size='small' onClick={() => navigator.clipboard.writeText(resolvedRange.copyText)}>
+                        <Button size='small' onClick={() => copyToClipboard(resolvedRange.copyText)}>
                           Copy
                         </Button>
                       </Stack>
@@ -347,22 +415,48 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
                     <SelectedInputPopoverContent inputSummary={runInput.summary} inputDetails={runInput.details} />
                   ) : (
                     <Box>
-                      <Stack direction='row' justifyContent='space-between' alignItems='center' sx={{ mb: 1 }}>
+                      <Stack direction='row' justifyContent='space-between' alignItems='center' flexWrap='wrap' useFlexGap spacing={1} sx={{ mb: 1 }}>
                         <Typography variant='caption' color='text.secondary'>
-                          The request as recorded for this run (credentials are never stored).
+                          {showEffective
+                            ? 'The request with the versions this run discovered filled in (credentials are never stored).'
+                            : 'The request as recorded for this run (credentials are never stored).'}
                         </Typography>
-                        <Button
-                          size='small'
-                          onClick={() => navigator.clipboard.writeText(JSON.stringify(runInput.details, null, 2))}
-                        >
-                          Copy JSON
-                        </Button>
+                        <Stack direction='row' spacing={1} alignItems='center'>
+                          {effectiveInput?.applied ? (
+                            <ToggleButtonGroup
+                              size='small'
+                              exclusive
+                              value={inputView}
+                              onChange={(_event, next) => next && setInputView(next)}
+                              aria-label='Input view'
+                            >
+                              <ToggleButton value='effective'>With discovered values</ToggleButton>
+                              <ToggleButton value='sent'>As sent</ToggleButton>
+                            </ToggleButtonGroup>
+                          ) : null}
+                          <Button
+                            size='small'
+                            onClick={() => copyToClipboard(JSON.stringify(shownInput, null, 2))}
+                          >
+                            Copy JSON
+                          </Button>
+                        </Stack>
                       </Stack>
                       <Box
                         component='pre'
                         sx={{ m: 0, p: 1.5, maxHeight: 320, overflow: 'auto', fontSize: '0.78rem', bgcolor: 'action.hover', borderRadius: 1 }}
                       >
-                        {JSON.stringify(runInput.details, null, 2)}
+                        {shownBlocks.map((block, index) =>
+                          block.changed ? (
+                            <Box key={index} component='span' sx={{ display: 'block', bgcolor: 'rgba(46,125,50,0.14)', fontWeight: 600 }}>
+                              {block.text}
+                            </Box>
+                          ) : (
+                            <span key={index} style={{ display: 'block' }}>
+                              {block.text}
+                            </span>
+                          )
+                        )}
                       </Box>
                     </Box>
                   )}

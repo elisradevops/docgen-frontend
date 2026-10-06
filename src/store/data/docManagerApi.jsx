@@ -159,7 +159,11 @@ const makeRequest = async (url, requestMethod = 'get', data = {}, customHeaders 
   return json;
 };
 
-export const sendDocumentToGenerator = async (docJson) => {
+// A generation legitimately takes minutes, but not forever: past this the page stops waiting (the server
+// side may still finish; the run is visible in Monitoring) instead of hanging with a held request slot.
+export const GENERATION_TIMEOUT_MS = 60 * 60 * 1000;
+
+export const sendDocumentToGenerator = async (docJson, { signal } = {}) => {
   try {
     docJson.documentId = uuidV4();
     // Phase 6b — captureDiagnostics never belongs in DocumentRequest's body shape: like
@@ -181,10 +185,12 @@ export const sendDocumentToGenerator = async (docJson) => {
           // thread it through AsyncLocalStorage as the run's correlation id before the
           // handler ever parses the body — see docgen-api-gate's runContext.ts.
           headers,
+          signal,
+          timeout: GENERATION_TIMEOUT_MS,
         }),
       // retry: false — generation is long-running and not idempotent. Re-sending it (the queue's
       // default for timeouts/5xx) starts a second generation of the same run while the first is
-      // still running. No axios timeout either: a large document legitimately takes minutes.
+      // still running. The ceiling above and the caller's signal (Cancel) are the ways out of a hang.
       { key: 'docs', priority: 'high', retry: false }
     );
     window.currentdoc = docJson.documentId;
@@ -194,9 +200,14 @@ export const sendDocumentToGenerator = async (docJson) => {
       // If the error has a response, it comes from the server
       logger.error('Error response while sending document to generator:', err.response.data);
       throw new Error(getServerErrorMessage(err.response.data));
+    } else if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') {
+      // The server may still finish the run: only this page stopped waiting.
+      const cancelled = new Error('Generation cancelled. The server may still finish the run; see Monitoring.');
+      cancelled.cancelled = true;
+      throw cancelled;
     } else if (err.code === 'ECONNABORTED') {
       logger.error('Request timeout while sending document to generator');
-      throw new Error('Request timeout - server took too long to respond');
+      throw new Error('The generator did not answer within 60 minutes. The run may still finish; see Monitoring.');
     } else if (err.code === 'ENOTFOUND') {
       logger.error(`Network error: Unable to connect to server - DNS resolution failed`);
       throw new Error(
