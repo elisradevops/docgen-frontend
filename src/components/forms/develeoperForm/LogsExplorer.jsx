@@ -13,11 +13,6 @@ import {
 import {
   buildEventQueryParams,
   mergeLiveRows,
-  computeLiveOverflow,
-  isFullTailPage,
-  tailCursorAfter,
-  liveBehind as liveBehindOf,
-  LIVE_MAX_DRAIN,
   logsBodyHeight,
   LOGS_SCROLLBAR_GUTTER_PX,
   formatRequestLine,
@@ -27,9 +22,6 @@ import {
   hasReachedRowCap,
   canLiveTail,
   isRequestId,
-  LIVE_POLL_MS,
-  LIVE_PAGE_LIMIT,
-  aggregateRefreshDelay,
   advanceLiveBoundary,
   formatStepLine,
   isCorrelationOnlyId,
@@ -50,6 +42,7 @@ import {
 } from './logsFilterSettings';
 import LogsFilterSettingsDialog from './LogsFilterSettingsDialog';
 import LiveStatus from './LiveStatus';
+import { useLiveTail } from './useLiveTail';
 import VirtualLogBody from './VirtualLogBody';
 import { useViewportHeight } from './useViewportHeight';
 
@@ -304,15 +297,11 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   const [error, setError] = useState('');
   // On by default (remembered): a debugging session wants the tail running from the first screen.
   const [live, setLive] = useState(loadLiveEnabled);
-  const [liveHidden, setLiveHidden] = useState(() => typeof document !== 'undefined' && document.hidden);
-  const [liveFailures, setLiveFailures] = useState(0);
-  const [liveLastOkAt, setLiveLastOkAt] = useState(undefined);
   // Server clock (ms) at the last full load: where the live tail starts when nothing else anchors it.
   const serverTimeRef = useRef(null);
-  const liveTimerRef = useRef(null);
-  const [liveOverflow, setLiveOverflow] = useState(0);
-  // Events still waiting after a full tail page (the poll is catching up on a burst).
-  const [liveBehind, setLiveBehind] = useState(0);
+  // The rows currently shown, for the live tail's starting point (read at call time, never a dependency).
+  const eventsRef = useRef(events);
+  eventsRef.current = events;
 
   const [selectedBucketIdx, setSelectedBucketIdx] = useState(null);
   // bucketFilter drives a server-side re-fetch for the clicked bucket's exact time range.
@@ -391,147 +380,42 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     loadFirstPage();
   }, [loadFirstPage]);
 
-  // Live tail. Each poll asks for what was INSERTED since the last one, by arrival and not by the event's own
-  // `ts`: events reach the store late and out of order (every service buffers and flushes on its own), so a
-  // `ts` boundary skipped a slow service's older events for good. api-gate's tail mode reads in insertion
-  // order from a cursor (`afterId`), so a burst larger than one page is drained over successive polls instead
-  // of being cut off; after a short page it goes back to a look-back by time (`insertedAfter`, seeded from the
-  // SERVER's clock), which also covers events inserted by another api-gate pod in the same second. Rows
-  // already shown are dropped by id (mergeLiveRows), which also keeps the table in time order. An api-gate
-  // without tail mode answers the old way and gets the old "+N more events" signal.
-  const liveBoundaryMsRef = useRef(null);
-  useEffect(() => {
-    if (!live || !canLiveTail(sortBy, sortDir)) return undefined;
-    // Set by the cleanup: a tick still awaiting its response when the filters change (or Live is
-    // switched off) must not merge its now-stale rows into the table.
-    let cancelled = false;
-    let tickInFlight = false;
-    // Tail by cursor: after a FULL page the next poll continues strictly after its last event and follows
-    // straight away, up to LIVE_MAX_DRAIN in a row; a short page goes back to the look-back by time.
-    let afterId = null;
-    let drainStreak = 0;
-    let drainTimer = null;
-    // Seed: the server time of the last full load; failing that, the newest row on screen. A no-op
-    // state update, only to read the latest `events` without making them an effect dependency (which
-    // would restart this interval on every merged-in row).
-    setEvents((prev) => {
-      liveBoundaryMsRef.current =
-        Number.isFinite(serverTimeRef.current) ? serverTimeRef.current : advanceLiveBoundary(null, prev, undefined);
-      return prev;
-    });
-    setLiveFailures(0);
+  // The chart and facet counts are re-fetched while Live brings rows (the hook throttles it). A response is
+  // dropped if a full load started meanwhile, and a failed refresh just keeps what is on screen.
+  const refreshAggregates = async ({ isCancelled }) => {
+    const seq = requestSeqRef.current;
+    try {
+      const params = buildEventQueryParams(queryState);
+      if (queryState.runId) params.runId = queryState.runId;
+      const [facetsRes, histogramRes] = await Promise.all([
+        getDiagnosticsEventFacets(params),
+        getDiagnosticsEventHistogram(params),
+      ]);
+      if (isCancelled() || seq !== requestSeqRef.current || bucketSelectedRef.current) return;
+      setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
+      setHistogram(histogramRes.buckets || []);
+    } catch {
+      // Keep the current chart; the next poll with new rows tries again.
+    }
+  };
 
-    // The poll only merges rows into the table; the chart and the facet counts come from their own
-    // queries. Re-fetch them on a throttle when rows arrive (see aggregateRefreshDelay), reading the
-    // current state when the timer fires so a burst is covered by one refresh. A response is dropped
-    // if a full load started meanwhile, and a failed refresh just keeps what is on screen.
-    let aggregateTimer = null;
-    const refreshAggregates = async () => {
-      aggregateTimer = null;
-      if (cancelled || bucketSelectedRef.current) return;
-      const seq = requestSeqRef.current;
-      aggregatesRefreshedAtRef.current = Date.now();
-      try {
-        const params = buildEventQueryParams(queryState);
-        if (queryState.runId) params.runId = queryState.runId;
-        const [facetsRes, histogramRes] = await Promise.all([
-          getDiagnosticsEventFacets(params),
-          getDiagnosticsEventHistogram(params),
-        ]);
-        if (cancelled || seq !== requestSeqRef.current || bucketSelectedRef.current) return;
-        setFacets(facetsRes.facets || { level: [], service: [], project: [], docType: [] });
-        setHistogram(histogramRes.buckets || []);
-      } catch {
-        // Keep the current chart; the next poll with new rows tries again.
-      }
-    };
-    const scheduleAggregateRefresh = (newRows) => {
-      const delay = aggregateRefreshDelay({
-        newRows,
-        lastRefreshAt: aggregatesRefreshedAtRef.current,
-        now: Date.now(),
-        pending: aggregateTimer !== null,
-        paused: bucketSelectedRef.current,
-      });
-      if (delay !== null) aggregateTimer = window.setTimeout(refreshAggregates, delay);
-    };
-
-    const tick = async () => {
-      if (cancelled || tickInFlight || document.hidden) return;
-      tickInFlight = true;
-      let drainNext = false;
-      try {
-        const params = buildEventQueryParams(queryState);
-        if (queryState.runId) params.runId = queryState.runId;
-        delete params.until; // live tail only ever looks forward, never has an upper bound
-        params.limit = LIVE_PAGE_LIMIT;
-        params.includeCount = true;
-        // Without a boundary yet (no server time, nothing on screen) this first poll just returns the
-        // newest page; the response then anchors the boundary.
-        const hadBoundary = Number.isFinite(liveBoundaryMsRef.current);
-        if (hadBoundary) {
-          params.insertedAfter = new Date(liveBoundaryMsRef.current).toISOString();
-          // Tail mode needs a starting point; an api-gate that predates it ignores these two parameters
-          // and answers the old way (no `tail` in the response), which is handled below.
-          params.tail = 'true';
-          if (afterId) params.afterId = afterId;
-        }
-        const res = await getDiagnosticsEvents(params);
-        if (cancelled) return;
-        const tailed = res.tail === true;
-        // "Behind" is only worth telling the user when a whole drain run could not catch up: right after a
-        // full page the count still holds events re-read from the look-back, so it would flicker while the
-        // tail is in fact keeping up.
-        let stillBehind = false;
-        if (tailed && isFullTailPage(res) && drainStreak < LIVE_MAX_DRAIN) {
-          afterId = tailCursorAfter(res);
-          drainStreak += 1;
-          drainNext = true;
-        } else {
-          stillBehind = tailed && isFullTailPage(res);
-          afterId = null;
-          drainStreak = 0;
-        }
-        liveBoundaryMsRef.current = advanceLiveBoundary(
-          liveBoundaryMsRef.current,
-          res.events,
-          Date.parse(res.serverTime)
-        );
-        setEvents((prev) => mergeLiveRows(prev, res.events || []));
-        // Without a boundary the poll matched the whole query, not "what arrived since": no burst signal.
-        // (An api-gate without tail mode still gets the old signal.)
-        setLiveBehind(stillBehind ? liveBehindOf(res) : 0);
-        setLiveOverflow(hadBoundary && !tailed ? computeLiveOverflow(res.matchedCount, res.events?.length ?? 0) : 0);
-        setLiveFailures(0);
-        setLiveLastOkAt(Date.now());
-        scheduleAggregateRefresh(res.events?.length ?? 0);
-      } catch {
-        // One missed poll is normal and the next tick retries; a run of them is shown in the status chip.
-        if (!cancelled) setLiveFailures((n) => n + 1);
-      } finally {
-        tickInFlight = false;
-        if (drainNext && !cancelled) drainTimer = window.setTimeout(tick, 0);
-      }
-    };
-
-    liveTimerRef.current = window.setInterval(tick, LIVE_POLL_MS);
-    tick(); // don't make the first look wait a full interval
-    // Coming back to a hidden tab: catch up straight away instead of at the next interval.
-    const onVisibility = () => {
-      setLiveHidden(document.hidden);
-      if (!document.hidden) tick();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      cancelled = true;
-      document.removeEventListener('visibilitychange', onVisibility);
-      if (liveTimerRef.current) window.clearInterval(liveTimerRef.current);
-      if (aggregateTimer !== null) window.clearTimeout(aggregateTimer);
-      if (drainTimer !== null) window.clearTimeout(drainTimer);
-      setLiveOverflow(0);
-      setLiveBehind(0);
-    };
-  }, [live, queryState, sortBy, sortDir]);
+  // Live tail (see useLiveTail): new rows join the table, merged by id and kept in time order.
+  const {
+    hidden: liveHidden,
+    failures: liveFailures,
+    lastOkAt: liveLastOkAt,
+    behind: liveBehind,
+    overflow: liveOverflow,
+  } = useLiveTail({
+    enabled: live && canLiveTail(sortBy, sortDir),
+    queryState,
+    seedBoundary: () =>
+      Number.isFinite(serverTimeRef.current) ? serverTimeRef.current : advanceLiveBoundary(null, eventsRef.current, undefined),
+    onEvents: (rows) => setEvents((prev) => mergeLiveRows(prev, rows)),
+    refreshAggregates,
+    aggregatesRefreshedAtRef,
+    bucketSelectedRef,
+  });
 
   const loadOlder = async () => {
     if (!nextCursor) return;
