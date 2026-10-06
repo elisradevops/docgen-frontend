@@ -3,6 +3,9 @@ import {
   buildEventQueryParams,
   mergeLiveRows,
   liveAnnouncement,
+  logsBodyHeight,
+  countPrepended,
+  newEventsLabel,
   isFullTailPage,
   tailCursorAfter,
   liveBehind,
@@ -501,5 +504,30 @@ describe('cursor tail helpers', () => {
   test('draining is bounded', () => {
     expect(LIVE_MAX_DRAIN).toBeGreaterThan(0);
     expect(LIVE_MAX_DRAIN).toBeLessThanOrEqual(20);
+  });
+});
+
+describe('virtual log list helpers', () => {
+  test('the scrolling area follows the viewport within bounds', () => {
+    expect(logsBodyHeight(1000)).toBe(640);
+    expect(logsBodyHeight(300)).toBe(320);
+    expect(logsBodyHeight(5000)).toBe(1200);
+    expect(logsBodyHeight(undefined)).toBe(520);
+  });
+
+  test('countPrepended: rows added ahead of the old first row', () => {
+    expect(countPrepended('b', ['x', 'y', 'b', 'a'])).toBe(2);
+    expect(countPrepended('b', ['b', 'a'])).toBe(0);
+  });
+
+  test('countPrepended: a vanished old first row is a reset (-1); no previous row is 0', () => {
+    expect(countPrepended('gone', ['x', 'y'])).toBe(-1);
+    expect(countPrepended(undefined, ['x'])).toBe(0);
+    expect(countPrepended('a', undefined)).toBe(-1);
+  });
+
+  test('newEventsLabel pluralizes', () => {
+    expect(newEventsLabel(1)).toBe('1 new event');
+    expect(newEventsLabel(1500)).toBe(`${(1500).toLocaleString()} new events`);
   });
 });

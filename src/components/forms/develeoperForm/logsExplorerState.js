@@ -300,3 +300,22 @@ export const runCellActions = (id, canOpen) => {
   return { primary: 'filter', showFilterIcon: false };
 };
 
+
+/** Height (px) of the scrolling log area: the viewport minus the page chrome above it, within sane bounds. */
+export const logsBodyHeight = (viewportHeight) => {
+  const h = Number.isFinite(viewportHeight) ? viewportHeight - 360 : 520;
+  return Math.min(1200, Math.max(320, Math.round(h)));
+};
+
+/**
+ * How many rows were added ahead of the row that used to be first, given the new row ids (newest first).
+ * 0 when nothing was prepended; -1 when the old first row is gone (a different query, a sort change, or
+ * the row cap trimmed it), which the list treats as a reset rather than a prepend.
+ */
+export const countPrepended = (previousFirstId, nextIds) => {
+  if (previousFirstId === undefined || previousFirstId === null) return 0;
+  return Array.isArray(nextIds) ? nextIds.indexOf(previousFirstId) : -1;
+};
+
+/** The label of the "jump to the newest" pill shown while the reader is scrolled away from the top. */
+export const newEventsLabel = (count) => `${count.toLocaleString()} new event${count === 1 ? '' : 's'}`;

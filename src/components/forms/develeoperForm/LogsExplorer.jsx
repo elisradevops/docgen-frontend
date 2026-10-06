@@ -18,6 +18,7 @@ import {
   tailCursorAfter,
   liveBehind as liveBehindOf,
   LIVE_MAX_DRAIN,
+  logsBodyHeight,
   formatRequestLine,
   buildDetailsText,
   buildLogsCsv,
@@ -48,6 +49,7 @@ import {
 } from './logsFilterSettings';
 import LogsFilterSettingsDialog from './LogsFilterSettingsDialog';
 import LiveStatus from './LiveStatus';
+import VirtualLogBody from './VirtualLogBody';
 
 const WINDOW_OPTIONS = [
   { label: 'Last hour', value: 1 },
@@ -247,10 +249,38 @@ function FacetFilterDropdown({ dimension, facetValues, selected, onChange, onCle
 const rowKeyOf = (record) => record._id;
 
 // Memoized so a re-render of the page for an unrelated reason (a status chip, the Live flags) skips the
-// table: up to LOG_ROW_CAP rows with buttons and tooltips are expensive to reconcile.
-const LogsTable = React.memo(({ dataSource, columns, onChange }) => (
-  <Table dataSource={dataSource} columns={columns} rowKey={rowKeyOf} pagination={false} onChange={onChange} size='small' />
-));
+// table. antd keeps rendering the header (sort arrows, facet filters); the rows are a virtualized list, so
+// only the ones near the viewport exist in the DOM however many events are loaded.
+const LogsTable = React.memo(({ dataSource, columns, onChange }) => {
+  const [height, setHeight] = useState(() => logsBodyHeight(window.innerHeight));
+  useEffect(() => {
+    const onResize = () => setHeight(logsBodyHeight(window.innerHeight));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const components = useMemo(
+    () => ({ body: (rows) => <VirtualLogBody data={rows} columns={columns} height={height} /> }),
+    [columns, height]
+  );
+  // Narrower than the columns need: the header and the rows scroll sideways together, never apart.
+  const minWidth = useMemo(() => columns.reduce((sum, column) => sum + (column.width || 0), 0) + 17, [columns]);
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ minWidth }}>
+        <Table
+          dataSource={dataSource}
+          columns={columns}
+          rowKey={rowKeyOf}
+          pagination={false}
+          onChange={onChange}
+          size='small'
+          scroll={{ y: height }}
+          components={components}
+        />
+      </div>
+    </div>
+  );
+});
 LogsTable.displayName = 'LogsTable';
 
 const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
@@ -632,6 +662,9 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       title: 'Message',
       dataIndex: 'message',
       key: 'message',
+      // Every column has an explicit width: the header (fixed layout) and the virtual rows below it
+      // stay aligned by growing in proportion to these.
+      width: 520,
       render: (message, record) => {
         const isExpanded = expandedRowId === record._id;
         const isLong = (message || '').length > MESSAGE_TRUNCATE_LENGTH;
