@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Box } from '@mui/material';
+import { colors, levelColors } from '../../../theme/tokens';
 import { liveStatus, liveAnnouncement } from './logsExplorerState';
+import { VISUALLY_HIDDEN } from './a11y';
 
-const TONE_COLOR = { warn: '#b45309', live: '#15803d' };
+const TONE_COLOR = { warn: levelColors.warn, live: colors.success };
 
 // The Live status next to the Live button. It owns the one-second clock behind "updated Ns ago", so the
 // tick re-renders only this label and never the (large) logs table around it.
@@ -15,18 +17,13 @@ const LiveStatus = ({ live, hidden, failures, lastOkAt }) => {
   }, [live]);
 
   const status = liveStatus({ live, hidden, failures, lastOkAt, now });
-  const color = TONE_COLOR[status.tone] || '#64748b';
+  const color = TONE_COLOR[status.tone] || colors.textSecondary;
   return (
     <>
       <Box component='span' sx={{ fontSize: 12, fontWeight: 500, color, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
         {status.label}
       </Box>
-      <Box
-        component='span'
-        role='status'
-        aria-live='polite'
-        sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
-      >
+      <Box component='span' role='status' aria-live='polite' sx={VISUALLY_HIDDEN}>
         {liveAnnouncement(status)}
       </Box>
     </>

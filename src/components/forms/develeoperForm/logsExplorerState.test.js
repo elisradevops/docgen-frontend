@@ -5,6 +5,9 @@ import {
   liveAnnouncement,
   logsBodyHeight,
   countPrepended,
+  antTableSelectors,
+  pickHeaderWidths,
+  sameWidths,
   newEventsLabel,
   isFullTailPage,
   tailCursorAfter,
@@ -515,15 +518,36 @@ describe('virtual log list helpers', () => {
     expect(logsBodyHeight(undefined)).toBe(520);
   });
 
+  const rowsOf = (...ids) => ids.map((id) => ({ _id: id }));
+
   test('countPrepended: rows added ahead of the old first row', () => {
-    expect(countPrepended('b', ['x', 'y', 'b', 'a'])).toBe(2);
-    expect(countPrepended('b', ['b', 'a'])).toBe(0);
+    expect(countPrepended('b', rowsOf('x', 'y', 'b', 'a'))).toBe(2);
+    expect(countPrepended('b', rowsOf('b', 'a'))).toBe(0);
   });
 
   test('countPrepended: a vanished old first row is a reset (-1); no previous row is 0', () => {
-    expect(countPrepended('gone', ['x', 'y'])).toBe(-1);
-    expect(countPrepended(undefined, ['x'])).toBe(0);
+    expect(countPrepended('gone', rowsOf('x', 'y'))).toBe(-1);
+    expect(countPrepended(undefined, rowsOf('x'))).toBe(0);
     expect(countPrepended('a', undefined)).toBe(-1);
+    expect(countPrepended('a', [])).toBe(-1);
+  });
+
+  test('antTableSelectors follow the antd class prefix', () => {
+    expect(antTableSelectors()).toEqual({ table: '.ant-table', headerTable: '.ant-table-header table' });
+    expect(antTableSelectors('acme-table').headerTable).toBe('.acme-table-header table');
+  });
+
+  test('pickHeaderWidths keeps the first N cells (the scrollbar gutter cell is dropped) and rounds', () => {
+    expect(pickHeaderWidths([100.04, 200.26, 16], 2)).toEqual([100, 200.3]);
+    expect(pickHeaderWidths([100], 2)).toBeNull();
+    expect(pickHeaderWidths(undefined, 2)).toBeNull();
+  });
+
+  test('sameWidths tolerates sub-pixel noise but not a real change', () => {
+    expect(sameWidths([100, 200], [100.3, 199.8])).toBe(true);
+    expect(sameWidths([100, 200], [100, 201])).toBe(false);
+    expect(sameWidths([100], [100, 200])).toBe(false);
+    expect(sameWidths(null, [100])).toBe(false);
   });
 
   test('newEventsLabel pluralizes', () => {

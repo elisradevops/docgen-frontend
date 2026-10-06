@@ -19,6 +19,7 @@ import {
   liveBehind as liveBehindOf,
   LIVE_MAX_DRAIN,
   logsBodyHeight,
+  LOGS_SCROLLBAR_GUTTER_PX,
   formatRequestLine,
   buildDetailsText,
   buildLogsCsv,
@@ -50,6 +51,7 @@ import {
 import LogsFilterSettingsDialog from './LogsFilterSettingsDialog';
 import LiveStatus from './LiveStatus';
 import VirtualLogBody from './VirtualLogBody';
+import { useViewportHeight } from './useViewportHeight';
 
 const WINDOW_OPTIONS = [
   { label: 'Last hour', value: 1 },
@@ -252,18 +254,13 @@ const rowKeyOf = (record) => record._id;
 // table. antd keeps rendering the header (sort arrows, facet filters); the rows are a virtualized list, so
 // only the ones near the viewport exist in the DOM however many events are loaded.
 const LogsTable = React.memo(({ dataSource, columns, onChange }) => {
-  const [height, setHeight] = useState(() => logsBodyHeight(window.innerHeight));
-  useEffect(() => {
-    const onResize = () => setHeight(logsBodyHeight(window.innerHeight));
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+  const height = useViewportHeight(logsBodyHeight);
   const components = useMemo(
     () => ({ body: (rows) => <VirtualLogBody data={rows} columns={columns} height={height} /> }),
     [columns, height]
   );
   // Narrower than the columns need: the header and the rows scroll sideways together, never apart.
-  const minWidth = useMemo(() => columns.reduce((sum, column) => sum + (column.width || 0), 0) + 17, [columns]);
+  const minWidth = useMemo(() => columns.reduce((sum, column) => sum + (column.width || 0), 0) + LOGS_SCROLLBAR_GUTTER_PX, [columns]);
   return (
     <div style={{ overflowX: 'auto' }}>
       <div style={{ minWidth }}>
@@ -394,13 +391,14 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     loadFirstPage();
   }, [loadFirstPage]);
 
-  // Live tail. Each tick asks for what was INSERTED since the last one (`insertedAfter`), not for
-  // events newer than the newest `ts` seen: events reach the store late and out of order (every
-  // service buffers and flushes on its own), so a ts boundary skipped a slow service's older events
-  // for good — they only appeared after a manual refresh. The boundary is the newest insertion time
-  // seen (from the rows' _id), seeded from the SERVER's clock; the server overlaps the range a little
-  // and mergeLiveRows drops the duplicates and keeps the table in time order.
-  // matchedCount vs. what came back drives the "+N more events" burst signal (computeLiveOverflow).
+  // Live tail. Each poll asks for what was INSERTED since the last one, by arrival and not by the event's own
+  // `ts`: events reach the store late and out of order (every service buffers and flushes on its own), so a
+  // `ts` boundary skipped a slow service's older events for good. api-gate's tail mode reads in insertion
+  // order from a cursor (`afterId`), so a burst larger than one page is drained over successive polls instead
+  // of being cut off; after a short page it goes back to a look-back by time (`insertedAfter`, seeded from the
+  // SERVER's clock), which also covers events inserted by another api-gate pod in the same second. Rows
+  // already shown are dropped by id (mergeLiveRows), which also keeps the table in time order. An api-gate
+  // without tail mode answers the old way and gets the old "+N more events" signal.
   const liveBoundaryMsRef = useRef(null);
   useEffect(() => {
     if (!live || !canLiveTail(sortBy, sortDir)) return undefined;
@@ -561,12 +559,6 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     [events, filterSettings.excludePhrases]
   );
 
-  // The rows expanded before the current ones: their Message cell has to render once more (to collapse).
-  const prevExpandedRef = useRef({ row: null, stack: null });
-  useEffect(() => {
-    prevExpandedRef.current = { row: expandedRowId, stack: expandedStackId };
-  }, [expandedRowId, expandedStackId]);
-
   const columns = useMemo(() => {
   const facetColumn = (dimension, title, width) => ({
     title,
@@ -726,17 +718,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       },
     },
   ];
-  // A cell re-renders only when its own record changed (rows keep their object identity across live
-  // merges), not whenever the table's data array does: with a full table that was every row, every poll.
-  // The Message cell also depends on which rows are expanded.
-  const touched = new Set([expandedRowId, expandedStackId, prevExpandedRef.current.row, prevExpandedRef.current.stack]);
-  return definitions.map((column) => ({
-    ...column,
-    shouldCellUpdate:
-      column.key === 'message'
-        ? (record, prevRecord) => record !== prevRecord || touched.has(record._id)
-        : (record, prevRecord) => record !== prevRecord,
-  }));
+  return definitions;
   // setRunId, setFilters, setExpanded* and the sort setters are stable; the rest decide the columns' output.
   }, [filters, facets, sortBy, sortDir, expandedRowId, expandedStackId, onOpenRun]);
 

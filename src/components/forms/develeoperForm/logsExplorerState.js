@@ -308,14 +308,36 @@ export const logsBodyHeight = (viewportHeight) => {
 };
 
 /**
- * How many rows were added ahead of the row that used to be first, given the new row ids (newest first).
+ * How many rows were added ahead of the row that used to be first, given the new rows (newest first).
  * 0 when nothing was prepended; -1 when the old first row is gone (a different query, a sort change, or
  * the row cap trimmed it), which the list treats as a reset rather than a prepend.
  */
-export const countPrepended = (previousFirstId, nextIds) => {
+export const countPrepended = (previousFirstId, rows, idOf = (row) => row?._id) => {
   if (previousFirstId === undefined || previousFirstId === null) return 0;
-  return Array.isArray(nextIds) ? nextIds.indexOf(previousFirstId) : -1;
+  return Array.isArray(rows) ? rows.findIndex((row) => idOf(row) === previousFirstId) : -1;
 };
+
+/** Room kept for the vertical scrollbar next to the table's columns (px), in the table's minimum width. */
+export const LOGS_SCROLLBAR_GUTTER_PX = 17;
+
+/** CSS selector (within a table) of the header table antd renders, for the given antd class prefix. */
+export const antTableSelectors = (prefix = 'ant-table') => ({
+  table: `.${prefix}`,
+  headerTable: `.${prefix}-header table`,
+});
+
+/**
+ * The header's column widths as measured cells, rounded to 0.1 px, or null when the number of cells is not the
+ * number of columns (then the rows fall back to proportional widths).
+ */
+export const pickHeaderWidths = (cellWidths, columnCount) =>
+  Array.isArray(cellWidths) && cellWidths.length >= columnCount
+    ? cellWidths.slice(0, columnCount).map((w) => Math.round(w * 10) / 10)
+    : null;
+
+/** Whether two width lists differ by less than `tolerance` px everywhere (so no state update is needed). */
+export const sameWidths = (a, b, tolerance = 0.5) =>
+  Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((w, i) => Math.abs(w - b[i]) < tolerance);
 
 /** The label of the "jump to the newest" pill shown while the reader is scrolled away from the top. */
 export const newEventsLabel = (count) => `${count.toLocaleString()} new event${count === 1 ? '' : 's'}`;
