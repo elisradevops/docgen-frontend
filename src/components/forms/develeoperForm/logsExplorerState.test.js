@@ -3,6 +3,10 @@ import {
   buildEventQueryParams,
   mergeLiveRows,
   liveAnnouncement,
+  isFullTailPage,
+  tailCursorAfter,
+  liveBehind,
+  LIVE_MAX_DRAIN,
   computeLiveOverflow,
   aggregateRefreshDelay,
   AGGREGATE_REFRESH_MS,
@@ -462,5 +466,40 @@ describe('liveAnnouncement', () => {
   test('says when it is reconnecting and passes an idle label through', () => {
     expect(liveAnnouncement({ tone: 'warn', label: 'Reconnecting… (3 failed polls)' })).toBe('Live updates are reconnecting');
     expect(liveAnnouncement({ tone: 'idle', label: 'Live off' })).toBe('Live off');
+  });
+});
+
+describe('cursor tail helpers', () => {
+  const page = (n, extra = {}) => ({ tail: true, events: Array.from({ length: n }, (_, i) => ({ _id: `id${i + 1}` })), ...extra });
+
+  test('a full tail page asks for an immediate next poll; a short one does not', () => {
+    expect(isFullTailPage(page(200))).toBe(true);
+    expect(isFullTailPage(page(199))).toBe(false);
+    expect(isFullTailPage(page(3), 3)).toBe(true);
+  });
+
+  test('an api-gate without tail mode never looks "full" (it ignored the parameters)', () => {
+    expect(isFullTailPage({ events: new Array(200).fill({ _id: 'x' }) })).toBe(false);
+    expect(tailCursorAfter({ events: [{ _id: 'a' }] })).toBeNull();
+    expect(liveBehind({ behind: 50 })).toBe(0);
+  });
+
+  test('the cursor is the last (newest) event of the oldest-first page', () => {
+    expect(tailCursorAfter(page(3))).toBe('id3');
+    expect(tailCursorAfter(page(0))).toBeNull();
+    expect(tailCursorAfter(undefined)).toBeNull();
+  });
+
+  test('behind is a non-negative whole number, 0 when absent or not a number', () => {
+    expect(liveBehind(page(1, { behind: 72 }))).toBe(72);
+    expect(liveBehind(page(1, { behind: -5 }))).toBe(0);
+    expect(liveBehind(page(1, { behind: 3.9 }))).toBe(3);
+    expect(liveBehind(page(1, { behind: 'x' }))).toBe(0);
+    expect(liveBehind(page(1))).toBe(0);
+  });
+
+  test('draining is bounded', () => {
+    expect(LIVE_MAX_DRAIN).toBeGreaterThan(0);
+    expect(LIVE_MAX_DRAIN).toBeLessThanOrEqual(20);
   });
 });

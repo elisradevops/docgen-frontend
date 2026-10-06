@@ -14,6 +14,10 @@ import {
   buildEventQueryParams,
   mergeLiveRows,
   computeLiveOverflow,
+  isFullTailPage,
+  tailCursorAfter,
+  liveBehind as liveBehindOf,
+  LIVE_MAX_DRAIN,
   formatRequestLine,
   buildDetailsText,
   buildLogsCsv,
@@ -280,6 +284,8 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   const serverTimeRef = useRef(null);
   const liveTimerRef = useRef(null);
   const [liveOverflow, setLiveOverflow] = useState(0);
+  // Events still waiting after a full tail page (the poll is catching up on a burst).
+  const [liveBehind, setLiveBehind] = useState(0);
 
   const [selectedBucketIdx, setSelectedBucketIdx] = useState(null);
   // bucketFilter drives a server-side re-fetch for the clicked bucket's exact time range.
@@ -372,6 +378,11 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     // switched off) must not merge its now-stale rows into the table.
     let cancelled = false;
     let tickInFlight = false;
+    // Tail by cursor: after a FULL page the next poll continues strictly after its last event and follows
+    // straight away, up to LIVE_MAX_DRAIN in a row; a short page goes back to the look-back by time.
+    let afterId = null;
+    let drainStreak = 0;
+    let drainTimer = null;
     // Seed: the server time of the last full load; failing that, the newest row on screen. A no-op
     // state update, only to read the latest `events` without making them an effect dependency (which
     // would restart this interval on every merged-in row).
@@ -420,6 +431,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     const tick = async () => {
       if (cancelled || tickInFlight || document.hidden) return;
       tickInFlight = true;
+      let drainNext = false;
       try {
         const params = buildEventQueryParams(queryState);
         if (queryState.runId) params.runId = queryState.runId;
@@ -431,9 +443,27 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
         const hadBoundary = Number.isFinite(liveBoundaryMsRef.current);
         if (hadBoundary) {
           params.insertedAfter = new Date(liveBoundaryMsRef.current).toISOString();
+          // Tail mode needs a starting point; an api-gate that predates it ignores these two parameters
+          // and answers the old way (no `tail` in the response), which is handled below.
+          params.tail = 'true';
+          if (afterId) params.afterId = afterId;
         }
         const res = await getDiagnosticsEvents(params);
         if (cancelled) return;
+        const tailed = res.tail === true;
+        // "Behind" is only worth telling the user when a whole drain run could not catch up: right after a
+        // full page the count still holds events re-read from the look-back, so it would flicker while the
+        // tail is in fact keeping up.
+        let stillBehind = false;
+        if (tailed && isFullTailPage(res) && drainStreak < LIVE_MAX_DRAIN) {
+          afterId = tailCursorAfter(res);
+          drainStreak += 1;
+          drainNext = true;
+        } else {
+          stillBehind = tailed && isFullTailPage(res);
+          afterId = null;
+          drainStreak = 0;
+        }
         liveBoundaryMsRef.current = advanceLiveBoundary(
           liveBoundaryMsRef.current,
           res.events,
@@ -441,7 +471,9 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
         );
         setEvents((prev) => mergeLiveRows(prev, res.events || []));
         // Without a boundary the poll matched the whole query, not "what arrived since": no burst signal.
-        setLiveOverflow(hadBoundary ? computeLiveOverflow(res.matchedCount, res.events?.length ?? 0) : 0);
+        // (An api-gate without tail mode still gets the old signal.)
+        setLiveBehind(stillBehind ? liveBehindOf(res) : 0);
+        setLiveOverflow(hadBoundary && !tailed ? computeLiveOverflow(res.matchedCount, res.events?.length ?? 0) : 0);
         setLiveFailures(0);
         setLiveLastOkAt(Date.now());
         scheduleAggregateRefresh(res.events?.length ?? 0);
@@ -450,6 +482,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
         if (!cancelled) setLiveFailures((n) => n + 1);
       } finally {
         tickInFlight = false;
+        if (drainNext && !cancelled) drainTimer = window.setTimeout(tick, 0);
       }
     };
 
@@ -466,7 +499,9 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       document.removeEventListener('visibilitychange', onVisibility);
       if (liveTimerRef.current) window.clearInterval(liveTimerRef.current);
       if (aggregateTimer !== null) window.clearTimeout(aggregateTimer);
+      if (drainTimer !== null) window.clearTimeout(drainTimer);
       setLiveOverflow(0);
+      setLiveBehind(0);
     };
   }, [live, queryState, sortBy, sortDir]);
 
@@ -496,6 +531,12 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     [events, filterSettings.excludePhrases]
   );
 
+  // The rows expanded before the current ones: their Message cell has to render once more (to collapse).
+  const prevExpandedRef = useRef({ row: null, stack: null });
+  useEffect(() => {
+    prevExpandedRef.current = { row: expandedRowId, stack: expandedStackId };
+  }, [expandedRowId, expandedStackId]);
+
   const columns = useMemo(() => {
   const facetColumn = (dimension, title, width) => ({
     title,
@@ -518,7 +559,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     ),
   });
 
-  return [
+  const definitions = [
     {
       title: 'Time',
       dataIndex: 'ts',
@@ -652,6 +693,17 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       },
     },
   ];
+  // A cell re-renders only when its own record changed (rows keep their object identity across live
+  // merges), not whenever the table's data array does: with a full table that was every row, every poll.
+  // The Message cell also depends on which rows are expanded.
+  const touched = new Set([expandedRowId, expandedStackId, prevExpandedRef.current.row, prevExpandedRef.current.stack]);
+  return definitions.map((column) => ({
+    ...column,
+    shouldCellUpdate:
+      column.key === 'message'
+        ? (record, prevRecord) => record !== prevRecord || touched.has(record._id)
+        : (record, prevRecord) => record !== prevRecord,
+  }));
   // setRunId, setFilters, setExpanded* and the sort setters are stable; the rest decide the columns' output.
   }, [filters, facets, sortBy, sortDir, expandedRowId, expandedStackId, onOpenRun]);
 
@@ -719,6 +771,21 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
             }}
           >
             +{liveOverflow} more events, narrow your query
+          </Box>
+        ) : null}
+        {live && liveBehind > 0 ? (
+          <Box
+            component='span'
+            title='A burst of events is arriving faster than one poll can carry; the table is catching up.'
+            sx={{
+              display: 'inline-flex', alignItems: 'center', gap: 0.5,
+              px: 1, py: 0.25, borderRadius: '4px',
+              fontSize: 11, fontWeight: 500,
+              bgcolor: 'rgba(237,108,2,0.1)', color: 'warning.main',
+              border: '1px solid rgba(237,108,2,0.3)',
+            }}
+          >
+            {liveBehind.toLocaleString()} events behind — catching up
           </Box>
         ) : null}
         <LogsFilterSettingsDialog

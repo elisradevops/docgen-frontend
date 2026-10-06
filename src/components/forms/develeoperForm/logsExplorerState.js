@@ -114,6 +114,26 @@ export const liveStatus = ({ live, hidden, failures, lastOkAt, now }) => {
 export const liveAnnouncement = (status) =>
   status.tone === 'warn' ? 'Live updates are reconnecting' : status.tone === 'live' ? 'Live updates on' : status.label;
 
+/** Back-to-back polls allowed to drain a burst before waiting for the next interval (keeps the page responsive). */
+export const LIVE_MAX_DRAIN = 10;
+
+/**
+ * Whether a tail-mode response filled the page, i.e. more events are probably waiting and the next poll
+ * should follow straight away. Only the cursor tail (`tail: true` in the response) pages this way.
+ */
+export const isFullTailPage = (res, limit = LIVE_PAGE_LIMIT) =>
+  res?.tail === true && Array.isArray(res.events) && res.events.length >= limit;
+
+/** The id to continue from after a tail poll: the newest (last, as the page is oldest-first) event, or null. */
+export const tailCursorAfter = (res) => {
+  const last = res?.tail === true && Array.isArray(res.events) ? res.events[res.events.length - 1] : null;
+  return last?._id ? String(last._id) : null;
+};
+
+/** How many events the tail is behind after this poll (0 when caught up, or not a tail-mode response). */
+export const liveBehind = (res) =>
+  res?.tail === true && Number.isFinite(res.behind) ? Math.max(0, Math.floor(res.behind)) : 0;
+
 /**
  * Live-tail burst signal: how many more events matched the poll's (incremental, since-last-poll)
  * window than the page actually returned. 0 means nothing was dropped — either matchedCount
