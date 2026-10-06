@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput, buildInputFacts } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput, buildInputFacts, formatResolvedRange, findingLabel } from './runDetailState';
 
 describe('formatRunDuration', () => {
   test('formats a completed run as seconds with one decimal', () => {
@@ -216,3 +216,95 @@ describe('buildInputFacts', () => {
   });
 });
 
+describe('formatResolvedRange', () => {
+  const release = {
+    rangeType: 'release',
+    definition: { id: 12, name: 'MyRelease' },
+    to: { id: 418, name: 'Release-418', source: 'auto' },
+    from: { id: 409, source: 'auto' },
+  };
+
+  test('summarises an auto-discovered release range as a chip and plain lines', () => {
+    const view = formatResolvedRange(release);
+
+    expect(view.chip).toBe('release MyRelease: #409 → #418');
+    expect(view.lines).toEqual([
+      'Release definition: MyRelease #12',
+      'From: #409 — auto-discovered',
+      'To: #418 (Release-418) — auto-discovered',
+    ]);
+    expect(view.copyText).toBe(view.lines.join('\n'));
+  });
+
+  test('says "as requested" for an explicit side', () => {
+    const view = formatResolvedRange({ ...release, from: { id: 409, source: 'explicit' } });
+
+    expect(view.lines[1]).toBe('From: #409 — as requested');
+  });
+
+  test('describes "no previous run found" as a baseline, not as a missing number', () => {
+    const view = formatResolvedRange({ ...release, from: { source: 'none' } });
+
+    expect(view.chip).toBe('release MyRelease: ? → #418');
+    expect(view.lines[1]).toBe('From: none found (a baseline run)');
+  });
+
+  test('says auto-discovery found nothing, rather than calling it a baseline, when a side was never resolved', () => {
+    const view = formatResolvedRange({ ...release, to: { source: 'auto' }, from: { source: 'auto' } });
+
+    expect(view.lines[1]).toBe('From: not resolved — auto-discovery found nothing');
+    expect(view.lines[2]).toBe('To: not resolved — auto-discovery found nothing');
+  });
+
+  test('labels a pipeline range as a pipeline', () => {
+    const view = formatResolvedRange({
+      rangeType: 'pipeline',
+      definition: { id: 5, name: 'Build' },
+      to: { id: 100, source: 'explicit' },
+      from: { id: 99, source: 'auto' },
+    });
+
+    expect(view.chip).toBe('pipeline Build: #99 → #100');
+    expect(view.lines[0]).toBe('Pipeline: Build #5');
+  });
+
+  test('names an unnamed definition by its id in the chip', () => {
+    const view = formatResolvedRange({ rangeType: 'release', definition: { id: 12 }, to: { source: 'auto' }, from: { source: 'auto' } });
+
+    expect(view.chip).toBe('release #12: ? → ?');
+  });
+
+  test('is null when nothing was recorded or the value is not an object', () => {
+    expect(formatResolvedRange(undefined)).toBeNull();
+    expect(formatResolvedRange(null)).toBeNull();
+    expect(formatResolvedRange('x')).toBeNull();
+    expect(formatResolvedRange([])).toBeNull();
+  });
+});
+
+describe('buildInputFacts with a resolved range', () => {
+  const range = { rangeType: 'release', definition: { name: 'R' }, to: { id: 2, source: 'auto' }, from: { id: 1, source: 'auto' } };
+
+  test('a pipeline-started run (technical input) shows the range next to its template and project', () => {
+    const run = { manifest: { inputs: { templateName: 'http://s3/templates/SVD.dotx', project: 'MEWP', resolvedRange: range, contentControls: [{}] } } };
+    const facts = buildInputFacts(pickRunInput(run), run);
+
+    expect(facts.map((f) => f.key)).toEqual(['template', 'project', 'range', 'controls']);
+    expect(facts.find((f) => f.key === 'range').value).toBe('release R: #1 → #2');
+  });
+
+  test('a run without one is unchanged', () => {
+    const run = { manifest: { inputs: { templateName: 'http://s3/t/SVD.dotx', project: 'MEWP', contentControls: [{}] } } };
+
+    expect(buildInputFacts(pickRunInput(run), run).map((f) => f.key)).toEqual(['template', 'project', 'controls']);
+  });
+});
+
+describe('findingLabel', () => {
+  test('maps severity to a label and a colour', () => {
+    expect(findingLabel('severe')).toEqual({ label: 'Differs', color: 'error' });
+    expect(findingLabel('moderate')).toEqual({ label: 'Check', color: 'warning' });
+    expect(findingLabel('info')).toEqual({ label: 'Note', color: 'default' });
+    expect(findingLabel(undefined).label).toBe('Note');
+  });
+});
