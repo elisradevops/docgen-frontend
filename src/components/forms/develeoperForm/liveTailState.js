@@ -43,6 +43,7 @@ export const advanceTail = (state, response, { hadBoundary = true, maxDrain = LI
       drainNext: true,
       stillBehind: false,
       behind: 0,
+      behindCapped: false,
       overflow: 0,
       tailed,
     };
@@ -52,6 +53,8 @@ export const advanceTail = (state, response, { hadBoundary = true, maxDrain = LI
     drainNext: false,
     stillBehind: full,
     behind: full ? liveBehind(response) : 0,
+    // The server stops counting at a cap ("at least this many"), shown as "10,000+".
+    behindCapped: full && response?.behindCapped === true,
     overflow: hadBoundary && !tailed ? computeLiveOverflow(response?.matchedCount, response?.events?.length ?? 0) : 0,
     tailed,
   };

@@ -38,8 +38,15 @@ describe('advanceTail', () => {
 
   test('a full page after the drain limit is "still behind", with the count from the server', () => {
     const r = advanceTail({ afterId: 'id5', drainStreak: 3 }, page(5, { behind: 1200 }), opts);
-    expect(r).toMatchObject({ drainNext: false, stillBehind: true, behind: 1200 });
+    expect(r).toMatchObject({ drainNext: false, stillBehind: true, behind: 1200, behindCapped: false });
     expect(r.state).toEqual(initialTailState());
+  });
+
+  test('a count the server stopped at its cap is flagged, so it reads "10,000+"', () => {
+    const r = advanceTail({ afterId: 'id5', drainStreak: 3 }, page(5, { behind: 10000, behindCapped: true }), opts);
+    expect(r).toMatchObject({ stillBehind: true, behind: 10000, behindCapped: true });
+    expect(advanceTail(initialTailState(), page(5, { behindCapped: true }), opts).behindCapped).toBe(false); // still draining
+    expect(advanceTail(initialTailState(), page(2, { behindCapped: true }), opts).behindCapped).toBe(false); // caught up
   });
 
   test('draining stops exactly at the limit', () => {

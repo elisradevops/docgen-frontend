@@ -17,7 +17,7 @@ import { advanceTail, buildTailParams, initialTailState, shouldResync } from './
 //   refreshAggregates({ isCancelled }) -> re-fetch the chart and facet counts (throttled here)
 //   onResync()                     -> reload the newest page (after a long time in a hidden tab); returns a promise
 // plus the refs the throttle shares with the page: aggregatesRefreshedAtRef and bucketSelectedRef.
-// Returns what the status chips show: hidden, failures, lastOkAt, behind, overflow.
+// Returns what the status chips show: hidden, failures, lastOkAt, behind (+ behindCapped), overflow.
 export const useLiveTail = ({
   enabled,
   queryState,
@@ -32,6 +32,7 @@ export const useLiveTail = ({
   const [failures, setFailures] = useState(0);
   const [lastOkAt, setLastOkAt] = useState(undefined);
   const [behind, setBehind] = useState(0);
+  const [behindCapped, setBehindCapped] = useState(false);
   // Only an api-gate without tail mode produces this (the old "+N more events" signal).
   const [overflow, setOverflow] = useState(0);
 
@@ -94,6 +95,7 @@ export const useLiveTail = ({
         boundaryMs = advanceLiveBoundary(boundaryMs, res.events, Date.parse(res.serverTime));
         latest.current.onEvents(res.events || []);
         setBehind(next.behind);
+        setBehindCapped(next.behindCapped);
         setOverflow(next.overflow);
         failureStreak = 0;
         setFailures(0);
@@ -151,10 +153,11 @@ export const useLiveTail = ({
       if (drainTimer !== null) window.clearTimeout(drainTimer);
       setOverflow(0);
       setBehind(0);
+      setBehindCapped(false);
     };
     // The callbacks come through `latest`; the refs are stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, queryState]);
 
-  return { hidden, failures, lastOkAt, behind, overflow };
+  return { hidden, failures, lastOkAt, behind, behindCapped, overflow };
 };

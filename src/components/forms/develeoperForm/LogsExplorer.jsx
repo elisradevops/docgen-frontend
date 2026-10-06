@@ -405,6 +405,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     failures: liveFailures,
     lastOkAt: liveLastOkAt,
     behind: liveBehind,
+    behindCapped: liveBehindCapped,
     overflow: liveOverflow,
   } = useLiveTail({
     enabled: live && canLiveTail(sortBy, sortDir),
@@ -685,7 +686,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
               border: '1px solid rgba(237,108,2,0.3)',
             }}
           >
-            {liveBehind.toLocaleString()} events behind — catching up
+            {liveBehind.toLocaleString()}{liveBehindCapped ? '+' : ''} events behind — catching up
           </Box>
         ) : null}
         <LogsFilterSettingsDialog
