@@ -13,7 +13,6 @@ import {
 import {
   buildEventQueryParams,
   mergeLiveRows,
-  liveAnnouncement,
   computeLiveOverflow,
   formatRequestLine,
   buildDetailsText,
@@ -26,7 +25,6 @@ import {
   LIVE_PAGE_LIMIT,
   aggregateRefreshDelay,
   advanceLiveBoundary,
-  liveStatus,
   formatStepLine,
   isCorrelationOnlyId,
   formatRunCellLabel,
@@ -45,6 +43,7 @@ import {
   isEventExcluded,
 } from './logsFilterSettings';
 import LogsFilterSettingsDialog from './LogsFilterSettingsDialog';
+import LiveStatus from './LiveStatus';
 
 const WINDOW_OPTIONS = [
   { label: 'Last hour', value: 1 },
@@ -241,6 +240,15 @@ function FacetFilterDropdown({ dimension, facetValues, selected, onChange, onCle
   );
 }
 
+const rowKeyOf = (record) => record._id;
+
+// Memoized so a re-render of the page for an unrelated reason (a status chip, the Live flags) skips the
+// table: up to LOG_ROW_CAP rows with buttons and tooltips are expensive to reconcile.
+const LogsTable = React.memo(({ dataSource, columns, onChange }) => (
+  <Table dataSource={dataSource} columns={columns} rowKey={rowKeyOf} pagination={false} onChange={onChange} size='small' />
+));
+LogsTable.displayName = 'LogsTable';
+
 const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   const [filterSettings, setFilterSettings] = useState(loadLogsFilterSettings);
   const [windowHours, setWindowHours] = useState(() => loadLogsFilterSettings().defaultWindowHours);
@@ -268,7 +276,6 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
   const [liveHidden, setLiveHidden] = useState(() => typeof document !== 'undefined' && document.hidden);
   const [liveFailures, setLiveFailures] = useState(0);
   const [liveLastOkAt, setLiveLastOkAt] = useState(undefined);
-  const [liveNow, setLiveNow] = useState(() => Date.now());
   // Server clock (ms) at the last full load: where the live tail starts when nothing else anchors it.
   const serverTimeRef = useRef(null);
   const liveTimerRef = useRef(null);
@@ -463,13 +470,6 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     };
   }, [live, queryState, sortBy, sortDir]);
 
-  // Re-renders the "updated 2s ago" label; only while Live is on.
-  useEffect(() => {
-    if (!live) return undefined;
-    const id = window.setInterval(() => setLiveNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [live]);
-
   const loadOlder = async () => {
     if (!nextCursor) return;
     setLoadingMore(true);
@@ -496,6 +496,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     [events, filterSettings.excludePhrases]
   );
 
+  const columns = useMemo(() => {
   const facetColumn = (dimension, title, width) => ({
     title,
     dataIndex: dimension,
@@ -517,7 +518,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
     ),
   });
 
-  const columns = [
+  return [
     {
       title: 'Time',
       dataIndex: 'ts',
@@ -651,12 +652,14 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       },
     },
   ];
+  // setRunId, setFilters, setExpanded* and the sort setters are stable; the rest decide the columns' output.
+  }, [filters, facets, sortBy, sortDir, expandedRowId, expandedStackId, onOpenRun]);
 
-  const handleTableChange = (_pagination, _tableFilters, sorter) => {
+  const handleTableChange = useCallback((_pagination, _tableFilters, sorter) => {
     const next = sortStateFromSorter(sorter);
     setSortBy(next.sortBy);
     setSortDir(next.sortDir);
-  };
+  }, []);
 
   const grandTotal = histogramBars.reduce((sum, b) => sum + b.total, 0);
 
@@ -703,28 +706,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
             </AntButton>
           </span>
         </Tooltip>
-        {(() => {
-          const status = liveStatus({ live: live && canLiveTail(sortBy, sortDir), hidden: liveHidden, failures: liveFailures, lastOkAt: liveLastOkAt, now: liveNow });
-          const color = status.tone === 'warn' ? '#b45309' : status.tone === 'live' ? '#15803d' : '#64748b';
-          return (
-            <>
-              <Box
-                component='span'
-                sx={{ fontSize: 12, fontWeight: 500, color, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-              >
-                {status.label}
-              </Box>
-              <Box
-                component='span'
-                role='status'
-                aria-live='polite'
-                sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}
-              >
-                {liveAnnouncement(status)}
-              </Box>
-            </>
-          );
-        })()}
+        <LiveStatus live={live && canLiveTail(sortBy, sortDir)} hidden={liveHidden} failures={liveFailures} lastOkAt={liveLastOkAt} />
         {live && liveOverflow > 0 ? (
           <Box
             component='span'
@@ -853,14 +835,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
               </Button>
             ) : null}
           </Stack>
-          <Table
-            dataSource={filteredEvents}
-            columns={columns}
-            rowKey={(record) => record._id}
-            pagination={false}
-            onChange={handleTableChange}
-            size='small'
-          />
+          <LogsTable dataSource={filteredEvents} columns={columns} onChange={handleTableChange} />
           {nextCursor && hasReachedRowCap(events.length) ? (
             <Typography variant='caption' color='text.secondary' sx={{ display: 'block', textAlign: 'center', p: 1.5 }}>
               Showing the newest {LOG_ROW_CAP.toLocaleString()} events — narrow the time range or filters to see more.
