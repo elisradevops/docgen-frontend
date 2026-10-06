@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { advanceTail, buildTailParams, initialTailState } from './liveTailState';
+import { advanceTail, buildTailParams, initialTailState, shouldResync, LIVE_RESYNC_AFTER_HIDDEN_MS } from './liveTailState';
 
 const page = (n, extra = {}) => ({ tail: true, events: Array.from({ length: n }, (_, i) => ({ _id: `id${i + 1}` })), ...extra });
 const opts = { maxDrain: 3, limit: 5 };
@@ -77,5 +77,29 @@ describe('advanceTail', () => {
     const state = { afterId: 'a', drainStreak: 1 };
     advanceTail(state, page(5), opts);
     expect(state).toEqual({ afterId: 'a', drainStreak: 1 });
+  });
+});
+
+describe('shouldResync', () => {
+  test('a tab hidden for the threshold or longer is reloaded on return', () => {
+    expect(shouldResync(1000, 1000 + LIVE_RESYNC_AFTER_HIDDEN_MS)).toBe(true);
+    expect(shouldResync(1000, 1000 + 10 * LIVE_RESYNC_AFTER_HIDDEN_MS)).toBe(true);
+  });
+
+  test('a brief absence just catches up with the next poll', () => {
+    expect(shouldResync(1000, 1000 + LIVE_RESYNC_AFTER_HIDDEN_MS - 1)).toBe(false);
+    expect(shouldResync(1000, 1500)).toBe(false);
+  });
+
+  test('a tab that was not hidden, or a bad clock, never resyncs', () => {
+    expect(shouldResync(null, 99999999)).toBe(false);
+    expect(shouldResync(undefined, 99999999)).toBe(false);
+    expect(shouldResync(NaN, 99999999)).toBe(false);
+    expect(shouldResync(1000, NaN)).toBe(false);
+  });
+
+  test('the threshold can be given', () => {
+    expect(shouldResync(0, 5000, 5000)).toBe(true);
+    expect(shouldResync(0, 4999, 5000)).toBe(false);
   });
 });

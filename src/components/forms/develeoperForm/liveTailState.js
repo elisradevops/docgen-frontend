@@ -56,3 +56,15 @@ export const advanceTail = (state, response, { hadBoundary = true, maxDrain = LI
     tailed,
   };
 };
+
+/** A tab hidden at least this long is reloaded on return instead of catching up poll by poll. */
+export const LIVE_RESYNC_AFTER_HIDDEN_MS = 30000;
+
+/**
+ * Whether coming back to a tab that was hidden since `hiddenSinceMs` should reload the page of events.
+ * After a long absence the missed events can be far more than the table holds, and draining them oldest
+ * first would crawl through (and the row cap would then trim) what is no longer interesting; the newest
+ * page is what the reader wants. False when the tab was not hidden (null) or only briefly.
+ */
+export const shouldResync = (hiddenSinceMs, nowMs, thresholdMs = LIVE_RESYNC_AFTER_HIDDEN_MS) =>
+  Number.isFinite(hiddenSinceMs) && Number.isFinite(nowMs) && nowMs - hiddenSinceMs >= thresholdMs;

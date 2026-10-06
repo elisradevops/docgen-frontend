@@ -413,6 +413,7 @@ const LogsExplorer = ({ onOpenRun, initialRunId = '' }) => {
       Number.isFinite(serverTimeRef.current) ? serverTimeRef.current : advanceLiveBoundary(null, eventsRef.current, undefined),
     onEvents: (rows) => setEvents((prev) => mergeLiveRows(prev, rows)),
     refreshAggregates,
+    onResync: loadFirstPage,
     aggregatesRefreshedAtRef,
     bucketSelectedRef,
   });

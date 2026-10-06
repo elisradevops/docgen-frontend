@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getDiagnosticsEvents } from '../../../store/data/docManagerApi';
 import logger from '../../../utils/logger';
 import { advanceLiveBoundary, aggregateRefreshDelay, buildEventQueryParams, LIVE_PAGE_LIMIT, LIVE_POLL_MS } from './logsExplorerState';
-import { advanceTail, buildTailParams, initialTailState } from './liveTailState';
+import { advanceTail, buildTailParams, initialTailState, shouldResync } from './liveTailState';
 
 // The Logs live tail: polls api-gate while `enabled`, hands new rows to the page, and drains a burst larger
 // than one page over back-to-back polls (the decisions live in liveTailState.js and are tested there).
@@ -15,6 +15,7 @@ import { advanceTail, buildTailParams, initialTailState } from './liveTailState'
 //   seedBoundary()                 -> ms to start from (the last full load's server time, else the newest row)
 //   onEvents(events)               -> merge the rows into the table
 //   refreshAggregates({ isCancelled }) -> re-fetch the chart and facet counts (throttled here)
+//   onResync()                     -> reload the newest page (after a long time in a hidden tab); returns a promise
 // plus the refs the throttle shares with the page: aggregatesRefreshedAtRef and bucketSelectedRef.
 // Returns what the status chips show: hidden, failures, lastOkAt, behind, overflow.
 export const useLiveTail = ({
@@ -23,6 +24,7 @@ export const useLiveTail = ({
   seedBoundary,
   onEvents,
   refreshAggregates,
+  onResync,
   aggregatesRefreshedAtRef,
   bucketSelectedRef,
 }) => {
@@ -34,7 +36,7 @@ export const useLiveTail = ({
   const [overflow, setOverflow] = useState(0);
 
   const latest = useRef({});
-  latest.current = { seedBoundary, onEvents, refreshAggregates };
+  latest.current = { seedBoundary, onEvents, refreshAggregates, onResync };
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -46,6 +48,9 @@ export const useLiveTail = ({
     let drainTimer = null;
     let aggregateTimer = null;
     let failureStreak = 0;
+    let resyncing = false;
+    // When the tab became hidden (null while visible): a long absence reloads the page on return.
+    let hiddenSince = typeof document !== 'undefined' && document.hidden ? Date.now() : null;
     let boundaryMs = latest.current.seedBoundary();
     setFailures(0);
 
@@ -70,7 +75,7 @@ export const useLiveTail = ({
     };
 
     const tick = async () => {
-      if (cancelled || tickInFlight || document.hidden) return;
+      if (cancelled || tickInFlight || resyncing || document.hidden) return;
       tickInFlight = true;
       let drainNext = false;
       try {
@@ -111,10 +116,31 @@ export const useLiveTail = ({
 
     const intervalId = window.setInterval(tick, LIVE_POLL_MS);
     tick(); // don't make the first look wait a full interval
+    // After a long absence the missed events can far exceed the table, so draining them oldest first would crawl:
+    // reload the newest page and start the tail again from its server time.
+    const resync = async () => {
+      resyncing = true;
+      tailState = initialTailState();
+      try {
+        await latest.current.onResync();
+      } finally {
+        resyncing = false;
+      }
+      if (cancelled) return;
+      boundaryMs = latest.current.seedBoundary();
+      tick();
+    };
     // Coming back to a hidden tab: catch up straight away instead of at the next interval.
     const onVisibility = () => {
       setHidden(document.hidden);
-      if (!document.hidden) tick();
+      if (document.hidden) {
+        hiddenSince = hiddenSince ?? Date.now();
+        return;
+      }
+      const since = hiddenSince;
+      hiddenSince = null;
+      if (shouldResync(since, Date.now())) resync();
+      else tick();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
