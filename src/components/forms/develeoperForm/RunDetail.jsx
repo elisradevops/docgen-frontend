@@ -28,6 +28,7 @@ import {
 import {
   formatRunDuration,
   formatRunStatusLabel,
+  runLogHealth,
   buildTimelineRows,
   mergeRunLog,
   formatCaptureLabel,
@@ -56,6 +57,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
   const [error, setError] = useState('');
   const [run, setRun] = useState(null);
   const [timeline, setTimeline] = useState([]);
+  const [loggedCounts, setLoggedCounts] = useState({});
   const [log, setLog] = useState([]);
   // Cursor for the next-older page of the run's log; undefined once the whole log is loaded.
   const [logCursor, setLogCursor] = useState(undefined);
@@ -100,6 +102,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
       if (currentRunIdRef.current !== runId) return;
       setRun(detail.run);
       setTimeline(detail.timeline || []);
+      setLoggedCounts({ errors: detail.loggedErrors, warnings: detail.loggedWarnings });
       setLog(mergeRunLog(tailRes.events, errorRes.events));
       setLogCursor(tailRes.nextCursor);
       setLogLoadCount((n) => n + 1);
@@ -153,6 +156,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
       stickToBottomRef.current = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       setRun(detail.run);
       setTimeline(detail.timeline || []);
+      setLoggedCounts({ errors: detail.loggedErrors, warnings: detail.loggedWarnings });
       setLog((prev) => mergeRunLog(prev, tailRes.events, errorRes.events));
     } catch {
       // the next tick retries
@@ -169,6 +173,7 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
   }, [log]);
 
   const isRunning = run?.status === 'running';
+  const logHealth = runLogHealth(run, loggedCounts.errors, loggedCounts.warnings);
   useEffect(() => {
     if (!isRunning) return undefined;
     const id = window.setInterval(() => {
@@ -273,6 +278,11 @@ const RunDetail = ({ runId, onBack, onOpenCompare, onShowInLogs }) => {
                 </IconButton>
               </Tooltip>
               <Chip size='small' color={STATUS_COLOR[run.status] || 'default'} label={formatRunStatusLabel(run.status)} />
+              {logHealth ? (
+                <Tooltip title={logHealth.tooltip}>
+                  <Chip size='small' variant='outlined' color={logHealth.color} label={logHealth.label} />
+                </Tooltip>
+              ) : null}
               {isRunning ? (
                 <Tooltip title='This run is still running — the page refreshes every few seconds until it finishes.'>
                   <Chip size='small' color='info' variant='outlined' label='Running · live' />
