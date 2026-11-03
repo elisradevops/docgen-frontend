@@ -13,6 +13,27 @@ const STATUS_LABEL = { failed: 'Failed', succeeded: 'Succeeded', running: 'Runni
 export const formatRunStatusLabel = (status) => STATUS_LABEL[status] || status;
 
 /**
+ * A run can finish "succeeded" while having logged errors along the way (an artifact skipped, a
+ * section that came back empty). The status alone hides that, so this gives the header a second
+ * chip: null for a clean run, a failed/running one (already shown as such), or when the log store
+ * could not be counted (counts undefined).
+ */
+export const runLogHealth = (run, loggedErrors, loggedWarnings) => {
+  if (run?.status !== 'succeeded') return null;
+  const errors = loggedErrors || 0;
+  const warnings = loggedWarnings || 0;
+  if (errors === 0 && warnings === 0) return null;
+  const parts = [];
+  if (errors > 0) parts.push(`${errors} error${errors === 1 ? '' : 's'}`);
+  if (warnings > 0) parts.push(`${warnings} warning${warnings === 1 ? '' : 's'}`);
+  return {
+    color: errors > 0 ? 'error' : 'warning',
+    label: `Succeeded with ${parts.join(', ')}`,
+    tooltip: 'The run finished, but errors or warnings were logged while it ran, so the document may be incomplete. See the log below.',
+  };
+};
+
+/**
  * Timeline rows (from GET /diagnostics/runs/:runId's derived `timeline`) into plain render
  * data — a clock-time label per row (run.startedAt + the row's own cumulative startOffsetMs)
  * plus a dot color, so the component only maps over strings.

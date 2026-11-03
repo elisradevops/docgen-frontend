@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatRunDuration, formatRunStatusLabel, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput, buildInputFacts, formatResolvedRange, formatCredential, buildEffectiveInput, jsonLinesWithMarkers, findingLabel } from './runDetailState';
+import { formatRunDuration, formatRunStatusLabel, runLogHealth, buildTimelineRows, sortDiffRows, bandLabel, formatDiffValue, mergeRunLog, formatCaptureLabel, pickRunInput, buildInputFacts, formatResolvedRange, formatCredential, buildEffectiveInput, jsonLinesWithMarkers, findingLabel } from './runDetailState';
 
 describe('formatRunDuration', () => {
   test('formats a completed run as seconds with one decimal', () => {
@@ -25,6 +25,25 @@ describe('formatRunStatusLabel', () => {
 
   test('falls back to the raw value for an unknown status', () => {
     expect(formatRunStatusLabel('mystery')).toBe('mystery');
+  });
+});
+
+describe('runLogHealth', () => {
+  test('flags a succeeded run that logged errors, with both counts in the label', () => {
+    expect(runLogHealth({ status: 'succeeded' }, 3, 2)).toMatchObject({ color: 'error', label: 'Succeeded with 3 errors, 2 warnings' });
+  });
+
+  test('uses singular wording and warning colour when only warnings were logged', () => {
+    expect(runLogHealth({ status: 'succeeded' }, 0, 1)).toMatchObject({ color: 'warning', label: 'Succeeded with 1 warning' });
+    expect(runLogHealth({ status: 'succeeded' }, 1, 0)).toMatchObject({ label: 'Succeeded with 1 error' });
+  });
+
+  test('shows nothing for a clean run, a failed/running run, or when counts are unavailable', () => {
+    expect(runLogHealth({ status: 'succeeded' }, 0, 0)).toBeNull();
+    expect(runLogHealth({ status: 'failed' }, 4, 0)).toBeNull();
+    expect(runLogHealth({ status: 'running' }, 4, 0)).toBeNull();
+    expect(runLogHealth({ status: 'succeeded' }, undefined, undefined)).toBeNull();
+    expect(runLogHealth(undefined, 2, 0)).toBeNull();
   });
 });
 
